@@ -1,0 +1,368 @@
+@import "tailwindcss";
+
+/* Dark mode follows <html data-theme>, set by src/lib/theme.ts (system | dark | light). */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* ==================================================================
+   DESIGN TOKENS — "Ink & Bone"
+   Dark-first performance base, warm bone type, monochrome primary
+   actions. Colour is reserved for meaning: four pillar hues (Train,
+   Eat, Rest, Mind) and three status colours (readiness / safety).
+   See docs/DESIGN.md.
+   ================================================================== */
+:root {
+  color-scheme: light;
+
+  /* Light — warm paper */
+  --c-bg: #f5f2ea;
+  --c-fg: #14161a;
+  --c-surface: #fffdf8;
+  --c-surface-2: #ece8de;
+  --c-surface-3: #e2ddd1;
+  --c-line: rgba(20, 22, 26, 0.10);
+  --c-line-strong: rgba(20, 22, 26, 0.18);
+  --c-muted: #565c66;
+  --c-faint: #7b818c;
+  --c-accent: #14161a;          /* monochrome primary action */
+  --c-accent-fg: #fffdf8;
+  --c-accent-soft: rgba(20, 22, 26, 0.07);
+  --c-shadow: rgba(40, 32, 16, 0.10);
+
+  /* Pillars (light) */
+  --c-train: #c2410c;
+  --c-eat: #4d7c0f;
+  --c-rest: #2f55d4;
+  --c-mind: #7c3aed;
+  --c-coach: #14161a;
+
+  /* Macros (light) */
+  --c-protein: #1d6fd1;
+  --c-carbs: #c2560c;
+  --c-fat: #a16207;
+
+  /* Status (light) — always paired with icon + label, never colour alone */
+  --c-ok: #047857;
+  --c-warn: #b45309;
+  --c-stop: #be123c;
+
+  /* Active pillar for the current screen; Screen sets data-pillar. */
+  --pillar: var(--c-fg);
+
+  --grain-opacity: 0.035;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --c-bg: #0a0b0d;
+  --c-fg: #f3efe7;              /* bone */
+  --c-surface: #131519;
+  --c-surface-2: #1c1f25;
+  --c-surface-3: #272b33;
+  --c-line: rgba(243, 239, 231, 0.09);
+  --c-line-strong: rgba(243, 239, 231, 0.18);
+  --c-muted: #a4a9b2;
+  --c-faint: #7d838e;
+  --c-accent: #f3efe7;
+  --c-accent-fg: #0a0b0d;
+  --c-accent-soft: rgba(243, 239, 231, 0.10);
+  --c-shadow: rgba(0, 0, 0, 0.55);
+
+  --c-train: #ff7a45;           /* ember */
+  --c-eat: #b5e550;             /* lime */
+  --c-rest: #86a8ff;            /* moon blue */
+  --c-mind: #c4a8ff;            /* lavender */
+  --c-coach: #f3efe7;
+
+  --c-protein: #6cb8ff;
+  --c-carbs: #ffb072;
+  --c-fat: #f2d66b;
+
+  --c-ok: #3ddc97;
+  --c-warn: #ffc53d;
+  --c-stop: #ff6b81;
+
+  --grain-opacity: 0.05;
+}
+
+[data-pillar="train"] { --pillar: var(--c-train); }
+[data-pillar="eat"]   { --pillar: var(--c-eat); }
+[data-pillar="rest"]  { --pillar: var(--c-rest); }
+[data-pillar="mind"]  { --pillar: var(--c-mind); }
+[data-pillar="coach"] { --pillar: var(--c-coach); }
+[data-pillar="today"], [data-pillar="neutral"] { --pillar: var(--c-fg); }
+
+@theme {
+  --font-sans: "Barlow", -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --font-display: "Barlow Condensed", "Barlow", -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --font-serif: "Lora Variable", "Lora", "Iowan Old Style", Georgia, serif;
+
+  --radius-card: 1.25rem;
+  --ease-out-soft: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+
+@theme inline {
+  --color-surface: var(--c-surface);
+  --color-surface-2: var(--c-surface-2);
+  --color-surface-3: var(--c-surface-3);
+  --color-line: var(--c-line);
+  --color-line-strong: var(--c-line-strong);
+  --color-muted: var(--c-muted);
+  --color-faint: var(--c-faint);
+  --color-accent: var(--c-accent);
+  --color-accent-fg: var(--c-accent-fg);
+  --color-accent-soft: var(--c-accent-soft);
+
+  --color-pillar: var(--pillar);
+  --color-pillar-soft: color-mix(in oklab, var(--pillar) 14%, transparent);
+  --color-pillar-line: color-mix(in oklab, var(--pillar) 32%, transparent);
+
+  --color-train: var(--c-train);
+  --color-eat: var(--c-eat);
+  --color-rest: var(--c-rest);
+  --color-mind: var(--c-mind);
+  --color-coach: var(--c-coach);
+
+  --color-protein: var(--c-protein);
+  --color-carbs: var(--c-carbs);
+  --color-fat: var(--c-fat);
+
+  --color-ok: var(--c-ok);
+  --color-warn: var(--c-warn);
+  --color-stop: var(--c-stop);
+}
+
+/* `app` = page background + primary text colour. */
+@utility bg-app { background-color: var(--c-bg); }
+@utility text-app { color: var(--c-fg); }
+
+@utility pt-safe { padding-top: env(safe-area-inset-top, 0px); }
+@utility pb-safe { padding-bottom: env(safe-area-inset-bottom, 0px); }
+@utility tnum { font-variant-numeric: tabular-nums; }
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar { display: none; }
+}
+
+/* Elevation: hairlines carry structure; shadows only for floating chrome. */
+@utility shadow-card { box-shadow: 0 1px 0 var(--c-line), 0 8px 24px -18px var(--c-shadow); }
+@utility shadow-float { box-shadow: 0 12px 36px -8px var(--c-shadow), 0 2px 6px var(--c-shadow); }
+@utility glow-pillar { box-shadow: 0 0 44px -6px color-mix(in oklab, var(--pillar) 45%, transparent); }
+
+/* ---- Type roles -------------------------------------------------- */
+/* Big condensed numerals: the signature of every data card. */
+@utility num {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  line-height: 0.95;
+}
+/* Tiny uppercase tracked label above numbers and sections. */
+@utility eyebrow {
+  font-family: var(--font-sans);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  line-height: 1.2;
+}
+/* Display headline (screen titles, hero statements). */
+@utility display {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  line-height: 1.02;
+  text-transform: uppercase;
+}
+/* The coach's voice and reflective moments (Mind, journal). */
+@utility voice {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-weight: 450;
+  letter-spacing: -0.005em;
+  line-height: 1.28;
+}
+
+/* ---- Atmosphere --------------------------------------------------- */
+/* A soft pillar-tinted glow at the top of a screen. Set data-pillar on an ancestor. */
+@utility atmo {
+  background-image:
+    radial-gradient(120% 420px at 50% -120px, color-mix(in oklab, var(--pillar) 20%, transparent), transparent 70%);
+  background-repeat: no-repeat;
+}
+/* Calmer, taller wash for Mind / Rest. */
+@utility atmo-calm {
+  background-image:
+    radial-gradient(90% 520px at 20% -140px, color-mix(in oklab, var(--pillar) 22%, transparent), transparent 70%),
+    radial-gradient(80% 460px at 95% -60px, color-mix(in oklab, var(--c-rest) 14%, transparent), transparent 70%);
+  background-repeat: no-repeat;
+}
+/* Frosted chrome (tab bar, sticky headers). */
+@utility glass {
+  background-color: color-mix(in oklab, var(--c-surface) 78%, transparent);
+  -webkit-backdrop-filter: saturate(160%) blur(18px);
+  backdrop-filter: saturate(160%) blur(18px);
+}
+@utility press {
+  transition: transform 150ms var(--ease-out-soft), opacity 150ms var(--ease-out-soft), background-color 150ms var(--ease-out-soft);
+  &:active { transform: scale(0.97); }
+}
+@utility hairline { border: 1px solid var(--c-line); }
+
+@layer base {
+  html {
+    font-size: 16px;
+    background-color: var(--c-bg);
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    overscroll-behavior-y: none;
+  }
+
+  body {
+    margin: 0;
+    background-color: var(--c-bg);
+    color: var(--c-fg);
+    font-family: var(--font-sans);
+    font-size: 1rem;
+    line-height: 1.45;
+    font-feature-settings: "ss01", "cv11";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+
+  /* Film grain: keeps large dark surfaces from looking flat. */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    pointer-events: none;
+    opacity: var(--grain-opacity);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.6 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    mix-blend-mode: overlay;
+  }
+
+  body.sheet-open { overflow: hidden; }
+
+  button {
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  a, [role="button"], summary, label[for] { cursor: pointer; }
+
+  :focus-visible {
+    outline: 2px solid var(--pillar);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+
+  input::placeholder,
+  textarea::placeholder { color: var(--c-faint); }
+
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  /* ---- Range slider (0–10 pain / energy / mood) ---- */
+  input[type="range"].slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 44px; /* tap target */
+    background: transparent;
+    margin: 0;
+  }
+  input[type="range"].slider:focus { outline: none; }
+  input[type="range"].slider::-webkit-slider-runnable-track {
+    height: 8px;
+    border-radius: 999px;
+    background: linear-gradient(
+      to right,
+      var(--slider-color, var(--pillar)) 0%,
+      var(--slider-color, var(--pillar)) var(--slider-pct, 0%),
+      var(--c-surface-2) var(--slider-pct, 0%),
+      var(--c-surface-2) 100%
+    );
+  }
+  input[type="range"].slider::-moz-range-track {
+    height: 8px;
+    border-radius: 999px;
+    background: var(--c-surface-2);
+  }
+  input[type="range"].slider::-moz-range-progress {
+    height: 8px;
+    border-radius: 999px;
+    background: var(--slider-color, var(--pillar));
+  }
+  input[type="range"].slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 30px;
+    height: 30px;
+    margin-top: -11px;
+    border-radius: 999px;
+    background: #fffdf8;
+    border: 1px solid rgba(20, 22, 26, 0.14);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35);
+  }
+  input[type="range"].slider::-moz-range-thumb {
+    width: 30px;
+    height: 30px;
+    border-radius: 999px;
+    background: #fffdf8;
+    border: 1px solid rgba(20, 22, 26, 0.14);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35);
+  }
+}
+
+/* ==================================================================
+   MOTION — one orchestrated entrance per screen, quiet everywhere else.
+   ================================================================== */
+@keyframes sheet-up   { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@keyframes sheet-down { from { transform: translateY(0); } to { transform: translateY(100%); } }
+@keyframes fade-in    { from { opacity: 0; } to { opacity: 1; } }
+@keyframes fade-out   { from { opacity: 1; } to { opacity: 0; } }
+@keyframes toast-in   { from { opacity: 0; transform: translateY(-8px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes rise       { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes pop        { 0% { transform: scale(0.8); opacity: 0; } 60% { transform: scale(1.06); opacity: 1; } 100% { transform: scale(1); } }
+@keyframes draw       { from { stroke-dashoffset: var(--dash-from, 1000); } }
+@keyframes shimmer    { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+@keyframes pulse-soft { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
+@keyframes burst      { 0% { transform: scale(0.2); opacity: 0.9; } 100% { transform: scale(2.4); opacity: 0; } }
+@keyframes drift      { 0%, 100% { transform: translate3d(0, 0, 0) scale(1); } 50% { transform: translate3d(0, -10px, 0) scale(1.04); } }
+
+.anim-sheet-up   { animation: sheet-up 280ms var(--ease-out-soft) both; }
+.anim-sheet-down { animation: sheet-down 200ms ease-in both; }
+.anim-fade-in    { animation: fade-in 200ms ease-out both; }
+.anim-fade-out   { animation: fade-out 200ms ease-in both; }
+.anim-toast-in   { animation: toast-in 180ms ease-out both; }
+/* Staggered entrance: set style={{ '--i': index }} on siblings. */
+.anim-rise       { animation: rise 420ms var(--ease-out-soft) both; animation-delay: calc(var(--i, 0) * 55ms); }
+.anim-pop        { animation: pop 320ms var(--ease-spring) both; }
+.anim-draw       { animation: draw 900ms var(--ease-out-soft) both; animation-delay: calc(var(--i, 0) * 90ms + 120ms); }
+.anim-pulse-soft { animation: pulse-soft 2.4s ease-in-out infinite; }
+.anim-burst      { animation: burst 700ms ease-out both; }
+.anim-drift      { animation: drift 9s ease-in-out infinite; }
+.skeleton {
+  border-radius: 0.75rem;
+  background: linear-gradient(90deg, var(--c-surface-2) 25%, var(--c-surface-3) 37%, var(--c-surface-2) 63%);
+  background-size: 400% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .anim-sheet-up, .anim-sheet-down, .anim-fade-in, .anim-fade-out, .anim-toast-in,
+  .anim-rise, .anim-pop, .anim-draw, .anim-burst {
+    animation-duration: 1ms;
+    animation-delay: 0ms;
+  }
+  .anim-pulse-soft, .anim-drift, .skeleton { animation: none; }
+  .press:active { transform: none; }
+}

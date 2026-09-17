@@ -1,0 +1,15 @@
+{
+  // Cloudflare Workers static-assets deployment. `npx wrangler deploy` builds the app and uploads dist/.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "fitty",
+  "compatibility_date": "2026-09-01",
+  "assets": {
+    "directory": "./dist",
+    // Single-page app: unknown paths (e.g. /train/session/4) serve index.html so client-side routing works.
+    "not_found_handling": "single-page-application"
+  },
+  "build": {
+    // The dashboard build command can stay empty; Wrangler runs this before every deploy.
+    "command": "npm run build"
+  }
+}
