@@ -107,65 +107,127 @@ function runClaude(args: string[], stdin: string, cwd: string): Promise<{ stdout
 
 const AUTH_HINT = 'Claude Code on this Mac is signed out. Open Terminal, run `claude`, type /login and sign in with your Claude subscription, then try again.'
 
+const STRUCTURED_RULE =
+  'OUTPUT: return the result by calling the StructuredOutput tool exactly once. Wherever these instructions ask for JSON, that JSON object is the tool input. ' +
+  'After the tool call, reply with the single word DONE: no summary, no markdown, no emoji.'
+
+/**
+ * Claude Code also makes small housekeeping calls (on Haiku), and `modelUsage` lists those first:
+ * the model that answered is the one that wrote the most output.
+ */
+export function mainModel(modelUsage: unknown): string | null {
+  if (!modelUsage || typeof modelUsage !== 'object') return null
+  let best: string | null = null
+  let most = -1
+  for (const [name, usage] of Object.entries(modelUsage as Record<string, { outputTokens?: unknown } | null>)) {
+    const out = typeof usage?.outputTokens === 'number' ? usage.outputTokens : 0
+    if (out > most) { best = name; most = out }
+  }
+  return best
+}
+
+/** Reads the `--output-format json` result. Throws a BridgeError for sign-in problems, CLI errors and unreadable output. */
+export function readCliResult(stdout: string, stderr: string, code: number | null): CliResult {
+  let parsed: Record<string, unknown> | null = null
+  try {
+    const j: unknown = JSON.parse(stdout)
+    if (j && typeof j === 'object' && !Array.isArray(j)) parsed = j as Record<string, unknown>
+  } catch { /* handled below */ }
+  const text = typeof parsed?.result === 'string' ? parsed.result : ''
+  if (/failed to authenticate|oauth|invalid api key|please run \/login|not logged in/i.test(text || stderr || stdout)) {
+    if (!parsed || parsed.is_error) throw new BridgeError('auth', AUTH_HINT, 401)
+  }
+  if (!parsed) throw new BridgeError('failed', (stderr || stdout || `claude exited with code ${code}`).slice(0, 400))
+  const structured = parsed.structured_output && typeof parsed.structured_output === 'object' ? parsed.structured_output : null
+  // A run that ran out of turns after delivering its structured output still has a usable answer.
+  if (parsed.is_error && !structured) {
+    throw new BridgeError('failed', text.slice(0, 400) || `Claude stopped early${typeof parsed.subtype === 'string' ? ` (${parsed.subtype})` : ''}. Try again.`)
+  }
+  return { text, structured, costUsd: typeof parsed.total_cost_usd === 'number' ? parsed.total_cost_usd : null, model: mainModel(parsed.modelUsage) }
+}
+
+// Attachments (meal photos, lab reports) live in a throw-away directory per call. Three layers make sure none is left
+// behind: the awaited removal below, a synchronous sweep when the server process exits, and a sweep of stale
+// directories (a crash, a force-quit) when the bridge is mounted. The set is process-wide because Vite re-imports
+// this module on every config restart.
+const shared = globalThis as typeof globalThis & { __coachAiDirs?: Set<string> }
+const liveDirs: Set<string> = shared.__coachAiDirs ?? new Set<string>()
+if (!shared.__coachAiDirs) {
+  shared.__coachAiDirs = liveDirs
+  process.once('exit', () => { for (const d of liveDirs) { try { rmSync(d, { recursive: true, force: true }) } catch { /* best effort */ } } })
+}
+
+async function sweepStaleDirs(): Promise<void> {
+  try {
+    const root = tmpdir()
+    for (const name of await readdir(root)) {
+      if (!name.startsWith(DIR_PREFIX)) continue
+      const path = join(root, name)
+      const info = await stat(path).catch(() => null)
+      if (info && !liveDirs.has(path) && Date.now() - info.mtimeMs > CALL_TIMEOUT_MS * 2) await rm(path, { recursive: true, force: true }).catch(() => {})
+    }
+  } catch { /* best effort */ }
+}
+
 async function ask(opts: RunOptions): Promise<RunResult> {
   if (active >= MAX_CONCURRENT) throw new BridgeError('busy', 'The AI bridge is busy. Try again in a moment.', 429)
   active++
-  const dir = await mkdtemp(join(tmpdir(), 'coach-ai-'))
+  let dir: string | null = null
   try {
+    dir = await mkdtemp(join(tmpdir(), DIR_PREFIX))
+    liveDirs.add(dir)
     const files: string[] = []
     for (const [i, a] of (opts.attachments ?? []).entries()) {
-      const ext = EXT[a.mediaType]
-      if (!ext) throw new BridgeError('bad_request', `Unsupported attachment type: ${a.mediaType}`, 400)
+      const ext = EXT[a?.mediaType]
+      if (!ext) throw new BridgeError('bad_request', `Unsupported attachment type: ${a?.mediaType}`, 400)
+      if (typeof a.base64 !== 'string' || !a.base64) throw new BridgeError('bad_request', 'Attachment has no data.', 400)
       const name = `input-${i + 1}.${ext}`
-      await writeFile(join(dir, name), Buffer.from(a.base64, 'base64'))
+      await writeFile(join(dir, name), Buffer.from(a.base64.replace(/^data:[^,]*,/, ''), 'base64'))
       files.push(name)
     }
-
-    let prompt = opts.prompt
-    if (files.length) {
-      prompt += `\n\nAttached file${files.length > 1 ? 's' : ''} (in the current directory): ${files.map((f) => `./${f}`).join(', ')}. Open ${files.length > 1 ? 'each one' : 'it'} with the Read tool before answering.`
-    }
-    if (opts.schema) {
-      prompt += `\n\nRespond with ONLY one JSON object that validates against this JSON Schema. No prose, no code fences.\n${JSON.stringify(opts.schema)}`
-    }
-
+    const attached = files.length
+      ? `\n\nAttached file${files.length > 1 ? 's' : ''} (in the current directory): ${files.map((f) => `./${f}`).join(', ')}. Open ${files.length > 1 ? 'each one' : 'it'} with the Read tool before answering.`
+      : ''
     const model = opts.model && ALLOWED_MODELS.has(opts.model) ? opts.model : DEFAULT_MODEL
-    const args = [
-      '-p',
-      '--output-format', 'json',
-      '--system-prompt', opts.system,
-      '--tools', files.length ? 'Read' : '',
-      '--max-turns', String(files.length ? 3 + files.length * 2 : 1),
-      '--strict-mcp-config',
-      '--setting-sources', 'project',
-      '--no-session-persistence',
-    ]
-    if (files.length) args.push('--allowedTools', 'Read')
-    if (model !== 'default') args.push('--model', model)
-
     const started = Date.now()
-    const { stdout, stderr, code } = await runClaude(args, prompt, dir)
 
-    let parsed: Record<string, unknown> | null = null
-    try { parsed = JSON.parse(stdout) as Record<string, unknown> } catch { /* handled below */ }
-    const text = typeof parsed?.result === 'string' ? parsed.result : ''
-    if (/failed to authenticate|oauth|invalid api key|please run \/login|not logged in/i.test(text || stderr || stdout)) {
-      if (!parsed || parsed.is_error) throw new BridgeError('auth', AUTH_HINT, 401)
-    }
-    if (!parsed) throw new BridgeError('failed', (stderr || stdout || `claude exited with code ${code}`).slice(0, 400))
-    if (parsed.is_error) throw new BridgeError('failed', text.slice(0, 400) || 'Claude returned an error.')
+    // At most two retries: one per optional flag an older Claude Code may not know.
+    for (let attempt = 0; ; attempt++) {
+      const structuredCall = !!opts.schema && schemaFlag
+      const effort = opts.schema && ALLOWED_EFFORT.has(JSON_EFFORT) && !noEffort.has(model) ? JSON_EFFORT : ''
+      const prompt = opts.prompt + attached + (opts.schema && !structuredCall
+        ? `\n\nRespond with ONLY one JSON object that validates against this JSON Schema. No prose, no code fences.\n${JSON.stringify(opts.schema)}`
+        : '')
+      // Turns: one per attached file to read it (plus slack), one to answer; a structured call adds the tool call,
+      // its one-word close and room for one validation retry.
+      const turns = (files.length ? 3 + files.length * 2 : 1) + (structuredCall ? 3 : 0)
+      const args = [
+        '-p',
+        '--output-format', 'json',
+        '--system-prompt', structuredCall ? `${opts.system}\n\n${STRUCTURED_RULE}` : opts.system,
+        '--tools', files.length ? 'Read' : '',
+        '--max-turns', String(turns),
+        '--strict-mcp-config',
+        '--setting-sources', 'project',
+        '--no-session-persistence',
+      ]
+      if (files.length) args.push('--allowedTools', 'Read')
+      if (model !== 'default') args.push('--model', model)
+      if (effort) args.push('--effort', effort)
+      if (structuredCall) args.push('--json-schema', JSON.stringify(opts.schema))
 
-    const usage = parsed.modelUsage && typeof parsed.modelUsage === 'object' ? Object.keys(parsed.modelUsage as object) : []
-    return {
-      text,
-      structured: parsed.structured_output ?? null,
-      durationMs: Date.now() - started,
-      costUsd: typeof parsed.total_cost_usd === 'number' ? parsed.total_cost_usd : null,
-      model: usage[0] ?? null,
+      const { stdout, stderr, code } = await runClaude(args, prompt, dir)
+      const rejected = attempt < 2 && code !== 0 ? /unknown option '?--(json-schema|effort)|(effort)/i.exec(`${stderr}\n${stdout}`.slice(0, 4000)) : null
+      if (rejected && structuredCall && rejected[1] === 'json-schema') { schemaFlag = false; continue }
+      if (rejected && effort) { noEffort.add(model); continue }
+      return { ...readCliResult(stdout, stderr, code), durationMs: Date.now() - started }
     }
   } finally {
     active--
-    void rm(dir, { recursive: true, force: true })
+    if (dir) {
+      await rm(dir, { recursive: true, force: true }).catch(() => {})
+      liveDirs.delete(dir)
+    }
   }
 }
 

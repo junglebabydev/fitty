@@ -95,6 +95,7 @@ describe('BridgeProvider', () => {
     expect((await kindOf(429, { ok: false, kind: 'busy', message: 'Busy.' })).kind).toBe('rate_limit')
     expect((await kindOf(429, { ok: false, kind: 'rate_limit', message: 'Slow down.' })).kind).toBe('rate_limit')
     expect((await kindOf(503, { ok: false, kind: 'auth', message: 'No AI key is configured on the server.' })).kind).toBe('auth')
+    expect((await kindOf(422, { ok: false, kind: 'refusal', message: 'The AI declined to answer this request.' })).kind).toBe('refusal')
     expect((await kindOf(504, { ok: false, kind: 'timeout', message: 'Too slow.' })).kind).toBe('network')
     expect((await kindOf(502, { ok: false, kind: 'failed', message: 'Nope.' })).kind).toBe('unknown')
   })

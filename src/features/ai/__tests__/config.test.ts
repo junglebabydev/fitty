@@ -115,6 +115,16 @@ describe('describeAI + aiStateLine', () => {
     expect(aiStateLine(st).line).toBe('Connected · Gemini with your API key')
   })
 
+  it('hosted with no Worker secrets and a device Gemini key reads as connected, not as an error', () => {
+    for (const bridge of [cloudNoSecrets, cloud({ ok: false, auth: 'signed_out', provider: null, message: 'No AI key is configured on the server.' }), null]) {
+      const st = statusFor(settings({ geminiKey: 'g' }), bridge, 'fitty.example.workers.dev')
+      expect(st.active).toBe('gemini')
+      expect(st.connected).toBe(true)
+      expect(st.message).toBe('Connected to Gemini with your API key.')
+      expect(aiStateLine(st)).toEqual({ line: 'Connected · Gemini with your API key', tone: 'ok' })
+    }
+  })
+
   it('Cloudflare Worker, connected', () => {
     const st = statusFor(settings({ bridgePin: 'long-pin-1234' }), cloud(), 'fitty.example.workers.dev')
     expect(st.message).toBe('Connected to AI through your Cloudflare Worker (Gemini).')

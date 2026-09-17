@@ -123,6 +123,21 @@ describe('ai gateway', () => {
       expect(ledger[0]).toMatchObject({ provider: 'anthropic', dataType: 'coach_context', status: 'sent' })
     })
 
+    it('configures Gemini from geminiKey / geminiModel and records provider "gemini" in the ledger', async () => {
+      vi.stubGlobal('navigator', { onLine: true })
+      configureAI({ providerId: 'gemini', geminiKey: 'test-key', geminiModel: null, onLedger })
+      expect(getProvider().id).toBe('gemini')
+      expect(getProvider().isConfigured()).toBe(true)
+      vi.spyOn(getProvider(), 'coachChat').mockResolvedValueOnce('ready')
+      expect(await coachChat('sys', [{ role: 'user', content: 'hi' }])).toBe('ready')
+      expect(ledger[0]).toMatchObject({ provider: 'gemini', dataType: 'coach_context', status: 'sent' })
+
+      configureAI({ providerId: 'gemini', geminiKey: '', onLedger })
+      const err = await coachChat('sys', [{ role: 'user', content: 'hi' }]).catch((e: unknown) => e)
+      expect((err as AIError).kind).toBe('not_configured')
+      expect(ledger).toHaveLength(1)
+    })
+
     it('times out after AI_TIMEOUT_MS and logs failed', async () => {
       vi.useFakeTimers()
       try {
