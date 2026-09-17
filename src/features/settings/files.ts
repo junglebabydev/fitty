@@ -1,7 +1,6 @@
 // Export / storage helpers for the Data screen.
-import { exportJson, exportSqlite } from '../../db/repositories'
+import { SECRET_SETTING_KEYS, exportJson, exportSqlite } from '../../db/repositories'
 import { todayStr } from '../../lib/util'
-import { KEYS } from './keys'
 
 export function fmtBytes(n: number): string {
   if (!Number.isFinite(n) || n < 0) return '—'
@@ -44,12 +43,13 @@ export function exportFilename(ext: 'json' | 'db', today: string = todayStr()): 
   return `coach-${today}.${ext}`
 }
 
-// Secrets, not health data: API keys for any provider and the hosted-bridge PIN never appear in a JSON export.
-export const REDACTED_SETTING_KEYS: string[] = [KEYS.aiApiKey, 'ai.geminiKey', 'ai.bridgePin']
+// Secrets, not health data: API keys for any provider and the hosted-bridge PIN never appear in an export.
+// One list for both formats (exportSqlite drops the same rows), so they cannot drift apart.
+export const REDACTED_SETTING_KEYS: string[] = SECRET_SETTING_KEYS
 
 /**
  * JSON export of every table. AI API keys and the bridge PIN are redacted (they are secrets, not
- * personal health data); the SQLite export is byte-exact and does include them.
+ * personal health data); the SQLite export leaves the same rows out.
  */
 export function buildJsonExport(): string {
   const raw = exportJson()

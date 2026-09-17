@@ -43,6 +43,14 @@ describe('planner prompt', () => {
     expect(plannerPrompt({ minutes: 45, focus: 'upper' })).toBe('Plan a 45-minute upper session for today.')
     expect(PLAN_SCHEMA.additionalProperties).toBe(false)
   })
+
+  it('a user with no condition flags is sent "none reported", never a default medical profile or gym', () => {
+    const s = buildPlannerSystem({ allowed: LIBRARY, gate: NECK_AMBER, conditions: [] })
+    expect(s).toContain('Conditions: none reported.')
+    expect(s).not.toMatch(/meniscus|back issues|neck issues|condo/i)
+    expect(plannerSystem).not.toMatch(/meniscus|back issues|neck issues|condo/i)
+    expect(buildPlannerSystem({ allowed: LIBRARY, gate: NECK_AMBER, conditions: ['Stiffness (after long sitting)'] })).toContain('Conditions: Stiffness (after long sitting).')
+  })
 })
 
 describe('router prompt', () => {

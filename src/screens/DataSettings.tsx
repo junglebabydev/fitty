@@ -158,7 +158,7 @@ export default function DataSettingsScreen() {
             </div>
             <div>
               <dt className="inline font-semibold">SQLite. </dt>
-              <dd className="inline text-muted">A byte-exact .db file. Includes all settings, including any API key, so store it somewhere private.</dd>
+              <dd className="inline text-muted">The whole database as a .db file. API keys and the bridge PIN are left out; it still holds all your health data, so store it somewhere private.</dd>
             </div>
           </dl>
           <p className="text-[13px] text-muted mt-3 leading-snug">Exports are files handed to the browser or share sheet; nothing is uploaded. Progress and meal photos are referenced by URI and are not embedded.</p>

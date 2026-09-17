@@ -78,12 +78,12 @@ function coachFacts(): CoachFacts {
   }
 }
 
-const PROFILE = 'Male, 37, 179 cm, intermediate lifter, condo gym. Goals: 74 kg, 81 cm waist. Conditions: meniscus tears (both knees), lower/mid/upper back, neck. Eats 1-2 meals/day, skips breakfast.'
+const PROFILE = 'Male, 37, 179 cm, intermediate lifter, condo gym. Goals: 74 kg, 81 cm waist. Conditions: past left-knee soreness, occasional lower-back tightness. Eats 1-2 meals/day, skips breakfast.'
 
 const ANSWERS: BaselineAnswers = {
   age: 37, sex: 'Male', heightCm: 179, weightKg: 84, waistCm: 84, goal: 'Lose fat', targetWeightKg: 74, horizonMonths: 6, experience: 'Intermediate',
   recentSessions: '1-2', enjoys: ['Lifting', 'Swimming'], daysPerWeek: 4, minutesPerSession: 45, equipment: ['Dumbbells', 'Machines', 'Cables', 'Bike', 'Pool'],
-  conditions: [{ region: 'Left knee', label: 'Meniscus tear', aggravators: ['deep squats', 'running'] }, { region: 'Lower back', label: 'Recurring tightness', aggravators: ['long sitting'] }],
+  conditions: [{ region: 'Left knee', label: 'Past knee soreness', aggravators: ['deep squats', 'running'] }, { region: 'Lower back', label: 'Recurring tightness', aggravators: ['long sitting'] }],
   mealsPerDay: '1-2', skipsBreakfast: true, foods: ['Hawker food', 'Home cooking'], alcohol: 'Weekends', caffeine: '2-3 a day', supplements: 'Whey, creatine',
   sleepHours: 6, bedtime: 'Varies', stress: 7, energy: 5, wants: ['Strength', 'Better sleep'], worked: ['Logging meals'], notWorked: ['Very low calorie diets'],
   historyNote: 'Lost 8 kg in 2023 then regained it after a knee flare-up.', kcal: 2050, proteinG: 150, coachStyle: 'Demanding',

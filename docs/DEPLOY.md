@@ -10,14 +10,16 @@ Checked against the Cloudflare and Google docs on 2026-09-18 (links at the end).
 |---|---|
 | Build command | leave empty, or `npm run build` (optional: `wrangler.jsonc` has `build.command = "npm run build"`, so Wrangler builds before every deploy anyway) |
 | Deploy command | `npx wrangler deploy` |
-| Non-production branch deploy command | `npx wrangler versions upload` |
+| Non-production branch deploy command | leave empty (see note 4) |
 | Path (root directory) | `/` |
 | Worker name | `fitty` (it must equal `name` in `wrangler.jsonc`, or the build fails with "The name in your Wrangler configuration file must match the name of your Worker") |
 
 Notes:
-1. Workers Builds installs dependencies from `package-lock.json` by itself. Node comes from `.nvmrc` (22); Wrangler 4 needs Node 22 or newer.
+1. Workers Builds installs dependencies from `package-lock.json` by itself with `npm ci`, so a build gets exactly the locked versions. Keep the lockfile committed, and do not replace the install step with `npm install`. Node comes from `.nvmrc` (22); Wrangler 4 needs Node 22 or newer.
 2. If you also fill in the dashboard build command, the app is built twice (once by that step, once by Wrangler). Leaving the dashboard field empty is the simplest setup.
 3. From your own machine: `npm run deploy` (build + `wrangler deploy`, needs `npx wrangler login` once) and `npm run cf:dry` (bundles the Worker into `.wrangler/dry` without logging in or uploading).
+4. **No preview deploys.** Every preview build is one more public `*-fitty.<subdomain>.workers.dev` origin with the production `GEMINI_API_KEY`, `ANTHROPIC_API_KEY` and `COACH_BRIDGE_PIN` bound and its own set of in-memory limiters, and any branch pushed to the repo would run its Worker code with those secrets. `wrangler.jsonc` therefore sets `"preview_urls": false`, and the non-production deploy command stays empty. If you really need previews, set `preview_urls` to `true`, use `npx wrangler versions upload` there, and make sure the Access policy in section 4 covers previews.
+5. The first `wrangler deploy` also creates the `DailyBudget` Durable Object (the `migrations` entry in `wrangler.jsonc`). SQLite-backed Durable Objects are available on the Workers Free plan, and nothing has to be created by hand. Both bindings are optional in the code: if a first deploy is refused because of the `ratelimits` or the `durable_objects` + `migrations` entries, remove that entry and the Worker runs without that one limit.
 
 ## 2. Secrets (required for hosted AI)
 
@@ -25,15 +27,24 @@ The site works without any of these; AI through the Worker stays off until both 
 
 | Name | Type | What it is |
 |---|---|---|
-| `COACH_BRIDGE_PIN` | Secret | The passphrase the app sends as `x-coach-pin`. **At least 8 characters**; use a long random phrase, not a 4-digit PIN. No PIN, no AI: the Worker refuses every call. |
-| `GEMINI_API_KEY` | Secret | Google AI Studio key. Used by default when present. |
+| `COACH_BRIDGE_PIN` | Secret | The token the app sends as `x-coach-pin`. Treat it as a bearer token, not a PIN you remember: **at least 16 characters**, generated with `openssl rand -base64 24` and pasted once per device. ASCII only (a browser cannot send other characters in a request header). Its length is what stops guessing. No PIN, no AI: the Worker refuses every call. |
+| `OPENROUTER_API_KEY` | Secret | OpenRouter key (`sk-or-…`). Used first when present. Default model `google/gemini-3.8-flash`; change it with the plain variable `COACH_OPENROUTER_MODEL`. Every request sends `provider.data_collection = "deny"`, so OpenRouter routes only to providers that do not retain or train on prompts (set `COACH_OPENROUTER_DATA_COLLECTION=allow` to lift that). An OpenRouter key saved under `GEMINI_API_KEY` is recognised by its prefix and is never sent to Google. |
+| `GEMINI_API_KEY` | Secret | Google AI Studio key. Used when there is no OpenRouter key. |
 | `ANTHROPIC_API_KEY` | Secret | Anthropic key. Used when there is no Gemini key, or when `COACH_PROVIDER` is `anthropic`. |
 
 Add them in either place:
 1. **Dashboard:** Workers & Pages → `fitty` → Settings → Variables and Secrets → Add → type **Secret** → name and value → Deploy.
 2. **CLI:** `npx wrangler secret put COACH_BRIDGE_PIN`, then `npx wrangler secret put GEMINI_API_KEY` (or `ANTHROPIC_API_KEY`). Wrangler prompts for the value; it is never written to disk.
 
-Never commit a key or the PIN, and never put them in `wrangler.jsonc` `vars` or in `VITE_*` variables (those end up in the public bundle). Secrets survive deploys.
+Never commit a key or the PIN, and never put them in `wrangler.jsonc` `vars` or in `VITE_*` variables (those end up in the public bundle). `.env`, `.env.*` and `.dev.vars*` are git-ignored. Secrets survive deploys.
+
+### Before you add a key: set a hard spend limit at the provider (required)
+
+The PIN is one static secret. It sits in plain text in every device's local database and in the raw SQLite export, so plan for the day it leaks. The Worker's own limits (section 5) only slow a caller down; the cap that holds is the provider's.
+
+1. **Anthropic:** in the Console, create the key in a workspace of its own and set a monthly spend limit on that workspace (Settings → Limits).
+2. **Google:** create the Gemini key in a Cloud project used for nothing else. In that project lower the per-day request quota of the Generative Language API (APIs & Services → Generative Language API → Quotas) and add a billing budget with an alert.
+3. If the PIN or a key may have leaked: replace `COACH_BRIDGE_PIN` (`npx wrangler secret put COACH_BRIDGE_PIN`), revoke the key at the provider, then enter the new PIN on each device.
 
 Optional plain settings go in `wrangler.jsonc` → `vars` (dashboard-only text variables are overwritten by the next `wrangler deploy`):
 
@@ -41,7 +52,7 @@ Optional plain settings go in `wrangler.jsonc` → `vars` (dashboard-only text v
 |---|---|---|
 | `COACH_PROVIDER` | unset | `gemini` or `anthropic`. Unset = Gemini if its key exists, else Anthropic. |
 | `COACH_GEMINI_MODEL` | `gemini-3.8-flash` | Gemini model code. |
-| `COACH_MODEL` | `claude-opus-5` | Claude model id. |
+| `COACH_MODEL` | `claude-opus-5` | Claude model id. Opus is the most expensive tier; `claude-sonnet-5` or `claude-haiku-4-5` cost a fraction of it per call. Only matters when the Worker uses the Anthropic key. |
 
 Then open the site → **Settings → AI**, enter the same PIN once per device. The status line should read connected, with the provider name.
 
@@ -50,7 +61,7 @@ Then open the site → **Settings → AI**, enter the same PIN once per device. 
 Create `.dev.vars` next to `wrangler.jsonc` (it is git-ignored) and run `npx wrangler dev`:
 
 ```
-COACH_BRIDGE_PIN=some-long-local-passphrase
+COACH_BRIDGE_PIN=<16 or more characters, e.g. from openssl rand -base64 24>
 GEMINI_API_KEY=<your key>
 ```
 
@@ -72,9 +83,12 @@ This is a personal health app on a public URL. Without Access, anyone who finds 
 
 1. Workers & Pages → `fitty` → **Access** tab → **Protect this Worker behind Access**. If the setup form you are on shows a "Protect with Cloudflare Access" switch, it is the same feature: turn it on. Zero Trust must be enabled on the account first.
 2. Choose **All traffic** (production and previews), and a policy that allows only your own email address.
-3. This covers the `workers.dev` hostname, preview URLs and any custom domain of this Worker.
+3. This covers the `workers.dev` hostname, preview URLs and any custom domain of this Worker. Check the policy again after you add a custom domain or change `workers_dev` / `preview_urls`: open every hostname of the Worker in a private window and make sure each one shows the Access login.
+4. Set the application's **session duration** to the longest you are comfortable with (up to 1 month). The default is 24 hours, and every expiry costs one more sign-in on every device.
 
-Keep the PIN anyway: it is the second lock. When an Access session expires, AI calls start failing with a network error; reload the app to sign in again.
+Keep the PIN anyway: it is the second lock.
+
+**When an Access session expires**, AI calls fail with a network error (the browser is redirected to the Access login, which a background request cannot follow) and app updates stop arriving. Reloading does not help: the service worker serves the app shell from its cache, so a reload never reaches Access. Open **`/api/ai/reauth`** on the site instead, for example `https://fitty.<subdomain>.workers.dev/api/ai/reauth`. That path always goes to the network, so Access shows its login and the Worker then sends you back to the app. In the iPhone home-screen app there is no address bar: use the "Sign in again" action the app shows when a hosted AI call cannot reach the server. Do not delete the home-screen app to get out of this state, because that also deletes its local database.
 
 ## 5. What works where
 
@@ -85,7 +99,17 @@ Keep the PIN anyway: it is the second lock. When an Access session expires, AI c
 
 The Claude subscription cannot be used from the hosted site: it needs Claude Code running on your Mac.
 
-What the Worker enforces on `/api/ai/*`: PIN on every call (constant-time check, 8 wrong tries from one address = 10-minute lockout), same-origin requests only, no CORS headers, bodies up to 20 MB, at most 4 attachments (JPEG, PNG, WebP, GIF, PDF), system prompt cut at 40,000 characters, 30 AI calls per 5 minutes and 2 at a time per isolate, reply caps of 2,048 tokens (chat) and 8,192 (JSON). Health reveals nothing about keys without the right PIN. Keys, the PIN and upstream error text are never sent to the browser or logged.
+What the Worker enforces on `/api/ai/*`: PIN on every call (constant-time check), HTTPS and same-origin requests only, no CORS headers, bodies up to 1.5 MB (about a 1 MB file; see section 8 for larger uploads), at most 4 attachments (JPEG, PNG, WebP, GIF, PDF), system prompt cut at 40,000 characters, reply caps of 2,048 tokens (chat) and 8,192 (JSON). Health reveals nothing about keys without the right PIN. Keys, the PIN and upstream error text are never sent to the browser or logged.
+
+Rate limits, and how much each one is worth:
+
+| Limit | Where it is counted | What it is |
+|---|---|---|
+| 300 AI calls per UTC day (`DAILY_CALL_LIMIT` in `worker/guard.ts`) | The `DailyBudget` Durable Object: one counter for every location and isolate, kept across restarts | The Worker's own spend cap. The provider-side limit from section 2 is still the one to rely on. |
+| 30 requests per minute per client address (`ratelimits` in `wrangler.jsonc`) | Cloudflare's rate limiting binding, per Cloudflare location | A brake, not a quota: Cloudflare documents it as approximate. An IPv6 client counts as its /64. |
+| 8 wrong PINs per address (IPv6: per /64) = 10 minutes locked out; 30 AI calls per 5 minutes; 2 calls at a time | Memory of one isolate | A brake only. Isolates are per location and are recycled, and an attacker with many addresses gets a fresh count for each, so none of this is a guarantee. Guessing is stopped by the length of the PIN, which is why it must be a random 16+ character token. |
+
+For a limit in front of the Worker, add a WAF rate limiting rule on the zone of a custom domain (Security → WAF → Rate limiting rules, expression `starts_with(http.request.uri.path, "/api/ai/")`). `workers.dev` hostnames have no WAF.
 
 ## 6. Your data stays in each browser
 
@@ -99,20 +123,31 @@ What the Worker enforces on `/api/ai/*`: PIN on every call (constant-time check,
 
 Workers & Pages → `fitty` → Settings → Domains & Routes → Add → **Custom Domain** (the domain's zone must be on the same Cloudflare account; DNS record and certificate are created for you). Or in `wrangler.jsonc`: `"routes": [{ "pattern": "fit.example.com", "custom_domain": true }]`. Mind point 6.3: moving to a custom domain starts with an empty database, so export first.
 
+After adding the domain:
+1. Turn on **Always Use HTTPS** for the zone (SSL/TLS → Edge Certificates). The Worker refuses AI calls over plain `http://`, and the app sends `Strict-Transport-Security`, but only this setting redirects the first visit.
+2. Set `"workers_dev": false` in `wrangler.jsonc` (the commented line is already there) and redeploy, so the Access-protected domain is the only origin. Do this only once the custom domain works.
+3. Re-check the Access policy (section 4, point 3).
+
+Security headers for the app itself live in `public/_headers` (HSTS, `nosniff`, `Referrer-Policy: no-referrer` and a Content-Security-Policy). `connect-src` there is the list of hosts the app may talk to: itself, `generativelanguage.googleapis.com`, `api.anthropic.com` and `raw.githubusercontent.com` (exercise photos). A new external host has to be added there or the browser blocks it. If Cloudflare Web Analytics or Rocket Loader is switched on for the zone, the script they inject is blocked by this policy; leave them off.
+
 ## 8. Troubleshooting
 
 | Symptom | Cause and fix |
 |---|---|
 | Build fails: name must match | Rename the Worker in the dashboard to `fitty`, or change `name` in `wrangler.jsonc`. |
-| Settings → AI says a PIN is needed | Enter `COACH_BRIDGE_PIN` on this device. After 8 wrong tries wait 10 minutes. |
-| "AI is switched off on this server" | `COACH_BRIDGE_PIN` is missing or shorter than 8 characters. |
-| "No AI key is configured on the server" | Add `GEMINI_API_KEY` or `ANTHROPIC_API_KEY` as a Secret and redeploy. |
+| Settings → AI says a PIN is needed | Enter `COACH_BRIDGE_PIN` on this device. After several wrong tries the Worker may refuse that address for about 10 minutes. |
+| "AI is switched off on this server" | `COACH_BRIDGE_PIN` is missing or shorter than 16 characters. |
+| AI worked yesterday, now "Couldn't reach the AI bridge" on a good connection | The Cloudflare Access session expired. Open `/api/ai/reauth` (section 4). |
+| "No AI key is configured on the server" | Add `OPENROUTER_API_KEY`, `GEMINI_API_KEY` or `ANTHROPIC_API_KEY` as a Secret and redeploy. |
+| "The OpenRouter account has no credits left" | Add credits at openrouter.ai. |
+| "OpenRouter has no provider for this model under the current privacy setting" | Pick another `COACH_OPENROUTER_MODEL`, or set `COACH_OPENROUTER_DATA_COLLECTION=allow`. |
 | "Google rejected the Gemini API key" / "Anthropic rejected the API key" | Wrong or revoked key, or the API is not enabled for that project. |
-| "Too many AI requests" (HTTP 429) | The per-isolate brake (30 calls / 5 min) or the provider's own rate limit. Wait. |
-| Error 1102 on a large PDF | Workers Free allows 10 ms CPU per request; parsing a multi-megabyte upload can exceed it. Use a smaller file or the Workers Paid plan. |
+| "Too many AI requests" / "Too many requests from this address" (HTTP 429) | A brake from section 5 (30 calls / 5 min, or 30 requests / min per address) or the provider's own rate limit. Wait. |
+| "Today's AI budget on this server is used up" (HTTP 429) | The daily cap (300 calls). It resets at midnight UTC; change `DAILY_CALL_LIMIT` in `worker/guard.ts` if it is too low for you. |
+| "Too large for the hosted AI endpoint" (HTTP 413) | The body limit is 1.5 MB, sized for Workers Free: it allows 10 ms CPU per request, and decoding a multi-megabyte upload exceeds that (Cloudflare error 1102, an HTML page the app cannot read). Use a photo of the page, or a per-device key (the browser then talks to the provider directly). On **Workers Paid**: uncomment `"limits": { "cpu_ms": 300 }` in `wrangler.jsonc`, raise `MAX_BODY_BYTES` in `worker/guard.ts` (8 MB at most) and redeploy. |
 | Deep links (`/train/...`) 404 | `assets.not_found_handling` must stay `single-page-application`. |
 
-Logs: Workers & Pages → `fitty` → Logs (observability is on). The Worker logs only an error name for unexpected failures, never prompts, keys or the PIN.
+Logs: **off on purpose.** `wrangler.jsonc` sets `observability.enabled` to `false`, so Cloudflare keeps no request logs for this Worker and the dashboard's Logs tab stays empty. To debug, run `npx wrangler tail fitty` while you reproduce the problem: it streams live and stores nothing. The Worker logs only an error name for unexpected failures, never prompts, keys or the PIN. Setting `observability.enabled` to `true` makes Cloudflare store request metadata (URL, status, timing, client details) for every call of a personal health app; if you ever need it, switch it on for the debugging session and off again.
 
 ## Sources
 
@@ -123,5 +158,8 @@ Logs: Workers & Pages → `fitty` → Logs (observability is on). The Worker log
 - Cloudflare Access for Workers: https://developers.cloudflare.com/workers/configuration/cloudflare-access/
 - Custom domains: https://developers.cloudflare.com/workers/configuration/routing/custom-domains/
 - Limits: https://developers.cloudflare.com/workers/platform/limits/
+- Rate limiting binding: https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/
+- Durable Objects (SQLite-backed, Free plan): https://developers.cloudflare.com/durable-objects/
+- `_headers` for static assets: https://developers.cloudflare.com/workers/static-assets/headers/
 - Gemini API terms: https://ai.google.dev/gemini-api/terms
 - Gemini generateContent, structured output, models: https://ai.google.dev/api/generate-content , https://ai.google.dev/gemini-api/docs/structured-output , https://ai.google.dev/gemini-api/docs/models

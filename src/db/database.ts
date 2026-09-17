@@ -1,4 +1,4 @@
-import initSqlJs, { type Database as SqlDatabase, type SqlValue } from 'sql.js'
+import initSqlJs, { type Database as SqlDatabase, type SqlJsStatic, type SqlValue } from 'sql.js'
 import { MIGRATIONS } from './schema'
 
 // Local-first SQLite via sql.js (WASM). The database bytes are persisted to
@@ -13,6 +13,7 @@ type Listener = () => void
 
 class Database {
   private db: SqlDatabase | null = null
+  private sql: SqlJsStatic | null = null
   private listeners = new Set<Listener>()
   private persistTimer: ReturnType<typeof setTimeout> | null = null
   private inTx = 0
@@ -33,6 +34,7 @@ class Database {
     // for 'sql-wasm-browser.wasm'; only sql-wasm.wasm (byte-identical) is served from public/.
     // Under node (vitest) the default loader finds dist/sql-wasm.wasm next to the script.
     const SQL = await initSqlJs(typeof window === 'undefined' ? {} : { locateFile: () => '/sql-wasm.wasm' })
+    this.sql = SQL
     const bytes = await idbGet()
     this.db = bytes ? new SQL.Database(bytes) : new SQL.Database()
     this.db.run('PRAGMA foreign_keys = ON;')
@@ -182,6 +184,21 @@ class Database {
   // --- export / delete -----------------------------------------------------
 
   export(): Uint8Array { return this.snapshot() }
+
+  /**
+   * The database file without the given `settings` rows (API keys, PIN): a backup gets shared, so secrets stay out.
+   * Works on a throwaway copy; VACUUM rebuilds the file so the deleted values do not linger in free pages.
+   */
+  exportWithoutSettings(keys: string[]): Uint8Array {
+    const copy = new this.sql!.Database(this.snapshot())
+    try {
+      copy.run(`DELETE FROM settings WHERE key IN (${keys.map(() => '?').join(', ')})`, keys)
+      copy.run('VACUUM;')
+      return copy.export()
+    } finally {
+      copy.close()
+    }
+  }
 
   exportJson(): Record<string, unknown[]> {
     const tables = this.all<{ name: string }>(`SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'`)

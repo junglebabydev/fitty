@@ -43,6 +43,12 @@ describe('routing', () => {
     expect(assets.fetch).toHaveBeenCalledTimes(2)
   })
 
+  it('answers GET /api/ai/reauth with a redirect home, even on the cross-site return from the Access login', async () => {
+    const res = await worker.fetch(get('/api/ai/reauth', { 'sec-fetch-site': 'cross-site' }), env())
+    expect([res.status, res.headers.get('location'), res.headers.get('cache-control')]).toEqual([302, '/', 'no-store'])
+    expect(assets.fetch).not.toHaveBeenCalled()
+  })
+
   it('answers unknown AI paths and wrong methods with JSON errors, only after the PIN', async () => {
     expect((await worker.fetch(post('/api/ai/nope', {}), env())).status).toBe(403)
     const unknown = await worker.fetch(post('/api/ai/nope', {}, { 'x-coach-pin': PIN }), env())
@@ -125,6 +131,14 @@ describe('security', () => {
     expect(upstream).not.toHaveBeenCalled()
   })
 
+  it('refuses plain http even with the right PIN', async () => {
+    const res = await worker.fetch(new Request('http://fitty.example.workers.dev/api/ai/chat', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'x-coach-pin': PIN }, body: JSON.stringify(chatBody),
+    }), env())
+    expect([res.status, (await res.json() as { kind: string }).kind]).toEqual([403, 'forbidden'])
+    expect(upstream).not.toHaveBeenCalled()
+  })
+
   it('locks an address out after repeated wrong PINs, without affecting other addresses', async () => {
     const from = (ip: string, pin: string) => worker.fetch(post('/api/ai/chat', chatBody, { 'cf-connecting-ip': ip, 'x-coach-pin': pin }), env())
     for (let i = 0; i < 8; i++) expect((await from('203.0.113.9', `wrong-guess-${i}`)).status).toBe(403)
@@ -134,11 +148,26 @@ describe('security', () => {
     expect((await from('198.51.100.7', PIN)).status).toBe(200)
   })
 
+  it('counts wrong PINs per /64 for IPv6, because one client owns the whole /64', async () => {
+    const from = (ip: string, pin: string) => worker.fetch(post('/api/ai/chat', chatBody, { 'cf-connecting-ip': ip, 'x-coach-pin': pin }), env())
+    for (let i = 0; i < 8; i++) expect((await from(`2001:db8:1:2::${i + 1}`, `wrong-guess-${i}`)).status).toBe(403)
+    expect((await from('2001:db8:1:2:ffff::9', PIN)).status).toBe(429)
+  })
+
+  it('applies the durable per-address limiter before the PIN is looked at', async () => {
+    const limit = vi.fn(async () => ({ success: false }))
+    const res = await worker.fetch(post('/api/ai/chat', chatBody, { 'cf-connecting-ip': '2001:db8:1:2::7', 'x-coach-pin': PIN }), env({ AI_LIMITER: { limit } }))
+    expect([res.status, (await res.json() as { kind: string }).kind]).toEqual([429, 'busy'])
+    expect(limit).toHaveBeenCalledWith({ key: '2001:db8:1:2' })
+    expect(upstream).not.toHaveBeenCalled()
+  })
+
   it('refuses oversized bodies before parsing them', async () => {
     const res = await worker.fetch(new Request(`${ORIGIN}/api/ai/chat`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json', Origin: ORIGIN, 'x-coach-pin': PIN, 'Content-Length': String(21 * 1024 * 1024) }, body: '{}',
+      method: 'POST', headers: { 'Content-Type': 'application/json', Origin: ORIGIN, 'x-coach-pin': PIN, 'Content-Length': String(2 * 1024 * 1024) }, body: '{}',
     }), env())
     expect(res.status).toBe(413)
+    expect((await res.json() as { message: string }).message).toMatch(/1\.5 MB/)
   })
 
   it('rate-limits AI calls per isolate', async () => {
@@ -148,6 +177,39 @@ describe('security', () => {
     const limited = await call()
     expect([limited.status, (await limited.json() as { kind: string }).kind]).toEqual([429, 'busy'])
     expect(upstream).toHaveBeenCalledTimes(30)
+  })
+
+  it('frees a concurrency slot by itself when a cancelled request never reaches `finally`', async () => {
+    // A client disconnect cancels the request in workerd: the pending call is never resumed.
+    upstream.mockImplementation(() => new Promise<Response>(() => undefined))
+    const call = () => worker.fetch(post('/api/ai/chat', chatBody, { 'x-coach-pin': PIN }), env())
+    void call(); void call()
+    await new Promise((r) => setTimeout(r, 20))
+    expect((await call()).status).toBe(429)
+    const later = Date.now() + 251_000
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(later)
+    try {
+      upstream.mockImplementation(async () => geminiOk('Hello'))
+      expect((await call()).status).toBe(200)
+    } finally {
+      clock.mockRestore()
+    }
+  })
+
+  it('stops at the daily budget, which is counted in a Durable Object', async () => {
+    const { DailyBudget } = await import('../index')
+    const store = new Map<string, unknown>()
+    const budget = new DailyBudget({ storage: { get: async <T>(k: string) => store.get(k) as T | undefined, put: async (k: string, v: unknown) => { store.set(k, v) } } })
+    const e = env({ DAILY_BUDGET: { idFromName: (name: string) => name, get: () => budget } })
+    const call = () => worker.fetch(post('/api/ai/chat', chatBody, { 'x-coach-pin': PIN }), e)
+    upstream.mockImplementation(async () => geminiOk('Hello'))
+    store.set('calls', { day: new Date().toISOString().slice(0, 10), used: 299 })
+    expect((await call()).status).toBe(200)
+    const spent = await call()
+    expect([spent.status, (await spent.json() as { kind: string }).kind]).toEqual([429, 'busy'])
+    expect(upstream).toHaveBeenCalledTimes(1)
+    store.set('calls', { day: '2000-01-01', used: 300 }) // an earlier day's count does not carry over
+    expect((await call()).status).toBe(200)
   })
 
   it('never echoes the key, the PIN or upstream error text', async () => {

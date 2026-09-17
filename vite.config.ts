@@ -34,7 +34,13 @@ export default defineConfig({
         theme_color: '#0a0b0d',
         background_color: '#0a0b0d',
         display: 'standalone',
-        icons: [{ src: 'icon.svg', sizes: 'any', type: 'image/svg+xml' }],
+        // iOS ignores SVG icons, so the PNGs (rendered from public/icon.svg) are what "Add to Home Screen" uses.
+        icons: [
+          { src: 'icon.svg', sizes: 'any', type: 'image/svg+xml' },
+          { src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png' },
+          { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png' },
+          { src: 'maskable-icon-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+        ],
       },
       workbox: {
         navigateFallbackDenylist: [/^\/api\//],
@@ -43,7 +49,7 @@ export default defineConfig({
           urlPattern: /^https:\/\/raw\.githubusercontent\.com\/yuhonas\/free-exercise-db\/.*\.(?:jpg|jpeg|png|gif)$/,
           handler: 'CacheFirst',
           options: { cacheName: 'exercise-media', expiration: { maxEntries: 400, maxAgeSeconds: 60 * 60 * 24 * 90 }, cacheableResponse: { statuses: [0, 200] } },
-        }], maximumFileSizeToCacheInBytes: 6 * 1024 * 1024, globPatterns: ['**/*.{js,css,html,svg,wasm,woff2}'] },
+        }], maximumFileSizeToCacheInBytes: 6 * 1024 * 1024, globPatterns: ['**/*.{js,css,html,svg,png,wasm,woff2}'] },
     }),
   ],
   // sql.js ships CJS/UMD only; pre-bundling makes its default import work in dev.
