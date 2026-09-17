@@ -399,7 +399,7 @@ const MAC_STEPS: { title: string; body: JSX.Element }[] = [
   { title: 'Keep the server running', body: <>Leave <Code>npm run dev</Code> or <Code>npm run dev:https</Code> running, and open the app from the same Wi-Fi.</> },
 ]
 const CLOUD_STEPS: { title: string; body: JSX.Element }[] = [
-  { title: 'Add two Worker secrets', body: <>Set one AI key (<Code>OPENROUTER_API_KEY</Code>, <Code>GEMINI_API_KEY</Code> or <Code>ANTHROPIC_API_KEY</Code>) and a <Code>COACH_BRIDGE_PIN</Code> of at least 16 characters, with <Code>npx wrangler secret put NAME</Code> or in the Cloudflare dashboard.</> },
+  { title: 'Add two Worker secrets', body: <>Set one AI key (<Code>OPENROUTER_API_KEY</Code>, <Code>GEMINI_API_KEY</Code> or <Code>ANTHROPIC_API_KEY</Code>) and a <Code>COACH_BRIDGE_PIN</Code> of at least 8 characters, with <Code>npx wrangler secret put NAME</Code> or in the Cloudflare dashboard.</> },
   { title: 'Redeploy', body: <>Deploy the Worker again so it picks the secrets up.</> },
   { title: 'Enter the PIN here', body: <>Type the same PIN in the Bridge PIN field, then check again. The API key stays on the Worker.</> },
 ]
@@ -466,9 +466,10 @@ function AISection() {
   const usesBridge = mode === 'auto' || mode === 'claude-code'
   const usesMac = usesBridge && !cloud
   const usesCloud = usesBridge && cloud
-  // Hosted: a Gemini key typed into this device is the main way in, so Auto shows it too. The Worker is optional.
-  const showGemini = mode === 'gemini' || (mode === 'auto' && cloud)
-  const workerInUse = mode === 'claude-code' || status.cloud === 'ok' || status.cloud === 'pin' || status.cloud === 'error' || !!config.bridgePin
+  // Hosted: if a Worker answers at all (connected, wants its PIN, misconfigured, erroring) it leads and the PIN field
+  // comes first. A key typed into this device is the fallback when no Worker answers, or when one is already saved.
+  const workerInUse = mode === 'claude-code' || (cloud && status.cloud !== 'none') || !!config.bridgePin
+  const showGemini = mode === 'gemini' || (mode === 'auto' && cloud && (!workerInUse || !!config.geminiKey))
   const showTest = mode === 'anthropic' || (showGemini && (mode === 'gemini' || status.active !== 'mock'))
   const { line, tone } = aiStateLine(status)
   const busy = checking || status.checking
