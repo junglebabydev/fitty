@@ -9,7 +9,10 @@
     "preview": "vite preview",
     "test": "vitest run",
     "typecheck": "tsc -b",
-    "dev:https": "COACH_HTTPS=1 vite --host"
+    "dev:https": "COACH_HTTPS=1 vite --host",
+    "typecheck:worker": "tsc -p worker/tsconfig.json --noEmit",
+    "deploy": "npm run build && wrangler deploy",
+    "cf:dry": "wrangler deploy --dry-run --outdir .wrangler/dry"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "latest",

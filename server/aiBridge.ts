@@ -10,11 +10,17 @@
 //   - the model gets NO tools, except `Read` when files are attached, scoped to a throw-away temp dir
 //   - no MCP servers, no project settings, no session persistence, hard timeout, small concurrency cap
 //
-// Env: COACH_CLAUDE_BIN (default "claude"), COACH_CLAUDE_MODEL (default "sonnet"), COACH_BRIDGE_PIN,
+// Structured calls pass the schema with `--json-schema`: Claude Code validates the reply and returns it as
+// `structured_output`. When that field is missing (older CLI, or COACH_BRIDGE_SCHEMA=prompt) the schema goes into the
+// prompt instead and the JSON is pulled out of the text reply.
+//
+// Env: COACH_CLAUDE_BIN (default "claude"), COACH_CLAUDE_MODEL (default "sonnet"), COACH_CLAUDE_EFFORT (structured calls
+//      only; default "low", "default" leaves it to Claude Code), COACH_BRIDGE_SCHEMA=prompt, COACH_BRIDGE_PIN,
 //      COACH_BRIDGE_DISABLED=1 to turn the bridge off.
 
 import { spawn } from 'node:child_process'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { rmSync } from 'node:fs'
+import { mkdtemp, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -27,6 +33,16 @@ const MAX_BODY_BYTES = 40 * 1024 * 1024
 const CALL_TIMEOUT_MS = 150_000
 const MAX_CONCURRENT = 2
 const ALLOWED_MODELS = new Set(['sonnet', 'opus', 'haiku', 'fable', 'default'])
+const ALLOWED_EFFORT = new Set(['low', 'medium', 'high', 'xhigh', 'max'])
+// Structured calls are transcription, routing and short drafts. Measured on the workout planner with sonnet:
+// 89 s at Claude Code's default effort, 26-35 s at low, with the same valid plan.
+const JSON_EFFORT = process.env.COACH_CLAUDE_EFFORT ?? 'low'
+const DIR_PREFIX = 'coach-ai-'
+const CONNECTED = 'Connected to Claude through Claude Code on this Mac.'
+
+// Optional CLI flags are switched off for the rest of the process when the installed Claude Code rejects them.
+let schemaFlag = process.env.COACH_BRIDGE_SCHEMA !== 'prompt'
+const noEffort = new Set<string>()
 
 type BridgeErrorKind = 'not_installed' | 'auth' | 'timeout' | 'bad_request' | 'forbidden' | 'busy' | 'failed'
 
@@ -38,7 +54,8 @@ class BridgeError extends Error {
 
 interface Attachment { base64: string; mediaType: string; name?: string }
 interface RunOptions { system: string; prompt: string; attachments?: Attachment[]; schema?: unknown; model?: string }
-interface RunResult { text: string; structured: unknown; durationMs: number; costUsd: number | null; model: string | null }
+interface CliResult { text: string; structured: unknown; costUsd: number | null; model: string | null }
+interface RunResult extends CliResult { durationMs: number }
 
 // --- environment -----------------------------------------------------------------------------------
 
@@ -82,6 +99,8 @@ function runClaude(args: string[], stdin: string, cwd: string): Promise<{ stdout
         : new BridgeError('failed', e.message))
     })
     child.on('close', (code) => { clearTimeout(timer); resolve({ stdout, stderr, code }) })
+    // A child that dies before reading its prompt (not installed, bad flag) must not take the dev server down with EPIPE.
+    child.stdin.on('error', () => {})
     child.stdin.end(stdin)
   })
 }

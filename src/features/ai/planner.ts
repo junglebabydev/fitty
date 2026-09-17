@@ -114,6 +114,8 @@ export function buildPlannerSystem(i: PlannerPromptInput): string {
     'Avoid repeating the main lifts of a session done in the last 48 hours. Order exercises by priority: compounds first, accessories last.',
     `ALLOWED EXERCISES — use ONLY these ids, copied exactly (id | name | pattern | equipment | safety tags):\n${list}`,
     'Sets 1–5, reps 3–30 (seconds for timed exercises), rest 30–180 s. The whole session, including a 5-minute warm-up, must fit the requested minutes (each set ≈ 45 s of work plus its rest).',
+    'The app schedules the 5-minute warm-up itself: do not list a warm-up or cool-down exercise. Cardio exercises belong in conditioning sessions only, unless the user asks for them.',
+    'name, rationale and note are plain text shown on a phone: name at most 5 words, rationale ONE sentence of at most 22 words, note at most 10 words. No emoji, no markdown.',
   ].join('\n\n')
 }
 
