@@ -63,12 +63,8 @@ export const SEED_GOALS: Omit<Goal, 'id' | 'startDate' | 'targetDate'>[] = [
 ]
 
 export const SEED_CONDITIONS: Omit<ConditionFlag, 'id'>[] = [
-  { region: 'knee_left', label: 'Meniscus tear', baselineNotes: 'Bilateral meniscus tears; the left knee is the more symptomatic side. Avoid deep loaded knee flexion and impact.' },
-  { region: 'knee_right', label: 'Meniscus tear', baselineNotes: 'Usually quiet; stiff after long sitting.' },
-  { region: 'back_lower', label: 'Lower back issues', baselineNotes: 'Flares with loaded spinal flexion and long unsupported hinging.' },
-  { region: 'back_mid', label: 'Mid back issues', baselineNotes: 'Stiffness after desk days; responds to rows and thoracic mobility.' },
-  { region: 'back_upper', label: 'Upper back issues', baselineNotes: 'Tight traps; keep shrugs and heavy carries light.' },
-  { region: 'neck', label: 'Neck issues', baselineNotes: 'Avoid end-range loading and heavy overhead work on bad days.' },
+  { region: 'knee_left', label: 'Past knee soreness', baselineNotes: 'Sore on stairs now and then. Avoid deep loaded knee flexion and impact on sore days.' },
+  { region: 'back_lower', label: 'Occasional tightness', baselineNotes: 'Tight after long desk days; eases with walking and hip mobility.' },
 ]
 
 export const SAVED_MEAL_NAMES = {

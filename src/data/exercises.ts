@@ -7,8 +7,8 @@ import type { Exercise } from '../domain/types'
 //   knee AMBER  -> avoid impact, deep_knee_flexion;   knee RED -> also knee_load
 //   back AMBER  -> avoid spinal_flexion, axial_load;  back RED -> also spinal_load
 //   neck AMBER  -> avoid overhead;                    neck RED -> also neck_load
-// Substitutions are ordered safest-first for a user with bilateral meniscus
-// tears plus lower/mid/upper back and neck issues. Every id in `substitutions`
+// Substitutions are ordered safest-first for a user with knee, back or neck
+// symptoms. Every id in `substitutions`
 // must exist in this library (asserted in __tests__/data.test.ts).
 
 const UPPER: Exercise[] = [

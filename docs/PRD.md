@@ -1,4 +1,4 @@
-# Personal Fitness Coach — PRD V0.1 (extracted from docx)
+# Personal Fitness Coach — PRD V0.1
 
 
 Personal Fitness Coach
@@ -7,9 +7,9 @@ Local-first iPhone app for training, nutrition, sleep, mobility, recovery and pr
 1. Executive Summary
 Build a personal, proactive fitness coach for iPhone that unifies strength training, HIIT/cardio, nutrition, sleep, body-composition progress, mobility and recovery. The application should minimize manual entry using voice and camera input, store canonical personal data locally, integrate with Apple Health/Apple Watch, and use AI for interpretation and coaching while deterministic rules own calculations and safety gates.
 Primary outcome (reference persona, §2): help the user reduce body weight from 84 kg toward roughly 70–75 kg while preserving or increasing strength and progressing toward visible abdominal definition over an aggressive but sustainable 3–6 month horizon.
-The product is for personal use initially. V0.1 should optimize for an excellent single-user experience rather than multi-user SaaS infrastructure.
+V0.1 should optimize for an excellent single-user experience rather than multi-user SaaS infrastructure.
 2. Reference Persona (fictional)
-The persona below is a fictional design reference ("Alex Tan") used for seed data, examples and defaults. It does not describe a real individual, and no real person's health data belongs in this document or the repository.
+The persona below is a fictional design reference ("Alex Tan") used for seed data, examples and defaults. No real person's health data belongs in this document or the repository.
 Dimension
 Requirement
 Profile
@@ -27,9 +27,9 @@ Condo gym: dumbbells, machines, bench, cables, lat pulldown, pool; no rower. Exa
 Mobility priorities
 Hips, hamstrings, shoulders, back and general mobility.
 Known physical constraints
-Knee considerations (meniscus tear history in both knees); lower, mid and upper back considerations; neck considerations.
+Past left-knee soreness; occasional lower-back tightness.
 Nutrition pattern
-Usually skips breakfast; 1–2 meals/day; morning coffee and supplements; occasional Snickers for quick sugar.
+Usually skips breakfast; 1–2 meals/day.
 Devices
 iPhone, Apple Watch, Mac.
 Privacy
@@ -450,4 +450,4 @@ Generic and branded food nutrition data.
 Singapore Health Promotion Board — https://www.hpb.gov.sg/
 Singapore-relevant nutrition resources / Food Insights data.
 24. Safety Note
-This application is a fitness and behavior-support product, not a medical device or clinician replacement. Because the reference persona includes knee, back and neck considerations, the product must avoid diagnosing conditions or prescribing rehabilitation. Concerning symptoms should route to conservative stop/modify behavior and appropriate professional assessment.
+This application is a fitness and behavior-support product, not a medical device or clinician replacement. Because the reference persona includes knee and lower-back considerations, the product must avoid diagnosing conditions or prescribing rehabilitation. Concerning symptoms should route to conservative stop/modify behavior and appropriate professional assessment.

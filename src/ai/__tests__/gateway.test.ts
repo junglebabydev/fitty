@@ -138,6 +138,21 @@ describe('ai gateway', () => {
       expect(ledger).toHaveLength(1)
     })
 
+    it('names the real recipient in the ledger when the bridge is the hosted Worker, and the Mac bridge otherwise', async () => {
+      vi.stubGlobal('navigator', { onLine: true })
+      const send = async () => {
+        vi.spyOn(getProvider(), 'coachChat').mockResolvedValueOnce('ok')
+        await coachChat('sys', [{ role: 'user', content: 'hi' }])
+      }
+      configureAI({ providerId: 'claude-code', bridgeHost: 'cloud', bridgeUpstream: 'gemini', onLedger })
+      await send()
+      configureAI({ providerId: 'claude-code', bridgeHost: 'cloud', bridgeUpstream: null, onLedger })
+      await send()
+      configureAI({ providerId: 'claude-code', bridgeHost: 'mac', bridgeUpstream: 'gemini', onLedger })
+      await send()
+      expect(ledger.map((e) => [e.provider, e.status])).toEqual([['worker:gemini', 'sent'], ['worker:unknown', 'sent'], ['claude-code', 'sent']])
+    })
+
     it('times out after AI_TIMEOUT_MS and logs failed', async () => {
       vi.useFakeTimers()
       try {

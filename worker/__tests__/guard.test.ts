@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
-  BridgeError, MAX_SYSTEM_CHARS, SlidingWindow, checkPin, extractJson, isSameOrigin, noKeyMessage, normalizeMediaType,
-  parseAttachments, parseBody, parseChatRequest, parseJsonRequest, pickProvider, pinMessage, readTextCapped, safeEqual, stripDataUrl,
+  BridgeError, MAX_SYSTEM_CHARS, SlidingWindow, checkPin, extractJson, isSameOrigin, isSecureRequest, noKeyMessage, normalizeMediaType,
+  parseAttachments, parseBody, parseChatRequest, parseJsonRequest, pickProvider, pinFailKey, pinMessage, readTextCapped, safeEqual, stripDataUrl,
 } from '../guard'
 
 function kindOf(fn: () => unknown): string {
@@ -25,10 +25,19 @@ describe('PIN', () => {
     expect(await checkPin(undefined, 'anything-at-all')).toBe('unset')
     expect(await checkPin('   ', 'anything-at-all')).toBe('unset')
     expect(await checkPin('1234', '1234')).toBe('too_short')
-    expect(await checkPin('long-enough-pin', null)).toBe('missing')
-    expect(await checkPin('long-enough-pin', '')).toBe('missing')
-    expect(await checkPin('long-enough-pin', 'long-enough-pim')).toBe('wrong')
-    expect(await checkPin('long-enough-pin', 'long-enough-pin')).toBe('ok')
+    expect(await checkPin('fifteen-chars-x', 'fifteen-chars-x')).toBe('too_short') // a bearer token, not a PIN: 16 or more
+    expect(await checkPin('a-long-enough-pin', null)).toBe('missing')
+    expect(await checkPin('a-long-enough-pin', '')).toBe('missing')
+    expect(await checkPin('a-long-enough-pin', 'a-long-enough-pim')).toBe('wrong')
+    expect(await checkPin('a-long-enough-pin', 'a-long-enough-pin')).toBe('ok')
+  })
+
+  it('keys wrong-PIN counting on the address for IPv4 and on the /64 for IPv6', () => {
+    expect(pinFailKey('203.0.113.9')).toBe('203.0.113.9')
+    expect(pinFailKey('2001:db8:12:34:aaaa:bbbb:cccc:dddd')).toBe(pinFailKey('2001:0db8:0012:0034::1'))
+    expect(pinFailKey('2001:db8::1:2:3:4')).toBe(pinFailKey('2001:db8::ffff')) // "::" inside the first 64 bits
+    expect(pinFailKey('2001:db8:12:34::1')).not.toBe(pinFailKey('2001:db8:12:35::1'))
+    expect(pinFailKey('::ffff:203.0.113.9')).toBe('::ffff:203.0.113.9')
   })
 
   it('never mentions keys or providers to a caller without the PIN', () => {
@@ -50,10 +59,21 @@ describe('isSameOrigin', () => {
   it('refuses other hosts, other ports, opaque and malformed origins, and cross-site fetches', () => {
     expect(isSameOrigin(url, 'https://evil.example')).toBe(false)
     expect(isSameOrigin(url, 'https://fitty.example.workers.dev:8443')).toBe(false)
+    expect(isSameOrigin(url, 'http://fitty.example.workers.dev')).toBe(false)
     expect(isSameOrigin(url, 'null')).toBe(false)
     expect(isSameOrigin(url, 'not a url')).toBe(false)
     expect(isSameOrigin(url, 'https://fitty.example.workers.dev', 'cross-site')).toBe(false)
     expect(isSameOrigin(url, null, 'same-site')).toBe(false)
+  })
+})
+
+describe('isSecureRequest', () => {
+  it('wants https, except on localhost (wrangler dev)', () => {
+    expect(isSecureRequest('https://fitty.example.workers.dev/api/ai/chat')).toBe(true)
+    expect(isSecureRequest('http://fitty.example.workers.dev/api/ai/chat')).toBe(false)
+    expect(isSecureRequest('http://localhost:8787/api/ai/chat')).toBe(true)
+    expect(isSecureRequest('http://127.0.0.1:8787/api/ai/chat')).toBe(true)
+    expect(isSecureRequest('not a url')).toBe(false)
   })
 })
 

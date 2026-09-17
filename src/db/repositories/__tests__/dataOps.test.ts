@@ -5,7 +5,7 @@
 // open database, so seedIfEmpty() sees exactly the fresh database deleteAllData left behind.
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { db } from '../../database'
-import { deleteAllData, exerciseCount, getProfile, getSetting, tableCounts } from '..'
+import { deleteAllData, exerciseCount, exportSqlite, getProfile, getSetting, setSetting, tableCounts } from '..'
 import { defaultSettings, seedIfEmpty } from '../../seed'
 
 const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -29,6 +29,20 @@ beforeAll(async () => {
 afterAll(() => {
   vi.unstubAllGlobals()
   errorSpy.mockRestore()
+})
+
+// A backup gets shared, synced and attached to bug reports; no credential may ride along in it.
+describe('exportSqlite', () => {
+  it('leaves the AI keys and the bridge PIN out of the file, keeps the rest, and does not touch the live database', () => {
+    const secrets = { 'ai.apiKey': 'fake-anthropic-key-0001', 'ai.geminiKey': 'fake-gemini-key-0002', 'ai.bridgePin': 'fake-pin-0003' }
+    for (const [key, value] of Object.entries(secrets)) setSetting(key, value)
+    setSetting('ai.geminiModel', 'fake-model-0004')
+    const file = new TextDecoder('latin1').decode(exportSqlite())
+    expect(file.startsWith('SQLite format 3')).toBe(true)
+    for (const value of Object.values(secrets)) expect(file).not.toContain(value)
+    expect(file).toContain('fake-model-0004')
+    for (const [key, value] of Object.entries(secrets)) expect(getSetting(key, '')).toBe(value)
+  })
 })
 
 describe('deleteAllData', () => {

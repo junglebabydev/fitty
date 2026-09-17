@@ -25,6 +25,11 @@ const VOICE_LABEL: Record<VoiceCommandRecord['status'], string> = { applied: 'Ap
 function providerLabel(p: string): string {
   if (p === 'mock') return 'On-device demo'
   if (p === 'anthropic') return 'Anthropic'
+  if (p === 'gemini') return 'Google Gemini'
+  if (p === 'claude-code') return 'Claude Code on your Mac'
+  if (p === 'worker:gemini') return 'Google Gemini, through your Cloudflare Worker'
+  if (p === 'worker:anthropic') return 'Claude, through your Cloudflare Worker'
+  if (p.startsWith('worker:')) return 'Your Cloudflare Worker'
   return p
 }
 

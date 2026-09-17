@@ -1,5 +1,5 @@
 // Mobility routines. Every movement is gentle and non-provocative for the
-// user's profile (bilateral meniscus tears, lower/mid/upper back, neck):
+// regions the symptom gate watches (knees, back, neck):
 // no loaded deep knee flexion, no end-range neck loading, no loaded spinal
 // flexion, no ballistic stretching. Cues say when to stop.
 

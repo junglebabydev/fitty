@@ -99,13 +99,13 @@ export interface PlannerPromptInput {
 /** The planner's system prompt. Pure: no database, no clock. */
 export function buildPlannerSystem(i: PlannerPromptInput): string {
   const { allowed, gate, readiness } = i
-  const conditions = i.conditions?.length ? i.conditions.join('; ') : 'bilateral meniscus tears; lower, mid and upper back issues; neck issues'
+  const conditions = i.conditions?.length ? i.conditions.join('; ') : 'none reported'
   const equipment = i.equipment?.length ? i.equipment.join(', ') : 'dumbbells, selectorised machines, cables, lat pulldown, adjustable bench, stationary bike, treadmill, pool'
   const list = allowed.map((e) => `${e.id} | ${e.name} | ${e.pattern} | ${e.equipment} | ${e.safetyTags.join(',') || 'none'}${e.timed ? ' | timed (seconds)' : ''}`).join('\n')
 
   return [
     'You plan ONE gym session for a single user of a wellness app. Reply with JSON only, matching the schema.',
-    `USER: ${i.experience ?? 'intermediate'} lifter, trains in a condo gym. Conditions: ${conditions}.`,
+    `USER: ${i.experience ?? 'intermediate'} lifter. Conditions: ${conditions}.`,
     'STANDING RULES: prefer machines, cables and dumbbells; low impact only; no deep knee flexion under load; no running or jumping; keep the spine supported where possible; no neck strain. Never diagnose and never give medical advice.',
     `EQUIPMENT: ${equipment}.`,
     `TODAY: readiness ${readiness?.state ?? 'unknown'}${readiness?.reasons.length ? ` (${readiness.reasons.slice(0, 3).join('; ')})` : ''}. Symptom gate ${gate.overall}${gate.avoidTags.length ? ` — avoid every exercise tagged: ${gate.avoidTags.join(', ')}` : ''}.${gate.advice.length ? ` ${gate.advice.slice(0, 3).join(' ')}` : ''}`,

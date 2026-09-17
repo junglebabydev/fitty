@@ -41,11 +41,12 @@ function mapKind(kind: string | undefined, status: number): AIError['kind'] {
   return 'unknown'
 }
 
-/** 'gemini' → 'Gemini', 'anthropic' → 'Claude'. Used in status lines for the cloud bridge. */
+/** 'gemini' → 'Gemini', 'anthropic' → 'Claude', 'openrouter' → 'OpenRouter'. Used in status lines for the cloud bridge. */
 export function bridgeProviderLabel(provider: string | null | undefined): string {
   const p = (provider ?? '').toLowerCase()
   if (p === 'gemini' || p === 'google') return 'Gemini'
   if (p === 'anthropic' || p === 'claude') return 'Claude'
+  if (p === 'openrouter') return 'OpenRouter'
   return ''
 }
 

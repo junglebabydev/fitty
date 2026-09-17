@@ -399,7 +399,7 @@ const MAC_STEPS: { title: string; body: JSX.Element }[] = [
   { title: 'Keep the server running', body: <>Leave <Code>npm run dev</Code> or <Code>npm run dev:https</Code> running, and open the app from the same Wi-Fi.</> },
 ]
 const CLOUD_STEPS: { title: string; body: JSX.Element }[] = [
-  { title: 'Add two Worker secrets', body: <>Set <Code>GEMINI_API_KEY</Code> (or <Code>ANTHROPIC_API_KEY</Code>) and a <Code>COACH_BRIDGE_PIN</Code> of at least 8 characters, with <Code>npx wrangler secret put NAME</Code> or in the Cloudflare dashboard.</> },
+  { title: 'Add two Worker secrets', body: <>Set one AI key (<Code>OPENROUTER_API_KEY</Code>, <Code>GEMINI_API_KEY</Code> or <Code>ANTHROPIC_API_KEY</Code>) and a <Code>COACH_BRIDGE_PIN</Code> of at least 16 characters, with <Code>npx wrangler secret put NAME</Code> or in the Cloudflare dashboard.</> },
   { title: 'Redeploy', body: <>Deploy the Worker again so it picks the secrets up.</> },
   { title: 'Enter the PIN here', body: <>Type the same PIN in the Bridge PIN field, then check again. The API key stays on the Worker.</> },
 ]
@@ -423,7 +423,7 @@ function GeminiKeyField({ stored }: { stored: string }) {
   }
 
   return (
-    <Field label="Gemini API key" htmlFor="set-gemini-key" hint="Kept in this phone's database and sent only to Google. Left out of JSON exports, but present in the raw SQLite export. Clear the field to remove it.">
+    <Field label="Gemini API key" htmlFor="set-gemini-key" hint="Kept in this phone's database and sent only to Google. Left out of JSON and SQLite exports. Clear the field to remove it.">
       <TextInput
         id="set-gemini-key"
         type={show ? 'text' : 'password'}
@@ -930,7 +930,7 @@ function ApiKeySheet({ open, apiKey, onClose }: { open: boolean; apiKey: string;
           />
         </Field>
         <p className="text-[13px] text-muted mt-3 leading-snug">
-          Stored in the local database only and sent directly from this device to Anthropic. It is redacted from JSON exports but present in the raw SQLite export.
+          Stored in the local database only and sent directly from this device to Anthropic. It is left out of JSON and SQLite exports.
         </p>
       </div>
     </Sheet>

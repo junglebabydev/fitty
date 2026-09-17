@@ -12,12 +12,16 @@ export class BridgeError extends Error {
   }
 }
 
-export type ProviderId = 'gemini' | 'anthropic'
+export type ProviderId = 'openrouter' | 'gemini' | 'anthropic'
 
 /** The string-valued part of the Worker env that the pure helpers need. Secrets are never logged or echoed. */
 export interface CoachEnv {
   COACH_BRIDGE_PIN?: string
   COACH_PROVIDER?: string
+  OPENROUTER_API_KEY?: string
+  COACH_OPENROUTER_MODEL?: string
+  /** 'deny' (default) routes only to providers that do not retain or train on prompts. */
+  COACH_OPENROUTER_DATA_COLLECTION?: string
   GEMINI_API_KEY?: string
   COACH_GEMINI_MODEL?: string
   ANTHROPIC_API_KEY?: string
@@ -26,20 +30,30 @@ export interface CoachEnv {
 
 // --- limits ------------------------------------------------------------------------------------------
 
-export const MAX_BODY_BYTES = 20 * 1024 * 1024
+/**
+ * Sized for the Workers Free plan (10 ms CPU per request): decoding and re-serialising a larger body can end in
+ * Cloudflare error 1102. About a 1 MB file once base64-encoded. On Workers Paid, raise it (8 MB at most) together
+ * with `limits.cpu_ms` in wrangler.jsonc; see docs/DEPLOY.md §8.
+ */
+export const MAX_BODY_BYTES = 1.5 * 1024 * 1024
 export const MAX_SYSTEM_CHARS = 40_000
 export const MAX_PROMPT_CHARS = 200_000
 export const MAX_TURNS = 60
 export const MAX_ATTACHMENTS = 4
 export const MAX_SCHEMA_CHARS = 50_000
-export const MIN_PIN_LENGTH = 8
+/** The PIN is a bearer token, not a 4-digit PIN: its length is what stops guessing, the lockout below is only a brake. */
+export const MIN_PIN_LENGTH = 16
 export const CHAT_MAX_TOKENS = 2048
 export const JSON_MAX_TOKENS = 8192
 /** AI calls per isolate. Isolates are per-location and recycled, so this is a brake, not a quota. */
 export const RATE_LIMIT = { calls: 30, windowMs: 5 * 60_000 }
-/** Wrong-PIN attempts per client address per isolate. */
+/** Wrong-PIN attempts per client address (per /64 for IPv6, see pinFailKey) per isolate. */
 export const PIN_FAIL_LIMIT = { attempts: 8, windowMs: 10 * 60_000 }
 export const MAX_CONCURRENT = 2
+/** A concurrency slot frees itself after the worst-case upstream time (a timeout of up to 120 s, twice on a 400-retry path). */
+export const LEASE_MS = 250_000
+/** AI calls per UTC day across all isolates and locations, counted in the DailyBudget Durable Object. */
+export const DAILY_CALL_LIMIT = 300
 
 export const ALLOWED_MEDIA_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf'] as const
 export type MediaType = (typeof ALLOWED_MEDIA_TYPES)[number]
@@ -91,19 +105,42 @@ export function pinMessage(state: PinState): string {
   return 'PIN required. Enter it in Settings → AI.'
 }
 
+/**
+ * Key for the wrong-PIN counter: the address itself for IPv4, the /64 for IPv6, because one IPv6 client
+ * controls every address in its /64. Handles "::" inside the first four groups.
+ */
+export function pinFailKey(ip: string): string {
+  if (!ip.includes(':') || ip.includes('.')) return ip
+  const [head, tail = ''] = ip.toLowerCase().split('::')
+  const h = head ? head.split(':') : []
+  const t = tail ? tail.split(':') : []
+  const groups = ip.includes('::') ? [...h, ...Array<string>(Math.max(0, 8 - h.length - t.length)).fill('0'), ...t] : h
+  return groups.slice(0, 4).map((g) => g.replace(/^0+(?=.)/, '')).join(':')
+}
+
 // --- origin ------------------------------------------------------------------------------------------
 
 /**
  * Same-origin only. Browsers send Origin on every POST and on cross-origin GETs; when it is present its
- * host must equal the host of the URL being requested. Sec-Fetch-Site, when present, must not say the
- * request came from another site. Requests without either header (curl, same-origin GET) pass this
- * check and still need the PIN.
+ * origin (scheme, host and port) must equal the origin of the URL being requested. Sec-Fetch-Site, when
+ * present, must not say the request came from another site. Requests without either header (curl,
+ * same-origin GET) pass this check and still need the PIN.
  */
 export function isSameOrigin(requestUrl: string, origin: string | null, secFetchSite: string | null = null): boolean {
   if (secFetchSite && secFetchSite !== 'same-origin' && secFetchSite !== 'none') return false
   if (origin === null) return true
   try {
-    return new URL(origin).host === new URL(requestUrl).host
+    return new URL(origin).origin === new URL(requestUrl).origin
+  } catch {
+    return false
+  }
+}
+
+/** HTTPS only, so the PIN and the health payload never travel in clear text. Plain http is fine on localhost (`wrangler dev`). */
+export function isSecureRequest(requestUrl: string): boolean {
+  try {
+    const { protocol, hostname } = new URL(requestUrl)
+    return protocol === 'https:' || hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]'
   } catch {
     return false
   }
@@ -146,7 +183,7 @@ export class SlidingWindow {
 
 /** Reads a request body as text, refusing anything over `maxBytes` without buffering the excess. */
 export async function readTextCapped(body: ReadableStream<Uint8Array> | null, contentLength: string | null, maxBytes = MAX_BODY_BYTES): Promise<string> {
-  const tooLarge = () => new BridgeError('bad_request', `Request too large (limit ${Math.round(maxBytes / (1024 * 1024))} MB).`, 413)
+  const tooLarge = () => new BridgeError('bad_request', `Too large for the hosted AI endpoint (limit ${+(maxBytes / (1024 * 1024)).toFixed(1)} MB per request). Try a smaller file, or a photo of the page.`, 413)
   const declared = Number(contentLength)
   if (Number.isFinite(declared) && declared > maxBytes) throw tooLarge()
   if (!body) return ''
@@ -267,12 +304,27 @@ export function extractJson(text: string): unknown {
 
 const has = (v: string | undefined): boolean => !!v && v.trim().length > 0
 
-/** COACH_PROVIDER wins when set; otherwise Gemini if its key exists, then Anthropic. null = no usable key. */
+/** OpenRouter keys start with "sk-or-"; one may have been stored under GEMINI_API_KEY by mistake. */
+const isOpenRouterKey = (v: string | undefined): boolean => !!v && v.trim().startsWith('sk-or-')
+
+/** The OpenRouter key, wherever it was stored: its own secret, or a "sk-or-" key saved as GEMINI_API_KEY. */
+export function openRouterKeyOf(env: CoachEnv): string {
+  if (has(env.OPENROUTER_API_KEY)) return (env.OPENROUTER_API_KEY as string).trim()
+  if (isOpenRouterKey(env.GEMINI_API_KEY)) return (env.GEMINI_API_KEY as string).trim()
+  return ''
+}
+
+/** A real Google key: GEMINI_API_KEY is set and is not an OpenRouter key. */
+const hasGoogleKey = (env: CoachEnv): boolean => has(env.GEMINI_API_KEY) && !isOpenRouterKey(env.GEMINI_API_KEY)
+
+/** COACH_PROVIDER wins when set; otherwise OpenRouter if its key exists, then Gemini, then Anthropic. null = no usable key. */
 export function pickProvider(env: CoachEnv): ProviderId | null {
   const want = (env.COACH_PROVIDER ?? '').trim().toLowerCase()
-  if (want === 'gemini') return has(env.GEMINI_API_KEY) ? 'gemini' : null
+  if (want === 'openrouter') return openRouterKeyOf(env) ? 'openrouter' : null
+  if (want === 'gemini') return hasGoogleKey(env) ? 'gemini' : openRouterKeyOf(env) ? 'openrouter' : null
   if (want === 'anthropic') return has(env.ANTHROPIC_API_KEY) ? 'anthropic' : null
-  if (has(env.GEMINI_API_KEY)) return 'gemini'
+  if (openRouterKeyOf(env)) return 'openrouter'
+  if (hasGoogleKey(env)) return 'gemini'
   if (has(env.ANTHROPIC_API_KEY)) return 'anthropic'
   return null
 }
@@ -280,7 +332,8 @@ export function pickProvider(env: CoachEnv): ProviderId | null {
 /** Shown only to a caller that already presented the right PIN. */
 export function noKeyMessage(env: CoachEnv): string {
   const want = (env.COACH_PROVIDER ?? '').trim().toLowerCase()
+  if (want === 'openrouter') return 'COACH_PROVIDER is "openrouter" but the OPENROUTER_API_KEY secret is not set on the server.'
   if (want === 'gemini') return 'COACH_PROVIDER is "gemini" but the GEMINI_API_KEY secret is not set on the server.'
   if (want === 'anthropic') return 'COACH_PROVIDER is "anthropic" but the ANTHROPIC_API_KEY secret is not set on the server.'
-  return 'No AI key is configured on the server. Add GEMINI_API_KEY (or ANTHROPIC_API_KEY) as a Worker secret.'
+  return 'No AI key is configured on the server. Add OPENROUTER_API_KEY, GEMINI_API_KEY or ANTHROPIC_API_KEY as a Worker secret.'
 }

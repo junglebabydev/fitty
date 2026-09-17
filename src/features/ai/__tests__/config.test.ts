@@ -12,6 +12,7 @@ import {
   resolveActive,
   type AISettings,
   type AIStatus,
+  CLOUD_SECRETS_MESSAGE,
 } from '../config'
 
 const settings = (patch: Partial<AISettings> = {}): AISettings => ({
@@ -153,7 +154,7 @@ describe('describeAI + aiStateLine', () => {
     expect(st.message).toMatch(/COACH_BRIDGE_PIN/)
     expect(aiStateLine(st)).toEqual({ line: 'Worker secrets needed', tone: 'warn' })
     const silent = statusFor(settings({ mode: 'claude-code' }), { ...cloudNoSecrets, message: '' }, 'fitty.example.workers.dev')
-    expect(silent.message).toBe('Add GEMINI_API_KEY and COACH_BRIDGE_PIN as Worker secrets to enable AI here.')
+    expect(silent.message).toBe(CLOUD_SECRETS_MESSAGE)
   })
 
   it('hosted, auto, nothing set up: points at the device key and stays in demo', () => {

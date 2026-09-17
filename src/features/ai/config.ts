@@ -105,7 +105,7 @@ export function isConnected(s: AISettings, active: AIProviderId, bridge: BridgeH
 }
 
 export const CLOUD_PIN_MESSAGE = 'Enter your bridge PIN in Settings → AI.'
-export const CLOUD_SECRETS_MESSAGE = 'Add GEMINI_API_KEY and COACH_BRIDGE_PIN as Worker secrets to enable AI here.'
+export const CLOUD_SECRETS_MESSAGE = 'Add an AI key (OPENROUTER_API_KEY, GEMINI_API_KEY or ANTHROPIC_API_KEY) and COACH_BRIDGE_PIN as Worker secrets to enable AI here.'
 
 /**
  * What the hosted Cloudflare Worker bridge needs next (worker/index.ts health contract):
@@ -228,6 +228,7 @@ function configure(s: AISettings, checking: boolean): void {
     bridgeModel: s.bridgeModel || null,
     bridgePin: s.bridgePin || null,
     bridgeHost: host,
+    bridgeUpstream: bridge?.provider ?? null,
     onLedger: (e) => { addLedgerEntry({ ...e, ts: nowIso() }) },
   })
   const cloud = host === 'cloud' ? cloudBridgeState(bridge) : 'none'

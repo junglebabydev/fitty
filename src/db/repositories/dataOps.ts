@@ -6,9 +6,12 @@ export function exportJson(): string {
   return JSON.stringify(db.exportJson(), null, 2)
 }
 
-/** Raw SQLite file bytes. */
+/** Secrets, not health data: API keys for any provider and the hosted-bridge PIN. Left out of every export. */
+export const SECRET_SETTING_KEYS: string[] = ['ai.apiKey', 'ai.geminiKey', 'ai.bridgePin']
+
+/** SQLite file bytes of the whole database, minus the SECRET_SETTING_KEYS rows. */
 export function exportSqlite(): Uint8Array {
-  return db.export()
+  return db.exportWithoutSettings(SECRET_SETTING_KEYS)
 }
 
 /**

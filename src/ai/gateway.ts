@@ -29,10 +29,14 @@ export interface ConfigureAIOptions {
   bridgePin?: string | null
   /** Bridge only: where the bridge runs. 'cloud' = the Cloudflare Worker, which picks its own model. */
   bridgeHost?: 'mac' | 'cloud' | null
+  /** Cloud bridge only: the upstream the Worker reports in /api/ai/health ('gemini' | 'anthropic'). Named on the ledger row. */
+  bridgeUpstream?: string | null
   onLedger: (e: LedgerInput) => void
 }
 
 let provider: AIProvider = new MockProvider()
+/** What a privacy-ledger row calls the recipient: the provider id, or `worker:<upstream>` for the hosted Worker. */
+let ledgerProvider: string = provider.id
 let ledgerSink: (e: LedgerInput) => void = () => {}
 
 export function configureAI(opts: ConfigureAIOptions): void {
@@ -42,6 +46,7 @@ export function configureAI(opts: ConfigureAIOptions): void {
     : opts.providerId === 'gemini' ? new GeminiProvider(opts.geminiKey ?? '', opts.geminiModel ?? undefined)
     : opts.providerId === 'claude-code' ? new BridgeProvider(opts.bridgeModel ?? '', opts.bridgePin ?? '', opts.bridgeHost ?? 'mac')
     : new MockProvider()
+  ledgerProvider = provider.id === 'claude-code' && opts.bridgeHost === 'cloud' ? `worker:${opts.bridgeUpstream || 'unknown'}` : provider.id
 }
 
 /** True when a real model is connected (not the on-device demo provider). */
@@ -107,7 +112,7 @@ async function guarded<T>(
 export function recognizeMeal(img: MealImage, context: MealContext = {}): Promise<MealRecognition> {
   const purpose = context.mealType ? `Meal photo recognition (${context.mealType})` : 'Meal photo recognition'
   return guarded(
-    { provider: provider.id, dataType: 'meal_photo', purpose, bytes: img.base64.length },
+    { provider: ledgerProvider, dataType: 'meal_photo', purpose, bytes: img.base64.length },
     'Meal recognition',
     (p) => p.recognizeMeal(img, context),
   )
@@ -116,7 +121,7 @@ export function recognizeMeal(img: MealImage, context: MealContext = {}): Promis
 export function coachChat(system: string, turns: ChatTurn[]): Promise<string> {
   const bytes = JSON.stringify({ system, turns }).length
   return guarded(
-    { provider: provider.id, dataType: 'coach_context', purpose: 'Coach chat (profile summary, today\'s facts, conversation)', bytes },
+    { provider: ledgerProvider, dataType: 'coach_context', purpose: 'Coach chat (profile summary, today\'s facts, conversation)', bytes },
     'Coach chat',
     (p) => p.coachChat(system, turns),
   )
@@ -129,7 +134,7 @@ export function coachChat(system: string, turns: ChatTurn[]): Promise<string> {
 export function aiJson<T>(req: JsonRequest, meta: { dataType: string; purpose: string }): Promise<T> {
   const bytes = JSON.stringify({ s: req.system, p: req.prompt }).length + (req.attachments ?? []).reduce((n, a) => n + a.base64.length, 0)
   return guarded(
-    { provider: provider.id, dataType: meta.dataType, purpose: meta.purpose, bytes },
+    { provider: ledgerProvider, dataType: meta.dataType, purpose: meta.purpose, bytes },
     meta.purpose,
     (p) => p.completeJson(req) as Promise<T>,
   )
