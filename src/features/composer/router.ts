@@ -64,7 +64,7 @@ export const ROUTER_SYSTEM = [
   'Extract only what the user said. Never invent data the user did not give: no weights, reps, pain scores, moods or measurements they did not state. If a required value is missing, use intent "question". A symptom without a pain number is still log_symptom, with pain null.',
   'Food is the one exception: for log_meal, estimate grams, kcal, protein_g, carbs_g and fat_g per item from typical portions (Singapore hawker portions when the dish is local). These are estimates and the app labels them as estimates.',
   'metric: value and unit exactly as stated (kg, lb, cm or in). symptom: region in plain words (e.g. "left knee", "lower back", "neck"), pain 0-10 only if the user gave a number, otherwise null (the app asks for it). mood: valence is an integer from -3 (very unpleasant) to 3 (very pleasant), note is their own words. plan: minutes (20, 30, 45 or 60) and focus (upper, lower, full, conditioning or mobility).',
-  'Never diagnose, never name a medical condition, never give medical advice. For a question, leave "answer" empty or one short neutral sentence; the coach screen answers it.',
+  'Never diagnose, never name a medical condition, never give medical advice. Leave "answer" empty for every intent: the coach screen answers questions, and nothing written there is shown.',
   'Plain text in every string. No emoji.',
 ].join('\n')
 

@@ -44,11 +44,12 @@ export function exportFilename(ext: 'json' | 'db', today: string = todayStr()): 
   return `coach-${today}.${ext}`
 }
 
-export const REDACTED_SETTING_KEYS: string[] = [KEYS.aiApiKey]
+// Secrets, not health data: API keys for any provider and the hosted-bridge PIN never appear in a JSON export.
+export const REDACTED_SETTING_KEYS: string[] = [KEYS.aiApiKey, 'ai.geminiKey', 'ai.bridgePin']
 
 /**
- * JSON export of every table. The AI API key is redacted (it is a secret, not
- * personal health data); the SQLite export is byte-exact and does include it.
+ * JSON export of every table. AI API keys and the bridge PIN are redacted (they are secrets, not
+ * personal health data); the SQLite export is byte-exact and does include them.
  */
 export function buildJsonExport(): string {
   const raw = exportJson()

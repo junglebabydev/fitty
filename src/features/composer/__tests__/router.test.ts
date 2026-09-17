@@ -55,6 +55,15 @@ describe('actionFromRouter', () => {
     expect(a.cmd.payload).toMatchObject({ region: 'knee_left', regions: ['knee_left'], painScore: 10, sideUnspecified: false })
   })
 
+  it('log_symptom without a stated score carries no pain score: the preview asks for it', () => {
+    const a = actionFromRouter({ intent: 'log_symptom', symptom: { region: 'lower back', pain: null } }, 'lower back is a bit sore', NOW)
+    expect(a.kind).toBe('command')
+    if (a.kind !== 'command') return
+    expect(a.cmd.payload).not.toHaveProperty('painScore')
+    expect(a.cmd.payload.region).toBe('back_lower')
+    expect(a.cmd.preview).toMatch(/pain score\?/)
+  })
+
   it('log_symptom with an unknown area uses "other" rather than guessing', () => {
     const a = actionFromRouter({ intent: 'log_symptom', symptom: { region: 'elbow', pain: 2 } }, 'elbow twinge', NOW)
     expect(a.kind === 'command' && a.cmd.payload.region).toBe('other')

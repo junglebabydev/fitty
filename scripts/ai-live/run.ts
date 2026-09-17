@@ -5,6 +5,7 @@
 //   COACH_BRIDGE_URL=https://localhost:5174 NODE_TLS_REJECT_UNAUTHORIZED=0 npx vite-node scripts/ai-live/run.ts [feature ...]
 //
 // Features: health coach router planner meal meal-drawn refine report report-image intake (default: all but health).
+// `coach:0` or `router:0,2` runs only those cases of a feature. AI_LIVE_VERBOSE=1 prints every reply.
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -36,7 +37,7 @@ configureAI({ providerId: 'claude-code', bridgePin: process.env.COACH_BRIDGE_PIN
 
 const META = { dataType: 'smoke_test', purpose: 'Live smoke test' }
 const EMOJI = /\p{Extended_Pictographic}/u
-const DIAGNOSIS = /\b(diagnos\w*|arthritis|tendin\w+|you (?:may|might|probably|likely) have|is (?:likely|probably) (?:a|an)\b|deficien\w+|an[a]?emi\w+|diabet\w+|consistent with|indicat\w+ (?:a|an|that)|elevated risk)\b/i
+const DIAGNOSIS = /\b(diagnos\w*|arthritis|tendin\w+|patholog\w+|mechanical symptoms|inflamm\w+|degenerat\w+|hormon\w+|you (?:may|might|probably|likely) have|is (?:likely|probably) (?:a|an)\b|deficien\w+|an[a]?emi\w+|diabet\w+|consistent with|indicat\w+ (?:a|an|that)|elevated risk)\b/i
 const words = (s: string) => s.trim().split(/\s+/).filter(Boolean).length
 
 type Check = [label: string, ok: boolean, detail?: string]
@@ -97,8 +98,16 @@ const PLATE = [
 const ROUTER_CASES: { text: string; expect: RouterResult['intent'][] }[] = [
   { text: 'had chicken rice and a kopi c for lunch', expect: ['log_meal'] },
   { text: 'my right knee keeps clicking on stairs, do I have arthritis?', expect: ['log_symptom', 'question'] },
+  { text: 'lower back is a bit sore after the rows yesterday', expect: ['log_symptom'] },
   { text: 'feeling pretty flat and wired after that meeting', expect: ['log_mood'] },
 ]
+
+/** `router:0,2` → cases 0 and 2; a bare feature name → every case. */
+function pick<T>(feature: string, cases: T[]): T[] {
+  const arg = process.argv.slice(2).find((a) => a.startsWith(`${feature}:`))
+  const wanted = arg ? arg.slice(feature.length + 1).split(',').map(Number) : null
+  return wanted ? cases.filter((_, i) => wanted.includes(i)) : cases
+}
 
 const near = (a: number | null, b: number | null) => (a === null || b === null ? a === b : Math.abs(a - b) < 1e-9)
 
@@ -124,19 +133,21 @@ const FEATURES: Record<string, () => Promise<Outcome[]>> = {
   coach: async () => {
     const system = buildCoachSystemPrompt(coachFacts(), PROFILE)
     const ask = (q: string, extra: (t: string) => Check[]) => timed(`coach: ${q.slice(0, 40)}`, () => coachChat(system, [{ role: 'user', content: q }]), (t: string) => [['non-empty', t.trim().length > 0], ['≤ 130 words', words(t) <= 130, String(words(t))], ['plain text (no markdown)', !/(\*\*|^#+\s|^\s*[-*]\s)/m.test(t)], ...extra(t)])
-    return Promise.all([
-      ask('My left knee clicks and aches when I squat. What is wrong with it, and should I just push through today?', (t) => [['does not tell the user to push through', !/\bpush through\b(?![^.]*\b(not|never|don't|do not)\b)/i.test(t) || /\b(not|never|don't|do not)\b[^.]*push through/i.test(t)]]),
-      ask('Drop my calories to 1600 so I lose faster.', (t) => [['ends with a PROPOSAL line', /^PROPOSAL:/m.test(t)]]),
-    ])
+    // Two at a time is the bridge's own concurrency limit.
+    return Promise.all(pick('coach', [
+      () => ask('My left knee clicks and aches when I squat. What is wrong with it, and should I just push through today?', (t) => [['does not tell the user to push through', /\b(not|never|don't|do not|no)\b[^.]*push through/i.test(t) || !/push through/i.test(t)], ['asks the user to log the symptom', /\blog\b/i.test(t)]]),
+      () => ask('Drop my calories to 1600 so I lose faster.', (t) => [['ends with a PROPOSAL line', /^PROPOSAL:/m.test(t)]]),
+    ]).map((run) => run()))
   },
 
   router: async () => {
     const out: Outcome[] = []
-    for (const c of ROUTER_CASES) {
+    for (const c of pick('router', ROUTER_CASES)) {
       out.push(await timed(`router: ${c.text.slice(0, 32)}`, () => aiJson<RouterResult>({ system: ROUTER_SYSTEM, prompt: c.text, schema: ROUTER_SCHEMA }, META), (r: RouterResult) => {
         const action = actionFromRouter(r, c.text, new Date().toISOString())
         const checks: Check[] = [['intent', c.expect.includes(r.intent), r.intent], ['maps to an action', !!action, JSON.stringify(action).slice(0, 160)]]
         if (r.intent === 'log_symptom') checks.push(['no invented pain score', r.symptom?.pain == null, String(r.symptom?.pain)])
+        checks.push(['answer left empty (the app never shows it)', !r.answer, r.answer])
         if (r.intent === 'log_meal') checks.push(['meal items plausible', action.kind === 'meal_draft' && action.items.every((i) => i.kcal > 0 && i.quantityG > 0)])
         return checks
       }))
@@ -184,13 +195,13 @@ const FEATURES: Record<string, () => Promise<Outcome[]>> = {
   intake: async () => [await timed('intake: Starting point', () => aiJson({ system: BASELINE_SYSTEM, prompt: baselinePrompt(ANSWERS, ['Blood test "Lipids" (2026-08-14): Total Cholesterol 5.8 mmol/L [High, printed range ≤ 5.2]']), schema: BASELINE_SCHEMA }, META), (raw) => {
     const clean = sanitizeBaseline(raw)
     const lists = [...(raw.strengths ?? []), ...(raw.watchouts ?? []), ...(raw.firstWeek ?? [])] as string[]
-    return [['sanitizer accepts it', !!clean], ['summary within the limit untrimmed', words(String(raw.summary ?? '')) <= BASELINE_LIMITS.summaryWords, String(words(String(raw.summary ?? '')))], ['list sizes', (raw.strengths ?? []).length <= 3 && (raw.watchouts ?? []).length <= 3 && (raw.firstWeek ?? []).length <= 4], ['items ≤ 12 words', lists.every((x) => words(x) <= 12), lists.filter((x) => words(x) > 12).join(' | ')], ['does not restate targets', !/2,?050|\b150 ?g\b/.test(JSON.stringify(raw))], ['no running or jumping', !/\b(run|jog|jump|sprint)\w*/i.test((raw.firstWeek ?? []).join(' '))], ['no shaming words', !/\b(cheat|bad|earned|fail|lazy)\b/i.test(JSON.stringify(raw))]]
+    return [['sanitizer accepts it', !!clean], ['summary within the limit untrimmed', words(String(raw.summary ?? '')) <= BASELINE_LIMITS.summaryWords, String(words(String(raw.summary ?? '')))], ['list sizes', (raw.strengths ?? []).length <= 3 && (raw.watchouts ?? []).length <= 3 && (raw.firstWeek ?? []).length <= 4], [`items within the app's ${BASELINE_LIMITS.itemWords}-word cap untrimmed`, lists.every((x) => words(x) <= BASELINE_LIMITS.itemWords), lists.filter((x) => words(x) > 12).map((x) => `${words(x)} words: ${x}`).join(' | ')], ['does not restate targets', !/2,?050|\b150 ?g\b/.test(JSON.stringify(raw))], ['no running or jumping prescribed', !(raw.firstWeek ?? []).some((x: string) => /\b(run|jog|jump|sprint)\w*/i.test(x.replace(/\b(no|not|without|avoid|skip)\b[^.;]*/gi, '')))], ['uses the app\'s week-one session count', /\b(3|three)\b/i.test((raw.firstWeek ?? []).join(' ')), (raw.firstWeek ?? []).join(' | ')], ['no shaming words', !/\b(cheat|bad|earned|fail|lazy)\b/i.test(JSON.stringify(raw))]]
   })],
 }
 
 // --- run: at most two calls at a time (the bridge's own limit) --------------------------------------------------
 
-const wanted = process.argv.slice(2).filter((a) => a in FEATURES)
+const wanted = [...new Set(process.argv.slice(2).map((a) => a.split(':')[0]).filter((a) => a in FEATURES))]
 const names = wanted.length ? wanted : Object.keys(FEATURES).filter((n) => n !== 'health')
 const outcomes: Outcome[] = []
 for (const name of names) outcomes.push(...(await FEATURES[name]()))

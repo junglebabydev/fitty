@@ -4,6 +4,7 @@
 //
 // Same contract as the local bridge in server/aiBridge.ts:
 //   GET  /api/ai/health → { ok, installed, version, auth, message, model, pinRequired, host: 'cloud', provider, pinOk }
+//                         (without the right PIN: 403 and the same generic "PIN required" body whether or not a key exists)
 //   POST /api/ai/chat   { system, turns, attachments? }          → { ok, text, meta }
 //   POST /api/ai/json   { system, prompt, schema, attachments? } → { ok, data, meta }
 //   errors              → { ok: false, kind, message }
@@ -29,6 +30,8 @@ export interface Env extends CoachEnv {
 
 const VERSION = 'fitty-worker/1'
 const HEALTH_TTL_MS = 10 * 60_000
+/** An inconclusive check (network blip upstream) is retried soon instead of being remembered for ten minutes. */
+const HEALTH_RETRY_MS = 30_000
 
 // Per-isolate state. Isolates come and go, so none of this is a guarantee, only a brake.
 const calls = new SlidingWindow(RATE_LIMIT.calls, RATE_LIMIT.windowMs)
@@ -60,7 +63,8 @@ async function health(env: Env): Promise<Record<string, unknown>> {
   const up = upstream(env)
   if (!up) return { ...base, ok: false, auth: 'signed_out', message: noKeyMessage(env), model: '', provider: null }
   const key = `${up.provider}:${up.model}`
-  if (!checked || checked.key !== key || Date.now() - checked.at > HEALTH_TTL_MS) {
+  const ttl = checked?.auth === 'unknown' ? HEALTH_RETRY_MS : HEALTH_TTL_MS
+  if (!checked || checked.key !== key || Date.now() - checked.at > ttl) {
     try {
       await (up.provider === 'gemini' ? geminiCheck(up.apiKey, up.model) : anthropicCheck(up.apiKey, up.model))
       checked = { key, auth: 'ok', message: `Connected to ${providerName(up.provider)} through this site's server.`, at: Date.now() }
@@ -75,8 +79,8 @@ async function health(env: Env): Promise<Record<string, unknown>> {
 async function run(env: Env, call: (up: Upstream) => Promise<ProviderReply>): Promise<{ reply: ProviderReply; up: Upstream; durationMs: number }> {
   const up = upstream(env)
   if (!up) throw new BridgeError('auth', noKeyMessage(env), 503)
-  if (!calls.take('all', Date.now())) throw new BridgeError('busy', 'Too many AI requests in a short time. Wait a few minutes and try again.', 429)
   if (active >= MAX_CONCURRENT) throw new BridgeError('busy', 'The AI endpoint is busy. Try again in a moment.', 429)
+  if (!calls.take('all', Date.now())) throw new BridgeError('busy', 'Too many AI requests in a short time. Wait a few minutes and try again.', 429)
   active++
   const started = Date.now()
   try {

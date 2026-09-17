@@ -421,7 +421,7 @@ function GeminiKeyField({ stored }: { stored: string }) {
   }
 
   return (
-    <Field label="Gemini API key" htmlFor="set-gemini-key" hint="Kept in this phone's database and sent only to Google. Clear the field to remove it.">
+    <Field label="Gemini API key" htmlFor="set-gemini-key" hint="Kept in this phone's database and sent only to Google. Left out of JSON exports, but present in the raw SQLite export. Clear the field to remove it.">
       <TextInput
         id="set-gemini-key"
         type={show ? 'text' : 'password'}
@@ -574,7 +574,7 @@ function AISection() {
           </div>
         </GroupBlock>
 
-        {usesCloud && mode === 'claude-code' && pinField}
+        {usesCloud && (mode === 'claude-code' || status.cloud === 'pin') && pinField}
         {usesCloud && mode === 'claude-code' && <Row icon={<Cloud size={18} />} title="Set up AI on my Worker" subtitle="Three steps: secrets, redeploy, PIN" chevron onClick={() => setHowTo(true)} />}
 
         {usesMac && <Row icon={<Laptop size={18} />} title="Set up Claude on my Mac" subtitle="Three steps, about two minutes" chevron onClick={() => setHowTo(true)} />}
@@ -640,7 +640,7 @@ function AISection() {
           </GroupText>
         )}
 
-        {usesCloud && mode === 'auto' && workerInUse && pinField}
+        {usesCloud && mode === 'auto' && workerInUse && status.cloud !== 'pin' && pinField}
         {usesCloud && mode === 'auto' && <Row icon={<Cloud size={18} />} title="Use my Worker instead" subtitle="Optional: the key stays on the server, this phone holds a PIN" chevron onClick={() => setHowTo(true)} />}
 
         {mode === 'anthropic' && (

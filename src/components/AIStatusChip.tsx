@@ -6,13 +6,15 @@ export interface AIStatusChipProps {
   onClick?: () => void
 }
 
-type ChipState = 'checking' | 'claude' | 'key' | 'signin' | 'offline' | 'demo'
+type ChipState = 'checking' | 'claude' | 'cloud' | 'key' | 'signin' | 'setup' | 'offline' | 'demo'
 
 const LABEL: Record<ChipState, string> = {
   checking: 'Checking…',
   claude: 'Claude connected',
+  cloud: 'AI connected',
   key: 'AI key connected',
   signin: 'Sign in on your Mac',
+  setup: 'Connect AI',
   offline: 'AI offline',
   demo: 'Demo mode',
 }
@@ -20,16 +22,21 @@ const LABEL: Record<ChipState, string> = {
 const DOT: Record<ChipState, string> = {
   checking: 'bg-faint anim-pulse-soft',
   claude: 'bg-ok',
+  cloud: 'bg-ok',
   key: 'bg-ok',
   signin: 'bg-warn',
+  setup: 'bg-faint',
   offline: 'bg-warn',
   demo: 'bg-faint',
 }
 
 export function aiChipState(s: AIStatus): ChipState {
   if (s.checking && !s.connected) return 'checking'
-  if (s.connected) return s.active === 'claude-code' ? 'claude' : 'key'
-  if (s.bridge?.auth === 'signed_out' && s.mode !== 'mock' && s.mode !== 'anthropic') return 'signin'
+  const hosted = s.host === 'cloud'
+  if (s.connected) return s.active === 'claude-code' ? (hosted ? 'cloud' : 'claude') : 'key'
+  // "Sign in on your Mac" only makes sense for the local Claude Code bridge; a hosted site needs a key instead.
+  if (hosted && s.mode !== 'mock') return 'setup'
+  if (s.bridge?.auth === 'signed_out' && s.mode !== 'mock' && s.mode !== 'anthropic' && s.mode !== 'gemini') return 'signin'
   if (s.mode === 'claude-code' || (s.mode === 'anthropic' && s.active === 'anthropic')) return 'offline'
   return 'demo'
 }

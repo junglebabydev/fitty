@@ -178,8 +178,8 @@ async function ask(opts: RunOptions): Promise<RunResult> {
     liveDirs.add(dir)
     const files: string[] = []
     for (const [i, a] of (opts.attachments ?? []).entries()) {
-      const ext = EXT[a?.mediaType]
-      if (!ext) throw new BridgeError('bad_request', `Unsupported attachment type: ${a?.mediaType}`, 400)
+      const ext = a && typeof a.mediaType === 'string' ? EXT[a.mediaType] : undefined
+      if (!ext) throw new BridgeError('bad_request', `Unsupported attachment type: ${String(a?.mediaType)}`, 400)
       if (typeof a.base64 !== 'string' || !a.base64) throw new BridgeError('bad_request', 'Attachment has no data.', 400)
       const name = `input-${i + 1}.${ext}`
       await writeFile(join(dir, name), Buffer.from(a.base64.replace(/^data:[^,]*,/, ''), 'base64'))
@@ -233,19 +233,32 @@ async function ask(opts: RunOptions): Promise<RunResult> {
 
 // --- JSON extraction ----------------------------------------------------------------------------------
 
-export function extractJson(text: string): unknown {
-  const cleaned = text.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim()
-  try { return JSON.parse(cleaned) } catch { /* try the outermost braces */ }
+/** The JSON object in a text reply (code fences and surrounding prose tolerated). Throws when there is none: `null`, arrays and bare values are not answers. */
+export function extractJson(text: string): Record<string, unknown> {
+  const cleaned = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim()
+  const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v)
+  try {
+    const whole: unknown = JSON.parse(cleaned)
+    if (isObject(whole)) return whole
+  } catch { /* try the outermost braces */ }
   const start = cleaned.indexOf('{')
   const end = cleaned.lastIndexOf('}')
-  if (start >= 0 && end > start) return JSON.parse(cleaned.slice(start, end + 1))
+  if (start >= 0 && end > start) {
+    const inner: unknown = JSON.parse(cleaned.slice(start, end + 1))
+    if (isObject(inner)) return inner
+  }
   throw new Error('no JSON object in reply')
 }
 
 // --- health ------------------------------------------------------------------------------------------------
 
-interface Health { ok: boolean; installed: boolean; version: string | null; auth: 'ok' | 'signed_out' | 'unknown'; message: string; model: string; checkedAt: number }
+interface Health { ok: boolean; installed: boolean; version: string | null; auth: 'ok' | 'signed_out' | 'unknown'; message: string; model: string; host: 'mac'; checkedAt: number }
 let health: Health | null = null
+/** True when `health` came from a real model call (a deep check or a user call), not just from finding the binary. */
+let proven = false
+let deepCheck: Promise<Health> | null = null
+const HEALTHY_TTL_MS = 10 * 60_000
+const UNHEALTHY_TTL_MS = 30_000
 
 async function checkInstalled(): Promise<{ installed: boolean; version: string | null }> {
   try {
@@ -256,24 +269,47 @@ async function checkInstalled(): Promise<{ installed: boolean; version: string |
   }
 }
 
-async function getHealth(deep: boolean): Promise<Health> {
-  const fresh = health && Date.now() - health.checkedAt < 10 * 60_000
-  if (health && fresh && (!deep || health.auth !== 'unknown')) return health
+/** Only a real, non-empty answer from the model may mark the bridge healthy. */
+function markHealthy(): void {
+  if (!health) return
+  health = { ...health, ok: true, installed: true, auth: 'ok', message: CONNECTED, checkedAt: Date.now() }
+  proven = true
+}
+
+async function runHealthCheck(deep: boolean): Promise<Health> {
   const { installed, version } = await checkInstalled()
   let auth: Health['auth'] = 'unknown'
   let message = installed ? 'Claude Code found on this Mac.' : 'Claude Code is not installed on this Mac.'
   if (installed && deep) {
     try {
-      await ask({ system: 'You are a connectivity check. Reply with the single word OK.', prompt: 'OK?', model: 'haiku' })
-      auth = 'ok'
-      message = 'Connected to Claude through Claude Code on this Mac.'
+      const r = await ask({ system: 'You are a connectivity check. Reply with the single word OK.', prompt: 'OK?', model: 'haiku' })
+      if (r.text.trim()) { auth = 'ok'; message = CONNECTED }
+      else message = 'Claude Code answered with an empty reply. Try again.'
     } catch (e) {
+      // Both slots taken by real calls says nothing about sign-in: keep what those calls last proved.
+      if (e instanceof BridgeError && e.kind === 'busy' && health) return health
       if (e instanceof BridgeError && e.kind === 'auth') { auth = 'signed_out'; message = AUTH_HINT }
       else message = e instanceof Error ? e.message : 'Claude Code did not respond.'
     }
   }
-  health = { ok: installed && auth === 'ok', installed, version, auth, message, model: DEFAULT_MODEL, checkedAt: Date.now() }
+  health = { ok: installed && auth === 'ok', installed, version, auth, message, model: DEFAULT_MODEL, host: 'mac', checkedAt: Date.now() }
+  proven = deep
   return health
+}
+
+/**
+ * A healthy result is reused for ten minutes. A failed deep check is reused for 30 s only, so signing in (or a
+ * transient failure clearing) shows up on the next "check again"; a result that only proves the binary exists
+ * never answers a deep check.
+ */
+async function getHealth(deep: boolean): Promise<Health> {
+  const age = health ? Date.now() - health.checkedAt : Infinity
+  const ttl = health?.ok || !deep ? HEALTHY_TTL_MS : UNHEALTHY_TTL_MS
+  if (health && age < ttl && (!deep || proven)) return health
+  if (!deep) return runHealthCheck(false)
+  // Several tabs or devices opening at once share one check instead of taking both call slots.
+  deepCheck ??= runHealthCheck(true).finally(() => { deepCheck = null })
+  return deepCheck
 }
 
 // --- HTTP plumbing --------------------------------------------------------------------------------------
@@ -345,27 +381,28 @@ async function handle(req: IncomingMessage, res: ServerResponse, path: string): 
       const history = turns.slice(0, -1).map((t) => `${t.role === 'assistant' ? 'Coach' : 'User'}: ${t.content}`).join('\n\n')
       const prompt = history ? `Conversation so far:\n${history}\n\nUser: ${last.content}\n\nReply as the coach to the last user message only.` : last.content
       const r = await ask({ system, prompt, attachments, model })
-      if (health) health = { ...health, ok: true, auth: 'ok', checkedAt: Date.now() }
+      if (!r.text.trim()) throw new BridgeError('failed', 'Claude returned an empty reply. Try again.', 502)
+      markHealthy()
       send(res, 200, { ok: true, text: r.text, meta: { durationMs: r.durationMs, costUsd: r.costUsd, model: r.model } })
       return
     }
 
     if (path === '/json') {
       const prompt = str(body.prompt)
-      if (!prompt || !body.schema) throw new BridgeError('bad_request', 'prompt and schema are required.', 400)
+      if (!prompt || !body.schema || typeof body.schema !== 'object') throw new BridgeError('bad_request', 'prompt and schema are required.', 400)
       const r = await ask({ system, prompt, attachments, schema: body.schema, model })
       let data: unknown
       try { data = r.structured ?? extractJson(r.text) }
       catch { throw new BridgeError('failed', 'Claude did not return valid JSON. Try again.', 502) }
-      if (health) health = { ...health, ok: true, auth: 'ok', checkedAt: Date.now() }
-      send(res, 200, { ok: true, data, meta: { durationMs: r.durationMs, costUsd: r.costUsd, model: r.model } })
+      markHealthy()
+      send(res, 200, { ok: true, data, meta: { durationMs: r.durationMs, costUsd: r.costUsd, model: r.model, structured: r.structured != null } })
       return
     }
 
     throw new BridgeError('bad_request', 'Unknown endpoint.', 404)
   } catch (e) {
     if (e instanceof BridgeError) {
-      if (e.kind === 'auth' && health) health = { ...health, ok: false, auth: 'signed_out', message: AUTH_HINT, checkedAt: Date.now() }
+      if (e.kind === 'auth' && health) { health = { ...health, ok: false, auth: 'signed_out', message: AUTH_HINT, checkedAt: Date.now() }; proven = true }
       send(res, e.status, { ok: false, kind: e.kind, message: e.message })
     } else {
       send(res, 500, { ok: false, kind: 'failed', message: e instanceof Error ? e.message : 'Bridge error.' })
@@ -376,6 +413,7 @@ async function handle(req: IncomingMessage, res: ServerResponse, path: string): 
 type Middlewares = { use: (fn: (req: IncomingMessage, res: ServerResponse, next: () => void) => void) => void }
 
 function mount(middlewares: Middlewares): void {
+  void sweepStaleDirs()
   middlewares.use((req, res, next) => {
     const url = req.url ?? ''
     if (!url.startsWith('/api/ai/')) { next(); return }

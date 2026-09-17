@@ -52,7 +52,7 @@ import type { HealthReport } from '../../domain/types'
 import { useToast } from '../../hooks'
 import { cx } from '../../lib/util'
 import { HEALTH_DATA_TYPES, getHealthBridge } from '../../native'
-import { applyAISettings, useAIStatus } from '../ai/config'
+import { activeProviderLabel, applyAISettings, useAIStatus } from '../ai/config'
 import { ReportUploader } from '../reports'
 import { MIND_CHECKIN_PRESETS, MIND_GOAL_OPTIONS } from '../settings/keys'
 import { ageFromDob, validateStep, weeklyRateTo, STEP, type WizardState } from '../settings/onboarding'
@@ -186,9 +186,7 @@ function ReportsStep({ setA }: Pick<StepCtx, 'setA'>) {
 function AIStep({ s, set, a, setA }: Pick<StepCtx, 's' | 'set' | 'a' | 'setA'>) {
   const status = useAIStatus()
   const how = status.connected
-    ? status.active === 'claude-code'
-      ? 'I think with Claude through your Mac. Only what a question needs is sent.'
-      : 'I think with Claude through your API key. Only what a question needs is sent.'
+    ? `I think with ${activeProviderLabel(status)}. Only what a question needs is sent.`
     : status.mode === 'mock'
       ? 'Demo mode: I work from rules on this phone. Nothing leaves it.'
       : `${status.message} Until then I work from rules on this phone.`
