@@ -10,12 +10,17 @@
 //   - the model gets NO tools, except `Read` when files are attached, scoped to a throw-away temp dir
 //   - no MCP servers, no project settings, no session persistence, hard timeout, small concurrency cap
 //
-// Structured calls pass the schema with `--json-schema`: Claude Code validates the reply and returns it as
-// `structured_output`. When that field is missing (older CLI, or COACH_BRIDGE_SCHEMA=prompt) the schema goes into the
-// prompt instead and the JSON is pulled out of the text reply.
+// Structured calls (/json) have two ways to get JSON back:
+//   flag   — `--json-schema`: Claude Code validates the reply against the schema and returns it as `structured_output`.
+//            It costs one extra turn (the tool call, then a one-word close).
+//   prompt — the schema goes into the prompt and the JSON object is pulled out of the text reply.
+// COACH_BRIDGE_SCHEMA picks one; the default "auto" uses the flag for text-only calls and the prompt for calls with
+// attachments, where the extra turn was measured at +14 s (lab report, sonnet: 10.8 s prompt vs 24-27 s flag). Whatever
+// the mode, a reply without `structured_output` falls back to text extraction, and a CLI too old for the flag falls
+// back to the prompt.
 //
-// Env: COACH_CLAUDE_BIN (default "claude"), COACH_CLAUDE_MODEL (default "sonnet"), COACH_CLAUDE_EFFORT (structured calls
-//      only; default "low", "default" leaves it to Claude Code), COACH_BRIDGE_SCHEMA=prompt, COACH_BRIDGE_PIN,
+// Env: COACH_CLAUDE_BIN (default "claude"), COACH_CLAUDE_MODEL (default "sonnet"), COACH_CLAUDE_EFFORT (/json calls only;
+//      default "low", "default" leaves it to Claude Code), COACH_BRIDGE_SCHEMA (auto | flag | prompt), COACH_BRIDGE_PIN,
 //      COACH_BRIDGE_DISABLED=1 to turn the bridge off.
 
 import { spawn } from 'node:child_process'
@@ -35,13 +40,14 @@ const MAX_CONCURRENT = 2
 const ALLOWED_MODELS = new Set(['sonnet', 'opus', 'haiku', 'fable', 'default'])
 const ALLOWED_EFFORT = new Set(['low', 'medium', 'high', 'xhigh', 'max'])
 // Structured calls are transcription, routing and short drafts. Measured on the workout planner with sonnet:
-// 89 s at Claude Code's default effort, 26-35 s at low, with the same valid plan.
+// 89 s at Claude Code's default effort, 24-35 s at low, with an equally valid plan.
 const JSON_EFFORT = process.env.COACH_CLAUDE_EFFORT ?? 'low'
 const DIR_PREFIX = 'coach-ai-'
 const CONNECTED = 'Connected to Claude through Claude Code on this Mac.'
 
 // Optional CLI flags are switched off for the rest of the process when the installed Claude Code rejects them.
-let schemaFlag = process.env.COACH_BRIDGE_SCHEMA !== 'prompt'
+const SCHEMA_MODE = process.env.COACH_BRIDGE_SCHEMA === 'flag' || process.env.COACH_BRIDGE_SCHEMA === 'prompt' ? process.env.COACH_BRIDGE_SCHEMA : 'auto'
+let schemaFlag = SCHEMA_MODE !== 'prompt'
 const noEffort = new Set<string>()
 
 type BridgeErrorKind = 'not_installed' | 'auth' | 'timeout' | 'bad_request' | 'forbidden' | 'busy' | 'failed'
@@ -191,9 +197,9 @@ async function ask(opts: RunOptions): Promise<RunResult> {
     const model = opts.model && ALLOWED_MODELS.has(opts.model) ? opts.model : DEFAULT_MODEL
     const started = Date.now()
 
-    // At most two retries: one per optional flag an older Claude Code may not know.
+    // At most two retries: one per optional flag (see `rejected` below).
     for (let attempt = 0; ; attempt++) {
-      const structuredCall = !!opts.schema && schemaFlag
+      const structuredCall = !!opts.schema && schemaFlag && (SCHEMA_MODE === 'flag' || files.length === 0)
       const effort = opts.schema && ALLOWED_EFFORT.has(JSON_EFFORT) && !noEffort.has(model) ? JSON_EFFORT : ''
       const prompt = opts.prompt + attached + (opts.schema && !structuredCall
         ? `\n\nRespond with ONLY one JSON object that validates against this JSON Schema. No prose, no code fences.\n${JSON.stringify(opts.schema)}`
@@ -217,6 +223,8 @@ async function ask(opts: RunOptions): Promise<RunResult> {
       if (structuredCall) args.push('--json-schema', JSON.stringify(opts.schema))
 
       const { stdout, stderr, code } = await runClaude(args, prompt, dir)
+      // An older Claude Code does not know --json-schema or --effort, and a model may refuse the effort level:
+      // drop the flag for the rest of the process and ask again. Such failures are immediate, so the retry is cheap.
       const rejected = attempt < 2 && code !== 0 ? /unknown option '?--(json-schema|effort)|(effort)/i.exec(`${stderr}\n${stdout}`.slice(0, 4000)) : null
       if (rejected && structuredCall && rejected[1] === 'json-schema') { schemaFlag = false; continue }
       if (rejected && effort) { noEffort.add(model); continue }

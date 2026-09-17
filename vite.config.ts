@@ -17,6 +17,9 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
+      // Behind Cloudflare Access the manifest must be fetched WITH the login cookie, or the browser gets the
+      // Access sign-in page instead and "Add to Home Screen" loses the app name and icon.
+      useCredentials: true,
       includeAssets: ['sql-wasm.wasm'],
       manifest: {
         name: 'Coach',
