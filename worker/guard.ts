@@ -42,7 +42,7 @@ export const MAX_TURNS = 60
 export const MAX_ATTACHMENTS = 4
 export const MAX_SCHEMA_CHARS = 50_000
 /** The PIN is a bearer token, not a 4-digit PIN: its length is what stops guessing, the lockout below is only a brake. */
-export const MIN_PIN_LENGTH = 16
+export const MIN_PIN_LENGTH = 8
 export const CHAT_MAX_TOKENS = 2048
 export const JSON_MAX_TOKENS = 8192
 /** AI calls per isolate. Isolates are per-location and recycled, so this is a brake, not a quota. */

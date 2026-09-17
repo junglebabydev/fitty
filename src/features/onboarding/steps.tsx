@@ -52,7 +52,7 @@ import type { HealthReport } from '../../domain/types'
 import { useToast } from '../../hooks'
 import { cx } from '../../lib/util'
 import { HEALTH_DATA_TYPES, getHealthBridge } from '../../native'
-import { activeProviderLabel, applyAISettings, useAIStatus } from '../ai/config'
+import { activeProviderLabel, applyAISettings, refreshAI, useAIStatus } from '../ai/config'
 import { ReportUploader } from '../reports'
 import { MIND_CHECKIN_PRESETS, MIND_GOAL_OPTIONS } from '../settings/keys'
 import { ageFromDob, validateStep, weeklyRateTo, STEP, type WizardState } from '../settings/onboarding'
@@ -196,7 +196,7 @@ function AIStep({ s, set, a, setA }: Pick<StepCtx, 's' | 'set' | 'a' | 'setA'>) 
         <AIStatusChip />
         <p className="text-[16px] leading-snug text-pretty">{how}</p>
       </div>
-      {!status.connected && status.mode !== 'mock' && <ConnectGemini />}
+      {!status.connected && status.mode !== 'mock' && (status.host === 'cloud' && status.cloud !== 'none' ? <ConnectWorker /> : <ConnectGemini />)}
       <div className="rounded-[1.25rem] border border-line bg-surface divide-y divide-[var(--c-line)]">
         <SwitchRow title="Send meal photos to AI" sub="Off = rough on-device estimate" checked={s.sendMealPhotos} onChange={(sendMealPhotos) => set({ sendMealPhotos })} />
         <SwitchRow title="Share report summaries with the coach" sub="Context only, never a diagnosis" checked={a.shareReports} onChange={(shareReports) => setA({ shareReports })} />
@@ -279,6 +279,66 @@ function ConnectGemini() {
       <p className="text-[14px] leading-snug text-muted">
         The key stays on this phone and goes only to Google. On Google's free tier, what you send may be used to improve their products; paid keys are not. You can skip this and add it later in Settings.
       </p>
+    </div>
+  )
+}
+
+/**
+ * Hosted site with a Cloudflare Worker: the AI key lives on the server, so this phone only needs the bridge PIN.
+ * The PIN is stored in the local database ('ai.bridgePin') and sent only to this site, in a request header.
+ */
+function ConnectWorker() {
+  const status = useAIStatus()
+  const [pin, setPin] = useState('')
+  const [show, setShow] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [tried, setTried] = useState(false)
+
+  const connect = async () => {
+    const trimmed = pin.trim()
+    if (!trimmed) return
+    setBusy(true)
+    setSetting('ai.bridgePin', trimmed)
+    if (getSetting<string>('ai.mode', 'auto') === 'mock') setSetting('ai.mode', 'auto')
+    try {
+      await refreshAI()
+    } finally {
+      setBusy(false)
+      setTried(true)
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-3 rounded-[1.25rem] border border-line bg-surface p-4">
+      <div className="flex items-center gap-2">
+        <KeyRound size={18} className="text-pillar" aria-hidden />
+        <p className="text-[16px] font-semibold">Connect to your server's AI</p>
+      </div>
+      <Field label="Bridge PIN">
+        <div className="flex items-center gap-2">
+          <TextInput
+            type={show ? 'text' : 'password'}
+            value={pin}
+            onChange={(e) => setPin(e.target.value)}
+            placeholder="The COACH_BRIDGE_PIN you set"
+            autoComplete="off"
+            autoCapitalize="off"
+            spellCheck={false}
+            aria-label="Bridge PIN"
+          />
+          <button
+            type="button"
+            onClick={() => setShow((v) => !v)}
+            aria-label={show ? 'Hide PIN' : 'Show PIN'}
+            className="press inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-line bg-surface-2 text-muted"
+          >
+            {show ? <EyeOff size={18} aria-hidden /> : <Eye size={18} aria-hidden />}
+          </button>
+        </div>
+      </Field>
+      <Button onClick={connect} loading={busy} disabled={!pin.trim() || busy}>Connect</Button>
+      <p role="status" className={cx('text-[15px] leading-snug', tried ? 'text-warn' : 'text-muted')}>{status.message}</p>
+      <p className="text-[14px] leading-snug text-muted">Your AI key stays on the server. This phone only keeps the PIN. You can skip this and do it later in Settings.</p>
     </div>
   )
 }
