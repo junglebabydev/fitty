@@ -16,6 +16,7 @@ import {
   getSessions, getSetsForSession, getSleepRecords,
 } from '../db/repositories'
 import { pickImage } from '../native'
+import { useSetupGate } from '../features/onboarding/SetupGate'
 import { addDays, cx, dateOf, dayName, daysBetween, fmtDate, fmtTime, nowIso, startOfWeek, todayStr } from '../lib/util'
 import {
   adherenceLine, adherencePct, buildWeightChart, computeAdherence, computeStrengthTrends, computeWaistStats, computeWeightStats,
@@ -602,6 +603,7 @@ export default function ProgressScreen() {
   const [infoOpen, setInfoOpen] = useState(false)
   const [logSheet, setLogSheet] = useState<MetricKind | null>(null)
   const [addOpen, setAddOpen] = useState(false)
+  const setup = useSetupGate()
   const [viewer, setViewer] = useState<ProgressPhoto | null>(null)
   const [compareMode, setCompareMode] = useState(false)
   const [selected, setSelected] = useState<number[]>([])
@@ -701,7 +703,7 @@ export default function ProgressScreen() {
         <div {...rise(2)}>
           <PhotoStrip
             photos={photos}
-            onAdd={() => setAddOpen(true)}
+            onAdd={() => { if (setup.require('progress_photo')) setAddOpen(true) }}
             onOpen={setViewer}
             compareMode={compareMode}
             selected={selected}
@@ -736,6 +738,7 @@ export default function ProgressScreen() {
         onSaved={(v) => saveMetric(logSheet ?? 'weight', v)}
       />
       <AddPhotoSheet open={addOpen} onClose={() => setAddOpen(false)} onSaved={() => setAddOpen(false)} />
+      {setup.sheet}
       <PhotoViewerSheet photo={viewer} onClose={() => setViewer(null)} onCompare={compareFromViewer} onDeleted={() => setViewer(null)} />
       <CompareSheet
         pair={pair}

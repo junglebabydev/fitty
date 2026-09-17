@@ -12,6 +12,7 @@ import { nowIso, todayStr } from '../lib/util'
 import { buildBaseline, localBaseline, type Baseline } from '../features/ai/intake'
 import { commitIntake, readIntake, reportContextLines, saveBaseline, toBaselineAnswers, type IntakeAnswers } from '../features/onboarding/state'
 import { StartingPoint } from '../features/onboarding/StartingPoint'
+import { skipOnboarding } from '../features/onboarding/setup'
 import { DEFAULTED_STEPS, STEPS, type StepCtx } from '../features/onboarding/steps'
 
 /** The essentials: enough to set targets, respect injuries and build the first week. */
@@ -148,13 +149,24 @@ export default function OnboardingScreen() {
     if (step > 0) setStep(step - 1)
   }
 
+  /** "Skip for now": look around with an unfinished profile. Training and photos stay locked
+   *  (features/onboarding/setup.ts) until this wizard is completed. */
+  const skipSetup = () => {
+    clearTimeout(advanceTimer.current)
+    skipOnboarding()
+    toast.show('Have a look around. Training and photos stay locked until setup is done.', 'info')
+    navigate('/', { replace: true })
+  }
+
   return (
     <Screen
       pillar={def.pillar}
       back={s.rerun ? '/settings' : undefined}
       backLabel="Cancel"
       right={
-        def.optional && !last ? (
+        step === 0 && !s.rerun ? (
+          <Button variant="ghost" size="sm" onClick={skipSetup}>Skip for now</Button>
+        ) : def.optional && !last ? (
           <Button variant="ghost" size="sm" onClick={skip} aria-label={`Skip: ${def.question}`}>
             Skip
           </Button>
@@ -187,6 +199,7 @@ export default function OnboardingScreen() {
             </header>
             {def.render(ctx)}
             {def.id === 'welcome' && !s.rerun && (
+              <>
               <div className="mt-7 grid grid-cols-2 gap-3" role="radiogroup" aria-label="How much to cover now">
                 {([
                   { v: 'quick', title: 'Quick start', sub: 'About 2 minutes' },
@@ -205,6 +218,10 @@ export default function OnboardingScreen() {
                   </button>
                 ))}
               </div>
+              <p className="mt-3 m-0 text-[13px] leading-snug text-muted text-pretty">
+                In a hurry? Skip for now and look around. Training and photos unlock once this is done.
+              </p>
+              </>
             )}
           </>
         )}

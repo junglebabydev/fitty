@@ -15,6 +15,7 @@ import { getCheckIn, getMealsForDate, getPendingDecisions, getSetting, lastNight
 import { EXERCISE_BY_ID } from '../data'
 import { SESSION_TEMPLATES, VALENCE_WORDS, computeDailyPriority, estimateSessionMinutes, shortenedVersion } from '../engine'
 import { getHealthBridge } from '../native'
+import { SetupPrompt, useSetupGate } from '../features/onboarding/SetupGate'
 import { buildCoachFacts, buildPillars } from '../features/coach/facts'
 import { syncProposals } from '../features/coach/apply'
 import { Composer } from '../features/composer'
@@ -67,6 +68,8 @@ export default function TodayScreen() {
 
   const [reasonsOpen, setReasonsOpen] = useState(false)
   const [whyOpen, setWhyOpen] = useState(false)
+  // Training is locked until the intake is done (features/onboarding/setup.ts).
+  const setup = useSetupGate()
 
   // Keep the proposal queue fresh: inserts only proposals not already raised in the last 7 days.
   useEffect(() => {
@@ -116,6 +119,7 @@ export default function TodayScreen() {
   // (startSessionWithGate stamps readiness and substitutes disallowed exercises) before it starts.
   const startShortened = () => {
     if (!session) return
+    if (!setup.require('workout')) return
     updateSession(session.id, {
       exercises: short,
       notes: appendNote(session.notes, 'Shortened evening version (25–35 min)'),
@@ -128,7 +132,7 @@ export default function TodayScreen() {
     switch (action.kind) {
       case 'continue_workout':
       case 'start_workout':
-        if (session) navigate(`/train/session/${session.id}`)
+        if (session && setup.require('workout')) navigate(`/train/session/${session.id}`)
         return
       case 'start_short': return startShortened()
       case 'morning_check_in': return navigate('/checkin')
@@ -170,6 +174,9 @@ export default function TodayScreen() {
       }
     >
       <div className="flex flex-col gap-4 pb-24">
+        {/* 1. Unfinished intake: the way back into setup is always in reach. */}
+        <SetupPrompt />
+
         {/* 2. Hero: the Pillar Dial around the readiness decision. The tiles below are its legend. */}
         <Rise i={0} className="flex flex-col gap-4">
           <PillarDial
@@ -220,7 +227,7 @@ export default function TodayScreen() {
               minutes={nextSession ? sessionMinutes(nextSession) : null}
               when={nextSession && nextSession.scheduledDate !== today ? dayName(nextSession.scheduledDate, true) : null}
               exercise={firstExercise}
-              onClick={() => navigate(session ? `/train/session/${session.id}` : '/train')}
+              onClick={() => { if (!session) return navigate('/train'); if (setup.require('workout')) navigate(`/train/session/${session.id}`) }}
             />
           </Rise>
           <Rise i={3} className="grid min-w-0">
@@ -285,7 +292,7 @@ export default function TodayScreen() {
             </section>
           )}
           {action.kind === 'start_short' && session && (
-            <Button full variant="outline" onClick={() => go(`/train/session/${session.id}`)}>Do the full session instead</Button>
+            <Button full variant="outline" onClick={() => { if (setup.require('workout')) go(`/train/session/${session.id}`) }}>Do the full session instead</Button>
           )}
           {pending.length > 0 && (
             <button
@@ -304,6 +311,8 @@ export default function TodayScreen() {
           <p className="text-xs leading-snug text-muted">Guidance from your own logs. It is not a medical assessment.</p>
         </div>
       </Sheet>
+
+      {setup.sheet}
 
       <Composer context="today" />
     </Screen>
