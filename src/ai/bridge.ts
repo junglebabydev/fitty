@@ -18,8 +18,12 @@ export interface BridgeHealth {
   pinRequired?: boolean
   /** Where the bridge runs. Absent on older Mac bridges, which means 'mac'. */
   host?: BridgeHost
-  /** Cloud: the upstream the Worker is set up for ('gemini' | 'anthropic'), null when no API key secret is set. */
+  /** Cloud: the upstream the Worker is set up for ('gemini' | 'anthropic'); null when the server is not set up (no usable PIN, or no API key secret). Absent when the PIN was refused. */
   provider?: string | null
+  /** Cloud: whether the PIN sent with the probe was accepted. */
+  pinOk?: boolean
+  /** Set by the client when the bridge refused the health probe itself (HTTP 401/403): a missing or wrong PIN. */
+  refused?: boolean
 }
 
 interface BridgeReply { ok: boolean; kind?: string; message?: string; text?: string; data?: unknown }
@@ -52,14 +56,21 @@ export function normalizeBridgeHealth(status: number, body: unknown): BridgeHeal
   const host: BridgeHost | undefined = b.host === 'cloud' || b.host === 'mac' ? b.host : undefined
   const provider = typeof b.provider === 'string' ? b.provider : b.provider === null ? null : undefined
   const message = typeof b.message === 'string' ? b.message : ''
-  const extras = { ...(host ? { host } : {}), ...(provider !== undefined ? { provider } : {}) }
+  const extras = { ...(host ? { host } : {}), ...(provider !== undefined ? { provider } : {}), ...(typeof b.pinOk === 'boolean' ? { pinOk: b.pinOk } : {}) }
 
-  // The bridge refused the probe itself: a missing or wrong PIN, or (Mac) a device outside the home network.
-  if (status === 401 || status === 403) {
-    const pinRequired = b.pinRequired === true || b.kind === 'pin' || /\bpin\b/i.test(message)
-    return { ok: false, installed: true, version: null, auth: 'unknown', message, model: '', pinRequired, ...extras }
+  if (status < 200 || status >= 300) {
+    // 401/403: the bridge refused the probe itself — a missing or wrong PIN, or (Mac) a device outside the home network.
+    const refused = status === 401 || status === 403
+    // Anything else that still speaks the bridge's error shape (429 after too many wrong PINs…) keeps its message.
+    if (!refused && !(b.ok === false && message)) return null
+    return {
+      ok: false, installed: true, version: null, auth: 'unknown', model: '',
+      message: message || 'Bridge PIN required. Enter it in Settings → AI.',
+      pinRequired: typeof b.pinRequired === 'boolean' ? b.pinRequired : refused,
+      ...(refused ? { refused: true } : {}),
+      ...extras,
+    }
   }
-  if (status < 200 || status >= 300) return null
   const macShape = typeof b.installed === 'boolean'
   const cloudShape = host === 'cloud' && typeof b.ok === 'boolean'
   if (!macShape && !cloudShape) return null
@@ -72,6 +83,8 @@ export function normalizeBridgeHealth(status: number, body: unknown): BridgeHeal
     model: typeof b.model === 'string' ? b.model : '',
     ...(typeof b.pinRequired === 'boolean' ? { pinRequired: b.pinRequired } : {}),
     ...extras,
+    // A bridge that reports `installed` without a host is the Mac bridge from before the Worker existed.
+    ...(host ? {} : { host: 'mac' as const }),
   }
 }
 

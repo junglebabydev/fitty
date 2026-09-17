@@ -202,6 +202,15 @@ describe('buildCoachSystemPrompt / answerLocally', () => {
     expect(s).toMatch(/Alex Tan/)
   })
 
+  it('system prompt keeps replies plain and routes new symptoms to the symptom gate', () => {
+    const s = buildCoachSystemPrompt(seedFacts(), 'profile')
+    expect(s).toMatch(/No emoji\./)
+    expect(s).toMatch(/no markdown/)
+    expect(s).toMatch(/never clinical terms/)
+    expect(s).toMatch(/tell them to log it in the app/)
+    expect(s).toMatch(/skip the movements that provoke it, not the whole session/)
+  })
+
   it('answers common questions deterministically with evidence', () => {
     const f = seedFacts()
     expect(answerLocally('How am I doing this week?', f).content).toMatch(/sessions done this week/)

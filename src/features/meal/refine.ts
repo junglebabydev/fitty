@@ -45,7 +45,8 @@ export function refineSystem(hasImage: boolean): string {
     '. Return the FULL corrected item list. Items the user did not mention stay exactly as they are. ' +
     'from_index is the index of the item a row replaces, or -1 for a new item. Leave out removed items. ' +
     'Quantities are grams; kcal and macros are for that quantity. Use typical Singapore portions when relevant. ' +
-    'These are estimates: give an honest confidence_0_1 and a short uncertainty_reason.'
+    'These are estimates: give an honest confidence_0_1 and an uncertainty_reason of at most 12 words. ' +
+    'Only change what the user described; never add foods they did not mention. Plain text only. No emoji.'
   )
 }
 
@@ -62,7 +63,8 @@ export function refinePrompt(items: RefineRow[], text: string): string {
 
 export const ESTIMATE_SYSTEM =
   'Estimate the nutrition of ONE food or dish as typically served (Singapore portions when the name suggests it). ' +
-  'Quantity in grams; kcal and macros for that quantity. It is an estimate: give an honest confidence_0_1 and a short uncertainty_reason.'
+  'Quantity in grams; kcal and macros for that quantity. It is an estimate: give an honest confidence_0_1 and an uncertainty_reason of at most 12 words. ' +
+  'If the text is not a food or drink, return zero for every number, confidence_0_1 0 and say so in uncertainty_reason. Plain text only. No emoji.'
 
 export function estimatePrompt(query: string): string {
   return `Food: "${query}"`

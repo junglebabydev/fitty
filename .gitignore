@@ -4,5 +4,5 @@ dev-dist
 .DS_Store
 *.local
 .wrangler
-.dev.vars
+.dev.vars*
 *.tsbuildinfo

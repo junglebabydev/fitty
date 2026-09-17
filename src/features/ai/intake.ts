@@ -74,7 +74,9 @@ export const BASELINE_SYSTEM = [
   '- Respect every listed body area. When a knee, back or neck is flagged, the first week uses machines and dumbbells, low-impact conditioning (bike, incline walk, pool) and no running or jumping.',
   '- Report lines, when present, are context only. Do not interpret lab values; at most say which result to discuss with their clinician.',
   '- The calorie and protein targets are shown next to your text and stay editable: refer to them without restating the numbers, and never invent numbers.',
-  'Format: summary at most 45 words; at most 3 strengths, 3 watch-outs and 4 first-week actions; each item at most 12 words, plain text, no markdown.',
+  '- Week-one sessions: use exactly the number given in the answers. The app computed it from what the client has actually been doing.',
+  '- Only state what the answers say. Do not infer habits or problems that are not there (one or two meals a day is an eating pattern, not under-eating), and make no physiology or health claims (hormones, metabolism, inflammation, disease risk): state the fact from the intake and the action.',
+  'Format: summary at most 45 words; at most 3 strengths, 3 watch-outs and 4 first-week actions; each item at most 12 words, plain text, no markdown. No emoji.',
 ].join('\n')
 
 function line(label: string, value: string | number | null | undefined): string | null {
@@ -98,6 +100,7 @@ export function baselinePrompt(a: BaselineAnswers, reportLines: string[] = []): 
     line('Enjoys', a.enjoys.join(', ')),
     line('Days available per week', a.daysPerWeek),
     line('Minutes per session', a.minutesPerSession),
+    line('Sessions planned for week one', firstWeekSessions(a)),
     line('Equipment', a.equipment.join(', ')),
     ...a.conditions.map((c) => `Area to look after: ${c.region} (${c.label})${c.aggravators.length ? `, aggravated by ${c.aggravators.join(', ')}` : ''}`),
     a.conditions.length === 0 ? 'Areas to look after: none listed' : null,

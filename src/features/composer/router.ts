@@ -18,7 +18,8 @@ export interface RouterResult {
   intent: RouterIntent
   meal?: { items: RouterMealItem[] }
   metric?: { type: 'weight' | 'waist'; value: number; unit: string }
-  symptom?: { region: string; pain: number }
+  /** `pain` is null unless the user stated a score: the router never invents one. */
+  symptom?: { region: string; pain: number | null }
   mood?: { valence: number; note: string }
   plan?: { minutes: number; focus: string }
   answer?: string
@@ -50,7 +51,7 @@ export const ROUTER_SCHEMA: Record<string, unknown> = {
       type: 'object', additionalProperties: false, required: ['type', 'value', 'unit'],
       properties: { type: { type: 'string', enum: ['weight', 'waist'] }, value: num, unit: str },
     },
-    symptom: { type: 'object', additionalProperties: false, required: ['region', 'pain'], properties: { region: str, pain: num } },
+    symptom: { type: 'object', additionalProperties: false, required: ['region', 'pain'], properties: { region: str, pain: { type: ['number', 'null'], description: '0-10 exactly as the user stated it, otherwise null' } } },
     mood: { type: 'object', additionalProperties: false, required: ['valence', 'note'], properties: { valence: num, note: str } },
     plan: { type: 'object', additionalProperties: false, required: ['minutes', 'focus'], properties: { minutes: num, focus: str } },
     answer: str,
@@ -60,10 +61,11 @@ export const ROUTER_SCHEMA: Record<string, unknown> = {
 export const ROUTER_SYSTEM = [
   'You are the input router for a personal wellness app (training, nutrition, sleep, mood). One short message comes in; you return ONE JSON object and nothing else.',
   'Pick the intent: log_meal (they ate or drank something), log_body_metric (body weight or waist), log_set (a lifting set), log_symptom (pain or discomfort in a body area), log_mood (how they feel), start_workout, plan_workout (they want a session built), question (anything else).',
-  'Extract only what the user said. Never invent data the user did not give: no weights, reps, pain scores, moods or measurements they did not state. If a required value is missing, use intent "question".',
+  'Extract only what the user said. Never invent data the user did not give: no weights, reps, pain scores, moods or measurements they did not state. If a required value is missing, use intent "question". A symptom without a pain number is still log_symptom, with pain null.',
   'Food is the one exception: for log_meal, estimate grams, kcal, protein_g, carbs_g and fat_g per item from typical portions (Singapore hawker portions when the dish is local). These are estimates and the app labels them as estimates.',
-  'metric: value and unit exactly as stated (kg, lb, cm or in). symptom: region in plain words (e.g. "left knee", "lower back", "neck"), pain 0-10 only if stated, otherwise 3. mood: valence is an integer from -3 (very unpleasant) to 3 (very pleasant), note is their own words. plan: minutes (20, 30, 45 or 60) and focus (upper, lower, full, conditioning or mobility).',
-  'Never diagnose, never name a medical condition, never give medical advice. For a question, leave "answer" empty or one short neutral sentence; the coach screen answers it.',
+  'metric: value and unit exactly as stated (kg, lb, cm or in). symptom: region in plain words (e.g. "left knee", "lower back", "neck"), pain 0-10 only if the user gave a number, otherwise null (the app asks for it). mood: valence is an integer from -3 (very unpleasant) to 3 (very pleasant), note is their own words. plan: minutes (20, 30, 45 or 60) and focus (upper, lower, full, conditioning or mobility).',
+  'Never diagnose, never name a medical condition, never give medical advice. Leave "answer" empty for every intent: the coach screen answers questions, and nothing written there is shown.',
+  'Plain text in every string. No emoji.',
 ].join('\n')
 
 export function routeWithAI(text: string): Promise<RouterResult> {

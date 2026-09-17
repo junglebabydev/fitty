@@ -13,7 +13,9 @@ export const REPORT_EXTRACTION_SYSTEM = [
   'For a one-sided printed range (for example "< 5.2" or "> 1.0") fill only that side and leave the other null.',
   'If a value is unreadable or not numeric, set value to null and put exactly what is printed (or an empty string) in value_text.',
   'The summary is at most two plain sentences saying what the document is (type of report, issuing lab or clinic if printed, what it covers). It is not an interpretation.',
-  'No diagnosis, no advice, no commentary on whether any value is good or bad.',
+  'No diagnosis, no advice, no commentary on whether any value is good or bad. Do not copy flags such as H, L or * into any field: the app computes them from the printed range.',
+  'Leave out personal identifiers: no patient name, ID or record number, date of birth, address or doctor name in the title or the summary.',
+  'Plain text only. No emoji.',
   'report_date is the collection or report date printed on the document as YYYY-MM-DD, or null if none is printed.',
 ].join(' ')
 

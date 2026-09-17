@@ -6,7 +6,9 @@ import {
   Brain,
   CircleAlert,
   CircleCheck,
+  Cloud,
   Database,
+  ExternalLink,
   Eye,
   EyeOff,
   FileText,
@@ -25,7 +27,7 @@ import {
   User,
   Utensils,
 } from 'lucide-react'
-import { Button, EmptyState, Field, IconButton, NumberInput, PermissionDenied, Screen, Segmented, Sheet, StatusPill, TextInput } from '../components'
+import { Button, Chip, EmptyState, Field, IconButton, NumberInput, PermissionDenied, Screen, Segmented, Sheet, StatusPill, TextInput } from '../components'
 import type { Tone } from '../components'
 import { getGoals, getLedger, getNutritionTarget, getProfile, latestBodyMetric, saveProfile, setNutritionTarget, setSetting, upsertGoal } from '../db/repositories'
 import { reseed } from '../db/seed'
@@ -34,7 +36,8 @@ import { useQuery, useToast } from '../hooks'
 import { getThemePref, setThemePref, type ThemePref } from '../lib/theme'
 import { addDays, cx, fmtDate, round, todayStr } from '../lib/util'
 import { notificationPermission, requestNotificationPermission, type NotificationState } from '../native'
-import { applyAISettings, readAISettings as readAIConfig, refreshAI, useAIStatus, type AIMode, type AIStatus } from '../features/ai/config'
+import { DEFAULT_GEMINI_MODEL } from '../ai'
+import { AI_GEMINI_KEY, AI_GEMINI_MODEL, aiStateLine, applyAISettings, readAISettings as readAIConfig, refreshAI, useAIStatus, type AIMode } from '../features/ai/config'
 import { maskApiKey, saveAISettings, testConnection, type ConnectionTestResult } from '../features/settings/ai'
 import {
   DEFAULT_EVENING_REMINDER,
@@ -363,17 +366,24 @@ function SettingsBody({ profile }: { profile: UserProfile }) {
 
 // --- AI section (DESIGN §10.3) --------------------------------------------------------
 
-const AI_MODE_OPTIONS: { value: AIMode; label: string }[] = [
-  { value: 'auto', label: 'Auto' },
-  { value: 'claude-code', label: 'My Mac' },
-  { value: 'anthropic', label: 'API key' },
-  { value: 'mock', label: 'Demo' },
-]
-const AI_MODE_HINT: Record<AIMode, string> = {
-  auto: 'Auto: Claude on my Mac when it answers, then your API key, then demo.',
-  'claude-code': 'Claude on my Mac: your Claude subscription, through Claude Code.',
-  anthropic: 'API key: requests go straight to Anthropic with your key.',
-  mock: 'Demo: placeholder estimates only. Nothing leaves this phone.',
+const GEMINI_KEY_URL = 'https://aistudio.google.com/apikey'
+
+// Five choices do not fit one Segmented track at 375 px, so the mode is a wrapped chip row.
+function aiModeOptions(cloud: boolean): { value: AIMode; label: string }[] {
+  return [
+    { value: 'auto', label: 'Auto' },
+    { value: 'claude-code', label: cloud ? 'My Worker' : 'My Mac' },
+    { value: 'gemini', label: 'Gemini' },
+    { value: 'anthropic', label: 'Anthropic' },
+    { value: 'mock', label: 'Demo' },
+  ]
+}
+function aiModeHint(mode: AIMode, cloud: boolean): string {
+  if (mode === 'auto') return `Auto: ${cloud ? 'your Worker if you set one up' : 'Claude on my Mac when it answers'}, then your Gemini key, then your Anthropic key, then demo.`
+  if (mode === 'claude-code') return cloud ? 'My Worker: your Cloudflare Worker holds the API key. This phone only holds the PIN.' : 'Claude on my Mac: your Claude subscription, through Claude Code.'
+  if (mode === 'gemini') return 'Gemini: requests go straight to Google with your key.'
+  if (mode === 'anthropic') return 'Anthropic: requests go straight to Anthropic with your key.'
+  return 'Demo: placeholder estimates only. Nothing leaves this phone.'
 }
 const BRIDGE_MODEL_OPTIONS: { value: string; label: string }[] = [
   { value: '', label: 'Default' },
@@ -386,27 +396,58 @@ const MAC_STEPS: { title: string; body: JSX.Element }[] = [
   { title: 'Sign in', body: <>Type <Code>/login</Code> and sign in with your Claude subscription.</> },
   { title: 'Keep the server running', body: <>Leave <Code>npm run dev</Code> or <Code>npm run dev:https</Code> running, and open the app from the same Wi-Fi.</> },
 ]
+const CLOUD_STEPS: { title: string; body: JSX.Element }[] = [
+  { title: 'Add two Worker secrets', body: <>Set <Code>GEMINI_API_KEY</Code> (or <Code>ANTHROPIC_API_KEY</Code>) and a <Code>COACH_BRIDGE_PIN</Code> of at least 8 characters, with <Code>npx wrangler secret put NAME</Code> or in the Cloudflare dashboard.</> },
+  { title: 'Redeploy', body: <>Deploy the Worker again so it picks the secrets up.</> },
+  { title: 'Enter the PIN here', body: <>Type the same PIN in the Bridge PIN field, then check again. The API key stays on the Worker.</> },
+]
 
 function Code({ children }: { children: string }) {
   return <code className="rounded-md border border-line bg-surface-2 px-1.5 py-0.5 font-mono text-[13px] text-app">{children}</code>
 }
 
-/** The big state line. Words and an icon carry the state; colour only reinforces it. */
-function aiStateLine(s: AIStatus): { line: string; tone: 'ok' | 'warn' | 'muted' } {
-  if (s.checking && !s.connected) return { line: 'Checking…', tone: 'muted' }
-  if (s.connected) return { line: s.active === 'claude-code' ? 'Connected · Claude through your Mac' : 'Connected · API key', tone: 'ok' }
-  if (s.mode === 'mock') return { line: 'Demo mode', tone: 'muted' }
-  if (s.mode === 'anthropic') return { line: 'API key needed', tone: 'warn' }
-  if (s.bridge?.auth === 'signed_out') return { line: 'Sign in needed on your Mac', tone: 'warn' }
-  if (s.mode === 'claude-code') return { line: 'Your Mac is not answering', tone: 'warn' }
-  return { line: 'Demo mode', tone: 'muted' }
+/** Masked Gemini key field. Saved on blur to the local settings table only; never logged, never put in a URL. */
+function GeminiKeyField({ stored }: { stored: string }) {
+  const toast = useToast()
+  const [value, setValue] = useState(stored)
+  const [show, setShow] = useState(false)
+
+  const commit = () => {
+    const next = value.trim()
+    if (next === stored) return
+    setSetting(AI_GEMINI_KEY, next)
+    applyAISettings()
+    toast.show(next ? 'Gemini key saved on this device' : 'Gemini key removed', 'success')
+  }
+
+  return (
+    <Field label="Gemini API key" htmlFor="set-gemini-key" hint="Kept in this phone's database and sent only to Google. Left out of JSON exports, but present in the raw SQLite export. Clear the field to remove it.">
+      <TextInput
+        id="set-gemini-key"
+        type={show ? 'text' : 'password'}
+        value={value}
+        onChange={(e) => setValue(e.currentTarget.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') e.currentTarget.blur()
+        }}
+        placeholder="Paste your key"
+        autoComplete="off"
+        autoCapitalize="none"
+        autoCorrect="off"
+        spellCheck={false}
+        enterKeyHint="done"
+        right={<IconButton icon={show ? <EyeOff size={18} /> : <Eye size={18} />} label={show ? 'Hide key' : 'Show key'} size="sm" onClick={() => setShow((v) => !v)} />}
+      />
+    </Field>
+  )
 }
 
 function AISection() {
   const toast = useToast()
   const status = useAIStatus()
   const legacy = useQuery(() => readAISettings(), []) // apiKey, model, sendMealPhotos
-  const config = useQuery(() => readAIConfig(), []) // mode, bridgeModel, bridgePin
+  const config = useQuery(() => readAIConfig(), []) // mode, geminiKey, geminiModel, bridgeModel, bridgePin
   const [shareReports, setShareReports] = useSetting<boolean>('ai.shareReports', false)
 
   const [checking, setChecking] = useState(false)
@@ -415,16 +456,24 @@ function AISection() {
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState<ConnectionTestResult | null>(null)
   const [model, setModel] = useState(legacy.model)
+  const [geminiModel, setGeminiModel] = useState(config.geminiModel || DEFAULT_GEMINI_MODEL)
   const [pin, setPin] = useState(config.bridgePin)
 
   const mode = config.mode
-  const usesMac = mode === 'auto' || mode === 'claude-code'
+  const cloud = status.host === 'cloud'
+  const usesBridge = mode === 'auto' || mode === 'claude-code'
+  const usesMac = usesBridge && !cloud
+  const usesCloud = usesBridge && cloud
+  // Hosted: a Gemini key typed into this device is the main way in, so Auto shows it too. The Worker is optional.
+  const showGemini = mode === 'gemini' || (mode === 'auto' && cloud)
+  const workerInUse = mode === 'claude-code' || status.cloud === 'ok' || status.cloud === 'pin' || status.cloud === 'error' || !!config.bridgePin
+  const showTest = mode === 'anthropic' || (showGemini && (mode === 'gemini' || status.active !== 'mock'))
   const { line, tone } = aiStateLine(status)
   const busy = checking || status.checking
 
   const changeMode = (next: AIMode) => {
     setSetting('ai.mode', next)
-    setSetting(KEYS.aiProvider, next === 'anthropic' ? 'anthropic' : 'mock') // legacy key, read by older code paths
+    setSetting(KEYS.aiProvider, next === 'anthropic' ? 'anthropic' : next === 'gemini' ? 'gemini' : 'mock') // legacy key, read by older code paths
     setTestResult(null)
     applyAISettings()
   }
@@ -451,6 +500,15 @@ function AISection() {
     }
   }
 
+  const commitGeminiModel = () => {
+    const m = geminiModel.trim() || DEFAULT_GEMINI_MODEL
+    setGeminiModel(m)
+    if (m === (config.geminiModel || DEFAULT_GEMINI_MODEL)) return
+    setSetting(AI_GEMINI_MODEL, m)
+    applyAISettings()
+    toast.show(`Model set to ${m}`, 'success')
+  }
+
   const runTest = async () => {
     setTesting(true)
     setTestResult(null)
@@ -462,6 +520,31 @@ function AISection() {
       setTesting(false)
     }
   }
+
+  const pinField = (
+    <div className="px-4 py-3.5">
+      <Field
+        label={cloud ? 'Bridge PIN' : 'PIN (optional)'}
+        htmlFor="set-bridge-pin"
+        hint={cloud ? 'The COACH_BRIDGE_PIN you set on your Worker. Kept on this device.' : "Only needed if your Mac's server was started with COACH_BRIDGE_PIN."}
+      >
+        <TextInput
+          id="set-bridge-pin"
+          type="password"
+          inputMode={cloud ? undefined : 'numeric'}
+          value={pin}
+          onChange={(e) => setPin(e.currentTarget.value)}
+          onBlur={commitPin}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') e.currentTarget.blur()
+          }}
+          autoComplete="off"
+          autoCapitalize="none"
+          enterKeyHint="done"
+        />
+      </Field>
+    </div>
+  )
 
   return (
     <div id="ai" className="scroll-mt-20">
@@ -481,9 +564,18 @@ function AISection() {
           </Button>
         </div>
 
-        <GroupBlock hint={AI_MODE_HINT[mode]}>
-          <Segmented options={AI_MODE_OPTIONS} value={mode} onChange={changeMode} size="sm" label="AI mode" />
+        <GroupBlock hint={aiModeHint(mode, cloud)}>
+          <div role="radiogroup" aria-label="AI mode" className="flex flex-wrap gap-2">
+            {aiModeOptions(cloud).map((o) => (
+              <Chip key={o.value} role="radio" aria-checked={o.value === mode} aria-pressed={undefined} selected={o.value === mode} tone="neutral" check onClick={() => o.value !== mode && changeMode(o.value)}>
+                {o.label}
+              </Chip>
+            ))}
+          </div>
         </GroupBlock>
+
+        {usesCloud && (mode === 'claude-code' || status.cloud === 'pin') && pinField}
+        {usesCloud && mode === 'claude-code' && <Row icon={<Cloud size={18} />} title="Set up AI on my Worker" subtitle="Three steps: secrets, redeploy, PIN" chevron onClick={() => setHowTo(true)} />}
 
         {usesMac && <Row icon={<Laptop size={18} />} title="Set up Claude on my Mac" subtitle="Three steps, about two minutes" chevron onClick={() => setHowTo(true)} />}
         {usesMac && (
@@ -500,25 +592,56 @@ function AISection() {
             />
           </GroupBlock>
         )}
-        {usesMac && (
+        {usesMac && pinField}
+
+        {showGemini && (
           <div className="px-4 py-3.5">
-            <Field label="PIN (optional)" htmlFor="set-bridge-pin" hint="Only needed if your Mac's server was started with COACH_BRIDGE_PIN.">
+            <GeminiKeyField stored={config.geminiKey} />
+          </div>
+        )}
+        {showGemini && (
+          <a
+            href={GEMINI_KEY_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-3 w-full min-h-[56px] px-4 py-2.5 text-app active:bg-surface-2 transition-colors duration-150 focus-visible:bg-surface-2 focus-visible:-outline-offset-2"
+          >
+            <span className="inline-flex items-center justify-center h-9 w-9 rounded-full bg-surface-2 text-muted shrink-0" aria-hidden>
+              <ExternalLink size={18} />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-base font-medium leading-tight">Get a key</span>
+              <span className="block text-[13px] text-muted mt-1 leading-snug">Google AI Studio, opens in your browser</span>
+            </span>
+          </a>
+        )}
+        {mode === 'gemini' && (
+          <div className="px-4 py-3.5">
+            <Field label="Model" htmlFor="set-gemini-model" hint={`Default: ${DEFAULT_GEMINI_MODEL}`}>
               <TextInput
-                id="set-bridge-pin"
-                type="password"
-                inputMode="numeric"
-                value={pin}
-                onChange={(e) => setPin(e.currentTarget.value)}
-                onBlur={commitPin}
+                id="set-gemini-model"
+                value={geminiModel}
+                onChange={(e) => setGeminiModel(e.currentTarget.value)}
+                onBlur={commitGeminiModel}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') e.currentTarget.blur()
                 }}
-                autoComplete="off"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 enterKeyHint="done"
               />
             </Field>
           </div>
         )}
+        {showGemini && (
+          <GroupText>
+            On Gemini's free tier Google may use what you send to improve its products and human reviewers may read it; the paid tier does not, so with health data use a paid-tier key or keep photos and reports off.
+          </GroupText>
+        )}
+
+        {usesCloud && mode === 'auto' && workerInUse && status.cloud !== 'pin' && pinField}
+        {usesCloud && mode === 'auto' && <Row icon={<Cloud size={18} />} title="Use my Worker instead" subtitle="Optional: the key stays on the server, this phone holds a PIN" chevron onClick={() => setHowTo(true)} />}
 
         {mode === 'anthropic' && (
           <Row
@@ -548,7 +671,7 @@ function AISection() {
             </Field>
           </div>
         )}
-        {mode === 'anthropic' && (
+        {showTest && (
           <ControlRow
             icon={<Bot size={18} />}
             title="Test connection"
@@ -560,7 +683,7 @@ function AISection() {
             }
           />
         )}
-        {mode === 'anthropic' && testResult && (
+        {showTest && testResult && (
           <div className="px-4 py-3.5" role="status">
             <StatusLine tone={testResult.ok ? 'ok' : 'stop'} icon={testResult.ok ? <CircleCheck size={18} /> : <CircleAlert size={18} />}>
               <span className="font-semibold">{testResult.ok ? 'Connected. ' : 'Not connected. '}</span>
@@ -584,9 +707,9 @@ function AISection() {
         <Row icon={<ScrollText size={18} />} title="Privacy ledger" subtitle="Every AI call, listed" chevron to="/settings/privacy" />
       </Group>
 
-      <Sheet open={howTo} onClose={() => setHowTo(false)} title="Claude on my Mac" footer={<Button full size="lg" onClick={() => { setHowTo(false); checkAgain() }}>Done, check again</Button>}>
+      <Sheet open={howTo} onClose={() => setHowTo(false)} title={cloud ? 'AI on my Cloudflare Worker' : 'Claude on my Mac'} footer={<Button full size="lg" onClick={() => { setHowTo(false); checkAgain() }}>Done, check again</Button>}>
         <ol className="m-0 list-none space-y-4 p-0 pt-1">
-          {MAC_STEPS.map((step, i) => (
+          {(cloud ? CLOUD_STEPS : MAC_STEPS).map((step, i) => (
             <li key={step.title} className="flex gap-3.5">
               <span className="num inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-line bg-surface-2 text-xl" aria-hidden>{i + 1}</span>
               <span className="min-w-0 flex-1">

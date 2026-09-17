@@ -42,6 +42,8 @@ describe('extraction contract', () => {
     expect(REPORT_EXTRACTION_SYSTEM).toMatch(/only what is printed/i)
     expect(REPORT_EXTRACTION_SYSTEM).toMatch(/never your own/i)
     expect(REPORT_EXTRACTION_SYSTEM).toMatch(/No diagnosis, no advice/)
+    expect(REPORT_EXTRACTION_SYSTEM).toMatch(/Leave out personal identifiers/)
+    expect(REPORT_EXTRACTION_SYSTEM).toMatch(/No emoji/)
   })
 
   it('the schema requires every field and does not ask the model for a flag', () => {

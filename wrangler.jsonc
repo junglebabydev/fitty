@@ -1,15 +1,24 @@
+// Cloudflare Worker + static assets. Deployed by Workers Builds from github.com/junglebabydev/fitty
+// (deploy command `npx wrangler deploy`; preview branches `npx wrangler versions upload`). See docs/DEPLOY.md.
 {
-  // Cloudflare Workers static-assets deployment. `npx wrangler deploy` builds the app and uploads dist/.
-  "$schema": "node_modules/wrangler/config-schema.json",
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  // Must match the Worker's name in the Cloudflare dashboard.
   "name": "fitty",
-  "compatibility_date": "2026-09-01",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-09-17",
+  // The dashboard build command is empty, so Wrangler builds the app (tsc + vite → ./dist) before every deploy.
+  "build": { "command": "npm run build" },
   "assets": {
     "directory": "./dist",
-    // Single-page app: unknown paths (e.g. /train/session/4) serve index.html so client-side routing works.
-    "not_found_handling": "single-page-application"
+    "binding": "ASSETS",
+    // Client-side routes (/train, /coach, ...) get index.html.
+    "not_found_handling": "single-page-application",
+    // Only the AI endpoint runs the Worker first; every other path is served straight from the assets.
+    "run_worker_first": ["/api/*"]
   },
-  "build": {
-    // The dashboard build command can stay empty; Wrangler runs this before every deploy.
-    "command": "npm run build"
-  }
+  // Off on purpose: this is a personal health app, so request logs are not collected by Cloudflare.
+  "observability": { "enabled": false },
+  // Plain settings only. Secrets (GEMINI_API_KEY or ANTHROPIC_API_KEY, COACH_BRIDGE_PIN) are added in the
+  // dashboard or with `npx wrangler secret put`, never here.
+  "vars": { "COACH_MODEL": "claude-opus-5" }
 }

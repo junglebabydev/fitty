@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { FileText, ScrollText, Server } from 'lucide-react'
 import { Button, Sheet } from '../../components'
 import { getSetting } from '../../db/repositories'
-import { useAIStatus } from '../ai/config'
+import { useAIStatus, activeProviderLabel } from '../ai/config'
 import { Toggle } from '../settings/SettingsUI'
 import { SHARE_REPORTS_KEY } from './context'
 import { fmtBytes } from './files'
@@ -17,12 +17,6 @@ export interface ConsentSheetProps {
   /** "Save without AI": the report is saved for manual entry and nothing is sent. */
   onSkip: () => void
   onClose: () => void
-}
-
-export function providerLabel(active: string): string {
-  if (active === 'claude-code') return 'Claude, through Claude Code on your Mac (your subscription)'
-  if (active === 'anthropic') return 'Claude, through the Anthropic API with your key'
-  return 'On-device demo (nothing is sent)'
 }
 
 export function ConsentSheet({ open, fileName, bytes, onAgree, onSkip, onClose }: ConsentSheetProps) {
@@ -52,7 +46,7 @@ export function ConsentSheet({ open, fileName, bytes, onAgree, onSkip, onClose }
         </li>
         <li className="flex items-start gap-3">
           <Server size={20} className="mt-0.5 shrink-0 text-muted" aria-hidden />
-          <span><span className="text-muted">To: </span>{providerLabel(status.active)}.</span>
+          <span><span className="text-muted">To: </span>{activeProviderLabel(status)}.</span>
         </li>
         <li className="flex items-start gap-3">
           <ScrollText size={20} className="mt-0.5 shrink-0 text-muted" aria-hidden />
