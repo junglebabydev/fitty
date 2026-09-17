@@ -9,7 +9,13 @@ import { aiBridge } from './server/aiBridge'
 // that is what enables the microphone / speech recognition and live camera over Wi-Fi.
 const https = process.env.COACH_HTTPS === '1'
 
+// Shown in Settings → About so it is obvious which build a device is running (service workers cache old shells).
+const commit = (process.env.WORKERS_CI_COMMIT_SHA || process.env.CF_PAGES_COMMIT_SHA || process.env.GITHUB_SHA || '').slice(0, 7)
+const builtAt = new Date().toISOString()
+const buildId = commit || builtAt.slice(0, 16).replace('T', ' ')
+
 export default defineConfig({
+  define: { __BUILD_ID__: JSON.stringify(buildId), __BUILD_TIME__: JSON.stringify(builtAt) },
   plugins: [
     react(),
     aiBridge(),

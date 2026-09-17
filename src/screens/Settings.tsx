@@ -39,6 +39,7 @@ import { notificationPermission, requestNotificationPermission, type Notificatio
 import { DEFAULT_GEMINI_MODEL } from '../ai'
 import { AI_GEMINI_KEY, AI_GEMINI_MODEL, aiStateLine, applyAISettings, readAISettings as readAIConfig, refreshAI, useAIStatus, type AIMode } from '../features/ai/config'
 import { maskApiKey, saveAISettings, testConnection, type ConnectionTestResult } from '../features/settings/ai'
+import { AppUpdate } from '../features/settings/AppUpdate'
 import {
   DEFAULT_EVENING_REMINDER,
   DEFAULT_MORNING_REMINDER,
@@ -327,6 +328,7 @@ function SettingsBody({ profile }: { profile: UserProfile }) {
 
       <Group title="About">
         <Row icon={<Info size={18} />} title="Coach" right="V0.1 · local-first" />
+        <AppUpdate />
         <GroupText>
           <span className="text-app font-medium">Fitness and wellbeing support, not a medical service.</span> The coach is demanding on adherence and conservative on symptoms: pain above 5/10 or any red flag stops the affected
           recommendation and points to professional assessment. Mood check-ins, breathing and journaling are for reflection, not therapy. It never diagnoses.
