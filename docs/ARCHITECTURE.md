@@ -15,7 +15,7 @@ Local-first personal fitness coach. One user, one device, no account. The SQLite
 | Database | `src/db/database.ts`, `schema.ts`, `seed.ts` | sql.js (WASM SQLite) persisted to IndexedDB; ordered migrations; reference data on every boot, fictional demo seed in dev or with `?demo=1` (`shouldSeedDemo`). |
 | AI | `src/ai/` | Provider abstraction (`mock`, `anthropic`) behind a gateway that checks connectivity, times out, and writes the privacy ledger. |
 | Native | `src/native/` | Bridges for HealthKit (web stub + Capacitor swap notes), camera, speech, notifications, wake lock. |
-| Boot | `src/main.tsx`, `src/App.tsx` | PWA service worker, boot state machine, router, onboarding guard, shell, error boundary. |
+| Boot | `src/main.tsx`, `src/App.tsx` | PWA service worker, boot state machine, router, onboarding guard + setup gate, shell, error boundary. |
 
 ## Module map
 
@@ -74,7 +74,7 @@ sequenceDiagram
   A->>S: seedIfEmpty() — always: exercise library + default settings. Demo scenario (PRD §21, fictional persona) only when no profile, no seed.skipDemo marker, and a dev build or ?demo=1
   A->>AI: applyAISettings() — configureAI(ai.provider, ai.apiKey, ai.model, onLedger → privacy_ledger)
   A->>A: state = ready → BrowserRouter · ToastProvider · AppShell
-  A->>A: OnboardingGate: profile.onboarded ? route : /onboarding
+  A->>A: OnboardingGate: profile.onboarded || onboarding.skippedAt ? route : /onboarding
   Note over A: any step throws → ErrorState with Retry and "Reset local database" (db.wipe + reload)
 ```
 
@@ -106,6 +106,7 @@ Multi-row writes (meals with items, seeding, reseeding, exercise upserts) run in
 
 ## Safety boundary
 
+- **Setup gate.** The intake can be skipped (`onboarding.skippedAt`), but `profile.onboarded` stays the only key: `features/onboarding/setup.ts` locks starting a workout or mobility routine and every photo capture (meal, progress, report) until the intake is committed, so no session, target or photo is ever written against a profile the coach has never seen.
 - **Deterministic first.** Readiness thresholds, red-flag rules, symptom → avoid-tag mapping, double progression, calorie/protein estimates and trend adjustments are pure functions in `src/engine/` with tests.
 - **AI proposes, never mutates.** The LLM system prompt forbids calorie math and plan changes; any material change surfaces as a `CoachDecision` with rationale + evidence and requires Accept/Reject. Only `features/coach/apply.ts` applies an accepted decision.
 - **Everything that leaves the device is logged.** `ai/gateway.ts` is the single choke point: offline check → provider call with 60 s timeout → `privacy_ledger` row (provider, data type, purpose, bytes, sent/failed/local_only).

@@ -38,6 +38,12 @@ Project: the repository root (all paths below are relative to it) — Vite + Rea
 
 Every screen is a plain component; `src/App.tsx` owns the router, `AppShell`, onboarding redirect, boot loading/error states.
 
+### Setup gate (`src/features/onboarding/setup.ts` + `SetupGate.tsx`)
+The intake may be skipped from the welcome screen (`skipOnboarding()` writes the ISO setting `onboarding.skippedAt`; `commitIntake` clears it). `App`'s `OnboardingGate` then lets the profile browse instead of redirecting to `/onboarding`, and the gated actions refuse until `profile.onboarded` is true.
+- `setup.ts`: `ONBOARDING_SKIP_KEY`, `GatedAction = 'workout'|'mobility'|'meal_photo'|'progress_photo'|'report'`, `GATE_COPY`/`gateCopy(action)`, `isOnboarded()`, `onboardingSkipped()`, `skipOnboarding()`, `clearOnboardingSkip()`, `canDo(action)`.
+- `SetupGate.tsx`: `useSetupGate(): { ready, require(action): boolean, sheet }` (`require` reads the database synchronously, so a photo picker still opens inside the user's tap), `RequireSetup` (route wrapper → `SetupRequired`), `SetupLockCard` (inline stand-in for a locked control), `SetupPrompt` (Today's reminder while the intake is unfinished).
+- Locked: `/train/session/:id`, `/train/mobility`, planning or starting a session from Train and Today, meal photos in the Composer, progress photos in Progress, report uploads in Reports. Everything else (browsing, check-ins, text meal logs, Mind, Coach, Settings) stays open.
+
 ## `src/hooks/` (UI kit task)
 - `useQuery<T>(fn: () => T, deps: unknown[]): T` — runs `fn` synchronously, re-runs on `db.subscribe` change and deps change.
 - `useOnline(): boolean`
@@ -51,7 +57,7 @@ All exported from `src/components/index.ts`.
 ## `src/db/repositories/` (repositories task) — export everything from `src/db/repositories/index.ts`
 All functions synchronous. Row mapping is internal.
 - `profile.ts`: `getProfile(): UserProfile | null`, `saveProfile(p: UserProfile): void`, `getGoals(): Goal[]`, `upsertGoal(g: Omit<Goal,'id'> & {id?: number}): number`, `deleteGoal(id)`, `getConditionFlags(): ConditionFlag[]`, `addConditionFlag(f: Omit<ConditionFlag,'id'>): number`, `deleteConditionFlag(id)`.
-- `settings.ts`: `getSetting<T>(key: string, fallback: T): T`, `setSetting(key: string, value: unknown): void`. Known keys: `'ai.provider'` ('mock'|'anthropic'), `'ai.apiKey'`, `'ai.model'`, `'ai.sendMealPhotos'` (bool), `'privacy.keepMealPhotos'` (bool), `'privacy.voiceRetentionDays'` (number), `'health.permissions'` (Record<string,'granted'|'denied'|'undetermined'>), `'health.writeWorkouts'`, `'health.writeBodyMass'`, `'reminders.morning'`, `'reminders.evening'`, `'units'`, `'coach.style'`, `'seed.skipDemo'` (bool; written by `deleteAllData`, read by `seedIfEmpty` to skip the demo even in a dev build or with `?demo=1`).
+- `settings.ts`: `getSetting<T>(key: string, fallback: T): T`, `setSetting(key: string, value: unknown): void`. Known keys: `'ai.provider'` ('mock'|'anthropic'), `'ai.apiKey'`, `'ai.model'`, `'ai.sendMealPhotos'` (bool), `'privacy.keepMealPhotos'` (bool), `'privacy.voiceRetentionDays'` (number), `'health.permissions'` (Record<string,'granted'|'denied'|'undetermined'>), `'health.writeWorkouts'`, `'health.writeBodyMass'`, `'reminders.morning'`, `'reminders.evening'`, `'units'`, `'coach.style'`, `'seed.skipDemo'` (bool; written by `deleteAllData`, read by `seedIfEmpty` to skip the demo even in a dev build or with `?demo=1`), `'onboarding.skippedAt'` (ISO string; the intake was skipped from the welcome screen — see the setup gate above).
 - `body.ts`: `addBodyMetric(m: Omit<BodyMetric,'id'>): number`, `getBodyMetrics(type: BodyMetric['type'], days?: number): BodyMetric[]` (ascending by ts), `latestBodyMetric(type): BodyMetric | null`, `metricForDate(type, date): BodyMetric | null`, `deleteBodyMetric(id)`.
 - `sleep.ts`: `addSleepRecord(r: Omit<SleepRecord,'id'>): number`, `getSleepRecords(days: number): SleepRecord[]` (ascending by endTs), `lastNightSleep(today: string): SleepRecord | null` (record whose endTs date == today), `deleteSleepRecord(id)`.
 - `health.ts`: `addHealthMetric(m: Omit<HealthMetric,'id'>): number`, `getHealthMetrics(type, days): HealthMetric[]`.

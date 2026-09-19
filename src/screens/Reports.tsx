@@ -6,6 +6,8 @@ import { ChevronRight, FileText } from 'lucide-react'
 import { AIStatusChip, Button, Illustration, Screen } from '../components'
 import { listReports } from '../db/repositories'
 import type { HealthReport } from '../domain/types'
+import { SetupLockCard } from '../features/onboarding/SetupGate'
+import { isOnboarded } from '../features/onboarding/setup'
 import { FLAG_LABEL, FlagMark, KIND_ICON, KIND_LABEL, ReportUploader, notableMarkers } from '../features/reports'
 import { useQuery } from '../hooks'
 import { dateOf, fmtDate } from '../lib/util'
@@ -53,6 +55,8 @@ export default function ReportsScreen() {
   const location = useLocation()
   const [params, setParams] = useSearchParams()
   const reports = useQuery(() => listReports(), [])
+  // Uploading a report needs a finished intake (features/onboarding/setup.ts); reading old ones does not.
+  const canUpload = useQuery(() => isOnboarded(), [])
   const [showAll, setShowAll] = useState(false)
   const uploaderRef = useRef<HTMLDivElement>(null)
 
@@ -81,13 +85,13 @@ export default function ReportsScreen() {
             <Illustration name="report" size={128} />
             <p className="voice m-0 text-xl text-app text-balance">Add a blood test or a scan so your coach knows where you are starting from.</p>
             <div ref={uploaderRef} className="w-full text-left">
-              <ReportUploader onDone={onDone} />
+              {canUpload ? <ReportUploader onDone={onDone} /> : <SetupLockCard action="report" />}
             </div>
           </section>
         ) : (
           <>
             <section ref={uploaderRef} className="anim-rise" style={{ '--i': 0 } as CSSProperties} aria-label="Add a report">
-              <ReportUploader compact onDone={onDone} />
+              {canUpload ? <ReportUploader compact onDone={onDone} /> : <SetupLockCard action="report" />}
             </section>
             <ul className="m-0 flex list-none flex-col gap-3 p-0" aria-label="Your reports">
               {visible.map((r, i) => (

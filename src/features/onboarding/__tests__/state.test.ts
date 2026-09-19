@@ -14,6 +14,8 @@ vi.mock('../../../db/database', () => ({ db: { transaction: <T,>(fn: () => T): T
 vi.mock('../../../db/repositories', () => ({
   getSetting: <T,>(k: string, d: T): T => (mem.settings.has(k) ? (mem.settings.get(k) as T) : d),
   setSetting: (k: string, v: unknown) => { mem.settings.set(k, v) },
+  deleteSetting: (k: string) => { mem.settings.delete(k) },
+  getProfile: () => null,
   latestBodyMetric: () => null,
   metricForDate: () => null,
   addBodyMetric: (m: { type: string; value: number }) => { mem.metrics.push(m); return 1 },
@@ -34,6 +36,7 @@ const WIZARD = { diet: DIET, conditions: [{ key: 'k', region: 'knee_left', label
 
 beforeEach(() => {
   mem.settings.clear()
+  mem.settings.set('onboarding.skippedAt', '2026-09-16T00:00:00.000Z')
   mem.metrics = []
   mem.checkIns = []
   mem.existingCheckIn = false
@@ -96,6 +99,8 @@ describe('commitIntake / readIntake', () => {
     expect(merged.conditions[0].label).toBe('Left knee')
 
     expect(readIntake()).toEqual({ ...a, waistCm: null, supplements: 'Creatine', historyNote: 'short' })
+    // A skipped intake is no longer skipped once it is committed (the setup gate opens).
+    expect(mem.settings.has('onboarding.skippedAt')).toBe(false)
   })
 
   it('does not overwrite a check-in that already exists, or log one from pre-filled answers', () => {

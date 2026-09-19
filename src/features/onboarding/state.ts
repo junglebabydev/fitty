@@ -9,6 +9,7 @@ import { ageFromDob, commitOnboarding, effectiveTargets, estimateFor, type Wizar
 import { COACH_STYLE_OPTIONS, EQUIPMENT_OPTIONS, EXPERIENCE_OPTIONS, REGION_LABEL, SEX_OPTIONS, labelFor } from '../settings/options'
 import { round1 } from '../settings/units'
 import { buildReportContextLines } from '../reports/markers'
+import { clearOnboardingSkip } from './setup'
 import {
   ALCOHOL_OPTIONS,
   BEDTIME_OPTIONS,
@@ -254,6 +255,7 @@ export function commitIntake(s: WizardState, a: IntakeAnswers, baseline: Baselin
     setSetting(INTAKE_KEYS.history, { worked: a.worked, notWorked: a.notWorked, note: a.historyNote.trim() })
     setSetting(INTAKE_KEYS.shareReports, a.shareReports)
     setSetting(INTAKE_KEYS.completedAt, nowIso())
+    clearOnboardingSkip() // the setup gate is open from here on
     if (baseline) saveBaseline(baseline)
 
     if (a.waistCm != null) {

@@ -8,8 +8,9 @@ import { useQuery, useToast } from './hooks'
 import { db } from './db/database'
 import { acquireTabLock } from './db/tabLock'
 import { seedIfEmpty } from './db/seed'
-import { getProfile } from './db/repositories'
 import { applyAISettings } from './features/ai/config'
+import { RequireSetup } from './features/onboarding/SetupGate'
+import { isOnboarded, onboardingSkipped } from './features/onboarding/setup'
 
 // --- screens (route table in docs/CONTRACTS.md) -------------------------------------
 
@@ -216,15 +217,18 @@ function Shell() {
 }
 
 /**
- * Sends un-onboarded profiles to /onboarding. Onboarded profiles may still visit
- * /onboarding: Settings and Coach link there to re-run the wizard, which detects
- * rerun mode itself (Cancel + "Save changes" both return to /settings).
+ * Sends un-onboarded profiles to /onboarding, unless they tapped "Skip for now" on the welcome
+ * screen: those browse the app and meet the setup gate (features/onboarding/setup.ts) at the
+ * actions that need a real profile. Onboarded profiles may still visit /onboarding: Settings and
+ * Coach link there to re-run the wizard, which detects rerun mode itself (Cancel + "Save changes"
+ * both return to /settings).
  */
 function OnboardingGate({ children }: { children: ReactNode }) {
   const { pathname } = useLocation()
-  const onboarded = useQuery(() => getProfile()?.onboarded ?? false, [])
+  const onboarded = useQuery(() => isOnboarded(), [])
+  const skipped = useQuery(() => onboardingSkipped(), [])
   const atOnboarding = pathname === '/onboarding'
-  if (!onboarded && !atOnboarding) return <Navigate to="/onboarding" replace />
+  if (!onboarded && !skipped && !atOnboarding) return <Navigate to="/onboarding" replace />
   return <>{children}</>
 }
 
@@ -236,9 +240,9 @@ function AppRoutes() {
       <Route path="/sleep" element={<SleepScreen />} />
       <Route path="/checkin" element={<CheckInScreen />} />
       <Route path="/train" element={<TrainScreen />} />
-      <Route path="/train/session/:id" element={<WorkoutScreen />} />
+      <Route path="/train/session/:id" element={<RequireSetup action="workout"><WorkoutScreen /></RequireSetup>} />
       <Route path="/train/exercise/:id" element={<ExerciseDetailScreen />} />
-      <Route path="/train/mobility" element={<MobilityScreen />} />
+      <Route path="/train/mobility" element={<RequireSetup action="mobility"><MobilityScreen /></RequireSetup>} />
       <Route path="/eat" element={<EatScreen />} />
       <Route path="/eat/review" element={<MealReviewScreen />} />
       <Route path="/eat/search" element={<FoodSearchScreen />} />
