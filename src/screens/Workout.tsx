@@ -23,6 +23,9 @@ import {
 } from '../features/workout'
 import { useRestTimer } from '../features/workout/useRestTimer'
 import { MuscleSummary } from '../features/workout/PlanVisuals'
+import { FocusDone, FocusMode } from '../features/workout/FocusMode'
+import { focusIndex, nextFocusIndex, remainingPlan } from '../features/workout/focus'
+import type { LoggedSet } from '../features/workout/useSetLogger'
 
 function safeReadiness(): Readiness | null {
   try { return todayReadiness().state } catch { return null }
@@ -314,8 +317,50 @@ export default function WorkoutScreen() {
   const GateIcon = gate.overall === 'OK' ? ShieldCheck : gate.overall === 'RED' ? ShieldAlert : TriangleAlert
   const gateCls = gate.overall === 'OK' ? 'bg-ok/10 text-ok' : gate.overall === 'RED' ? 'bg-stop/10 text-stop' : 'bg-warn/10 text-warn'
 
+  // Focus Mode (BFT format) is the default while a session runs; ?view=list shows the full list.
+  const focusOn = params.get('view') !== 'list' && session.exercises.length > 0
+  const idx = focusIndex(session.exercises, setsFor, stopped)
+  const left = remainingPlan(session.exercises, setsFor, stopped)
+  const leftSets = left.reduce((n, e) => n + e.sets, 0)
+  const remainingLabel = leftSets <= 1 ? (leftSets === 1 ? 'Last set' : 'All done') : `~${estimateSessionMinutes(left)} min left`
+  const focusPlanned = idx != null ? session.exercises[idx] : null
+  const focusExercise = focusPlanned ? byId.get(focusPlanned.exerciseId) ?? null : null
+  const onLogged = (planned: PlannedExercise, index: number, s: LoggedSet) => {
+    setPainNext(planned.exerciseId, false)
+    if (s.pr) setPr(s.pr)
+    const doneHere = (setsFor.get(planned.exerciseId)?.length ?? 0) + 1 >= planned.sets
+    if (focusOn && doneHere && nextFocusIndex(session.exercises, setsFor, stopped, index) == null && focusIndex(session.exercises, setsFor, stopped) === index) {
+      timer.skip()
+      setFinishOpen(true)
+    } else if (s.restSec > 0) timer.start(s.restSec)
+  }
+
   return (
     <Screen pillar="train" padded={false}>
+      {focusOn && (focusPlanned && focusExercise && idx != null ? (
+        <FocusMode
+          key={`${idx}-${focusPlanned.exerciseId}`}
+          session={session}
+          planned={focusPlanned}
+          exercise={focusExercise}
+          sets={setsFor.get(focusPlanned.exerciseId) ?? []}
+          stopped={stopped.includes(focusPlanned.exerciseId)}
+          painNext={!!painNext[focusPlanned.exerciseId]}
+          position={{ n: idx + 1, total: session.exercises.length }}
+          progress={{ logged: sets.length, total: plannedTotal }}
+          elapsed={fmtElapsed(elapsedSec)}
+          remaining={remainingLabel}
+          timer={timer}
+          onLogged={(s) => onLogged(focusPlanned, idx, s)}
+          onList={() => setParams({ view: 'list' })}
+          onPain={() => setPainIndex(idx)}
+          onSubstitute={() => { setSubReason(undefined); setSubIndex(idx) }}
+          onOptions={() => setMoreOpen(true)}
+          onFinish={() => setFinishOpen(true)}
+        />
+      ) : (
+        <FocusDone onFinish={() => setFinishOpen(true)} onList={() => setParams({ view: 'list' })} />
+      ))}
       {/* Cancels the wrapper's top inset so the bar owns the safe area while stuck. */}
       <header
         className="sticky top-0 z-30 glass border-b border-line"
@@ -328,6 +373,9 @@ export default function WorkoutScreen() {
             <h1 className="text-[15px] font-semibold leading-tight truncate">{session.name}</h1>
           </div>
           <div className="num text-3xl text-app px-1" role="timer" aria-label={`Elapsed ${fmtElapsed(elapsedSec)}`}>{fmtElapsed(elapsedSec)}</div>
+          {session.exercises.length > 0 && (
+            <button type="button" onClick={() => setParams({})} className="press h-11 px-3 rounded-xl border border-line-strong text-[15px] font-semibold">Focus</button>
+          )}
           <IconButton icon={<Ellipsis size={20} />} label="Session options" onClick={() => setMoreOpen(true)} className="text-muted" />
           <button type="button" onClick={() => setFinishOpen(true)} className="press ml-1 h-11 px-4 rounded-xl bg-accent text-accent-fg text-[15px] font-semibold">
             Finish
@@ -395,11 +443,7 @@ export default function WorkoutScreen() {
                   library={library}
                   stopped={stopped.includes(planned.exerciseId)}
                   painNext={!!painNext[planned.exerciseId]}
-                  onLogged={(s) => {
-                    setPainNext(planned.exerciseId, false)
-                    if (s.restSec > 0) timer.start(s.restSec)
-                    if (s.pr) setPr(s.pr)
-                  }}
+                  onLogged={(s) => onLogged(planned, index, s)}
                   onSubstitute={() => { setSubReason(undefined); setSubIndex(index) }}
                   onPain={() => setPainIndex(index)}
                 />
