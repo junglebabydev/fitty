@@ -6,6 +6,7 @@ import { Button, Illustration, Screen } from '../components'
 import { useQuery } from '../hooks'
 import { PLAN_FOCUSES, estimateSessionMinutes, type PlanFocus } from '../engine'
 import { useAIStatus } from '../features/ai/config'
+import { useSetupGate } from '../features/onboarding/SetupGate'
 import { cx, dayName, fmtDate, startOfWeek, todayStr } from '../lib/util'
 import { SESSION_TYPE_META, exerciseMap, libraryExercises, missedSessions, sessionStatusInfo, weekSessions } from '../features/workout'
 import { PlanSheet } from '../features/workout/PlanSheet'
@@ -30,6 +31,8 @@ function TrainRoot() {
   const navigate = useNavigate()
   const [params, setParams] = useSearchParams()
   const ai = useAIStatus()
+  // Planning and starting a session both need the intake (features/onboarding/setup.ts).
+  const setup = useSetupGate()
   const today = todayStr()
   const weekStart = startOfWeek(today)
 
@@ -48,9 +51,11 @@ function TrainRoot() {
     if (params.get('plan') !== '1') return
     const minutes = Number(params.get('minutes'))
     const focus = params.get('focus') as PlanFocus | null
+    setParams({}, { replace: true })
+    if (!setup.require('workout')) return // unfinished intake: the gate sheet explains instead
     setPlanInit({ minutes: Number.isFinite(minutes) && minutes > 0 ? minutes : undefined, focus: focus && PLAN_FOCUSES.includes(focus) ? focus : undefined })
     setPlanOpen(true)
-    setParams({}, { replace: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params, setParams])
 
   // Hero: what is actionable today, else the next thing coming up.
@@ -69,7 +74,9 @@ function TrainRoot() {
   }, [sessions, hero?.id, today])
 
   const occupied = useMemo(() => new Set(sessions.filter((s) => s.status !== 'skipped').map((s) => s.scheduledDate)), [sessions])
-  const openPlanner = () => { setPlanInit({}); setPlanOpen(true) }
+  const openPlanner = () => { if (setup.require('workout')) { setPlanInit({}); setPlanOpen(true) } }
+  const openSession = (id: number) => { if (setup.require('workout')) navigate(`/train/session/${id}`) }
+  const openRoutine = (r: Routine) => { if (setup.require('workout')) setRoutine(r) }
 
   return (
     <Screen pillar="train" large title="Train" eyebrow={`Week of ${fmtDate(weekStart)}`}>
@@ -92,7 +99,7 @@ function TrainRoot() {
                 full
                 className="mt-4"
                 icon={hero.status === 'completed' ? <ChevronRight size={18} /> : <Play size={18} />}
-                onClick={() => navigate(`/train/session/${hero.id}`)}
+                onClick={() => openSession(hero.id)}
               >
                 {hero.status === 'in_progress' ? 'Resume' : hero.status === 'completed' ? 'Summary' : hero.scheduledDate === today ? 'Start' : 'Preview'}
               </Button>
@@ -118,7 +125,7 @@ function TrainRoot() {
         {/* 3 · routines */}
         <section className="anim-rise" style={rise(3)} aria-labelledby="train-routines">
           <h2 id="train-routines" className="eyebrow text-muted px-1 mb-2 mt-2">Routines</h2>
-          <RoutinesRow routines={routines} byId={byId} onOpen={setRoutine} />
+          <RoutinesRow routines={routines} byId={byId} onOpen={openRoutine} />
         </section>
 
         {/* 4 · this week */}
@@ -137,7 +144,7 @@ function TrainRoot() {
                 const TypeIcon = SESSION_TYPE_META[s.type].icon
                 return (
                   <li key={s.id}>
-                    <button type="button" onClick={() => navigate(`/train/session/${s.id}`)} className="w-full min-h-[56px] px-3.5 py-1.5 flex items-center gap-3 text-left active:bg-surface-2">
+                    <button type="button" onClick={() => openSession(s.id)} className="w-full min-h-[56px] px-3.5 py-1.5 flex items-center gap-3 text-left active:bg-surface-2">
                       <span className={cx('h-10 w-10 rounded-xl inline-flex items-center justify-center shrink-0', s.status === 'completed' ? 'bg-pillar text-accent-fg' : 'bg-surface-2 text-muted')} aria-hidden><TypeIcon size={18} /></span>
                       <span className="min-w-0 flex-1 font-semibold text-[15px] leading-tight truncate">{s.name.replace(/\s*\(.*\)$/, '')}</span>
                       <span className="inline-flex items-center gap-1 text-xs font-semibold text-muted shrink-0">
@@ -158,6 +165,7 @@ function TrainRoot() {
 
       <PlanSheet open={planOpen} onClose={() => setPlanOpen(false)} initialMinutes={planInit.minutes} initialFocus={planInit.focus} onSaved={() => setRoutineTick((n) => n + 1)} />
       <RoutineDetailSheet routine={routine} onClose={() => setRoutine(null)} byId={byId} occupied={occupied} onChanged={() => setRoutineTick((n) => n + 1)} />
+      {setup.sheet}
     </Screen>
   )
 }

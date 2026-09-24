@@ -13,6 +13,7 @@ import { cx, nowIso } from '../../lib/util'
 import { usePhotoPicker } from '../../native/PhotoInput'
 import { KEYBOARD_DICTATION_HINT, isSpeechAvailable, startListening, type ListenHandle, type SpeechErrorCode } from '../../native/speech'
 import { useAIStatus } from '../ai/config'
+import { useSetupGate } from '../onboarding/SetupGate'
 import { captureMealFromFile, REVIEW_PATH } from '../meal/captureMeal'
 import { itemFromFoodItem, newDraft, saveDraft } from '../meal/draft'
 import { VoiceSheet } from '../voice/VoiceSheet'
@@ -73,6 +74,7 @@ export function Composer({ context, placeholder = 'Ask or log anything…' }: Co
   const navigate = useNavigate()
   const toast = useToast()
   const ai = useAIStatus()
+  const setup = useSetupGate()
   const keyboard = useKeyboardInset()
 
   const [text, setText] = useState('')
@@ -116,8 +118,9 @@ export function Composer({ context, placeholder = 'Ask or log anything…' }: Co
   const focusField = () => fieldRef.current?.focus()
 
   // --- + sheet: the picker opens FIRST, synchronously, inside the tap --------------------
-  const snapMeal = () => { photos.openCamera(); setPlusOpen(false) }
-  const choosePhoto = () => { photos.openLibrary(); setPlusOpen(false) }
+  // `setup.require` reads the database synchronously, so the picker still opens inside the tap.
+  const snapMeal = () => { if (!setup.require('meal_photo')) { setPlusOpen(false); return } photos.openCamera(); setPlusOpen(false) }
+  const choosePhoto = () => { if (!setup.require('meal_photo')) { setPlusOpen(false); return } photos.openLibrary(); setPlusOpen(false) }
   const uploadReport = () => { setPlusOpen(false); navigate('/reports?upload=1') }
 
   // --- mic -----------------------------------------------------------------------------------
@@ -292,6 +295,8 @@ export function Composer({ context, placeholder = 'Ask or log anything…' }: Co
           )}
         </div>
       </Sheet>
+
+      {setup.sheet}
 
       <VoiceSheet
         open={previewOpen}

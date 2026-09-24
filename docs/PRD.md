@@ -144,7 +144,7 @@ coach_query
 Screen
 Requirements
 Onboarding
-Profile, goal, cadence, experience, diet pattern, equipment, mobility priorities, condition history, privacy preferences, Apple Health permissions and app disclaimer.
+Profile, goal, cadence, experience, diet pattern, equipment, mobility priorities, condition history, privacy preferences, Apple Health permissions and app disclaimer. The intake can be skipped from the welcome screen to look around first; starting a workout or a mobility routine and taking any photo (meal, progress, report) stay locked until it is completed.
 Today
 Readiness at top, coach directive, workout, nutrition, sleep and body cards. Persistent camera + microphone quick actions.
 Workout
@@ -375,7 +375,7 @@ Secondary review experience after the core iPhone flow is stable.
 Area
 Acceptance criterion
 Onboarding
-Complete profile/goals/condition/privacy setup without creating an online account.
+Complete profile/goals/condition/privacy setup without creating an online account. Setup may be skipped; every workout and photo action stays locked, with a reason and one way back, until it is finished.
 Today
 Show workout, kcal/protein, sleep, weight trend, readiness and one coach priority.
 Workout

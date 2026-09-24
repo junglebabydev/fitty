@@ -3,7 +3,8 @@ import { db } from '../database'
 // Known keys: 'ai.provider' ('mock'|'anthropic'), 'ai.apiKey', 'ai.model', 'ai.sendMealPhotos' (bool),
 // 'privacy.keepMealPhotos' (bool), 'privacy.voiceRetentionDays' (number),
 // 'health.permissions' (Record<string,'granted'|'denied'|'undetermined'>), 'health.writeWorkouts',
-// 'health.writeBodyMass', 'reminders.morning', 'reminders.evening', 'units', 'coach.style'.
+// 'health.writeBodyMass', 'reminders.morning', 'reminders.evening', 'units', 'coach.style',
+// 'onboarding.skippedAt' (ISO string; intake skipped from the welcome screen).
 // Values are stored as JSON text.
 
 export function getSetting<T>(key: string, fallback: T): T {
