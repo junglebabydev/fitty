@@ -2,10 +2,10 @@
 // runs the reply through the deterministic validator (library, symptom gate, clamps, time budget).
 // Not connected, or any failure → the local template-based fallback. Nothing is saved here.
 import { aiConnected, aiJson } from '../../ai'
-import type { Exercise } from '../../domain/types'
+import type { Exercise, SafetyTag } from '../../domain/types'
 import { EXERCISES } from '../../data'
 import { getConditionFlags, getExercises, getProfile, getSessions, getSetsForSession } from '../../db/repositories'
-import { fallbackPlan, validateAIPlan, type AIPlanDraft, type GateResult, type PlanFocus } from '../../engine'
+import { baselineAvoidTags, fallbackPlan, validateAIPlan, type AIPlanDraft, type GateResult, type PlanFocus } from '../../engine'
 import { addDays, todayStr } from '../../lib/util'
 import { gateFor, todayReadiness } from '../coach/facts'
 
@@ -52,17 +52,22 @@ export const PLAN_SCHEMA: Record<string, unknown> = {
   },
 }
 
-/** Standing constraints for this user: nothing that needs deep knee flexion under load, no impact / running. */
-const PROFILE_AVOID = ['deep_knee_flexion', 'impact']
-
 function library(): Exercise[] {
   const list = getExercises()
   return list.length ? list : EXERCISES
 }
 
-/** The library the planner may draw from: everything minus exercises the user's conditions rule out every day. */
+/**
+ * The library the planner may draw from: everything minus what this user's own baseline
+ * condition flags rule out every day. Derived from `condition_flags`, not hard-coded — a
+ * user with no flags sees the whole library. Today's symptoms are a separate, stricter
+ * filter applied later by the symptom gate.
+ */
 export function plannerLibrary(): Exercise[] {
-  return library().filter((e) => !e.safetyTags.some((t) => PROFILE_AVOID.includes(t)))
+  const regions = safe(() => getConditionFlags().map((f) => f.region), [])
+  const avoid = baselineAvoidTags(regions)
+  if (!avoid.length) return library()
+  return library().filter((e) => !e.safetyTags.some((t) => avoid.includes(t)))
 }
 
 function safe<T>(fn: () => T, fallback: T): T {
@@ -94,19 +99,44 @@ export interface PlannerPromptInput {
   readiness?: { state: string; reasons: string[] } | null
   /** One line per recent session (see `recentTraining`). */
   recentTraining?: string
+  /** Standing safety tags from the user's condition flags; empty for a user with none. */
+  baselineAvoid?: SafetyTag[]
+}
+
+/**
+ * Avoid-clauses for the prompt, derived from the user's own baseline safety tags.
+ * A user with no condition flags gets none — the model is then free to use the whole
+ * library, including barbells, jumping and impact work. These used to be hard-coded
+ * to the reference persona, which silently forbade most of the library for everyone.
+ */
+export function standingRules(avoid: SafetyTag[]): string[] {
+  const clause: Partial<Record<SafetyTag, string>> = {
+    impact: 'no running, jumping or other impact',
+    deep_knee_flexion: 'no deep knee flexion under load',
+    knee_load: 'keep loading off the knee',
+    spinal_flexion: 'no loaded spinal flexion',
+    spinal_load: 'keep the spine supported; avoid loaded hinging',
+    axial_load: 'nothing loaded across the shoulders or spine',
+    overhead: 'nothing pressed or held overhead',
+    neck_load: 'no neck strain',
+  }
+  return avoid.map((t) => clause[t]).filter((s): s is string => Boolean(s))
 }
 
 /** The planner's system prompt. Pure: no database, no clock. */
 export function buildPlannerSystem(i: PlannerPromptInput): string {
   const { allowed, gate, readiness } = i
   const conditions = i.conditions?.length ? i.conditions.join('; ') : 'none reported'
-  const equipment = i.equipment?.length ? i.equipment.join(', ') : 'dumbbells, selectorised machines, cables, lat pulldown, adjustable bench, stationary bike, treadmill, pool'
+  const equipment = i.equipment?.length ? i.equipment.join(', ') : 'unspecified — infer what is available from the allowed exercise list below'
+  const rules = standingRules(i.baselineAvoid ?? [])
   const list = allowed.map((e) => `${e.id} | ${e.name} | ${e.pattern} | ${e.equipment} | ${e.safetyTags.join(',') || 'none'}${e.timed ? ' | timed (seconds)' : ''}`).join('\n')
 
   return [
     'You plan ONE gym session for a single user of a wellness app. Reply with JSON only, matching the schema.',
     `USER: ${i.experience ?? 'intermediate'} lifter. Conditions: ${conditions}.`,
-    'STANDING RULES: prefer machines, cables and dumbbells; low impact only; no deep knee flexion under load; no running or jumping; keep the spine supported where possible; no neck strain. Never diagnose and never give medical advice.',
+    rules.length
+      ? `STANDING RULES from this user's own history: ${rules.join('; ')}. Never diagnose and never give medical advice.`
+      : 'STANDING RULES: this user reports no standing physical constraints — use the full allowed list. Never diagnose and never give medical advice.',
     `EQUIPMENT: ${equipment}.`,
     `TODAY: readiness ${readiness?.state ?? 'unknown'}${readiness?.reasons.length ? ` (${readiness.reasons.slice(0, 3).join('; ')})` : ''}. Symptom gate ${gate.overall}${gate.avoidTags.length ? ` — avoid every exercise tagged: ${gate.avoidTags.join(', ')}` : ''}.${gate.advice.length ? ` ${gate.advice.slice(0, 3).join(' ')}` : ''}`,
     'When readiness is AMBER or RED, reduce volume (fewer sets, more reps in reserve) rather than adding work.',
@@ -134,6 +164,7 @@ function buildSystem(allowed: Exercise[], gate: GateResult, today: string): stri
     gate,
     experience: profile?.experience,
     conditions: flags.map((f) => `${f.label}${f.baselineNotes ? ` (${f.baselineNotes})` : ''}`),
+    baselineAvoid: baselineAvoidTags(flags.map((f) => f.region)),
     equipment: profile?.equipment ?? [],
     readiness: safe(() => todayReadiness(today), null),
     recentTraining: recentTraining(byId, today),
