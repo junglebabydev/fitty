@@ -49,6 +49,11 @@ export default defineConfig({
           urlPattern: /^https:\/\/raw\.githubusercontent\.com\/yuhonas\/free-exercise-db\/.*\.(?:jpg|jpeg|png|gif)$/,
           handler: 'CacheFirst',
           options: { cacheName: 'exercise-media', expiration: { maxEntries: 400, maxAgeSeconds: 60 * 60 * 24 * 90 }, cacheableResponse: { statuses: [0, 200] } },
+        }, {
+          // Exercise animations (ExerciseDB free tier, see src/data/exerciseMedia.ts): same rule, their own cache.
+          urlPattern: /^https:\/\/static\.exercisedb\.dev\/media\/[A-Za-z0-9]+\.gif$/,
+          handler: 'CacheFirst',
+          options: { cacheName: 'exercise-animations', expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 90 }, cacheableResponse: { statuses: [0, 200] } },
         }], maximumFileSizeToCacheInBytes: 6 * 1024 * 1024, globPatterns: ['**/*.{js,css,html,svg,png,wasm,woff2}'] },
     }),
   ],

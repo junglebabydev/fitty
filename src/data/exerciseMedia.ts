@@ -1,4 +1,4 @@
-// Exercise photos and demo links.
+// Exercise animations and photos.
 //
 // Photos come from free-exercise-db (https://github.com/yuhonas/free-exercise-db). The repository is
 // released under the Unlicense (LICENSE.md) and describes itself as an "Open Public Domain Exercise
@@ -14,8 +14,6 @@
 // A few photos use different equipment from our variant (barbell hip thrust, kettlebell goblet squat,
 // dumbbell rear lunge) and may show a fuller range than our knee-friendly versions: the photo
 // illustrates the movement, the exercise's own instructions set the range and load.
-
-import { EXERCISE_BY_ID } from './exercises'
 
 export const EXERCISE_MEDIA_SOURCE = 'free-exercise-db (public domain, Unlicense)'
 export const EXERCISE_MEDIA_BASE = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises'
@@ -98,25 +96,67 @@ export const EXERCISE_PHOTO_IDS: Record<string, string> = {
   elliptical: 'Elliptical_Trainer',
 }
 
-/** A YouTube search for the movement's form; works for every exercise, mapped or not. */
-export function demoUrl(name: string): string {
-  return 'https://www.youtube.com/results?search_query=' + encodeURIComponent(name + ' proper form')
+// Animations come from ExerciseDB's free V1 API (https://oss.exercisedb.dev, 180×180 GIFs): free for
+// non-commercial use with attribution, which fits this single-user personal app. The art is ExerciseDB's
+// (it matches Gym Visual's style), so it is never copied into the repo: GIFs load on demand from their CDN
+// and the service worker caches them (`exercise-animations` in vite.config.ts). Credit: README → Media.
+//
+// Every id in EXERCISE_ANIMATION_IDS was picked by hand on 2026-09-24 and its GIF checked by eye against our
+// exercise. Deliberately left out: moves with no faithful match (bird dog, hollow hold, suitcase carry,
+// face pull, the swims, glute kickback, …) and moves whose knee- or back-friendly range limit a stock
+// full-range clip would contradict (hack squat, leg press, box goblet squat, short split squat, low step-up,
+// back squat, pistol to box, deficit lunge, bench dip, ab wheel). Those keep the photo or the MuscleMap tile.
+// Never add an id without looking at the GIF.
+
+export const EXERCISE_ANIMATION_SOURCE = 'ExerciseDB (free, non-commercial)'
+export const EXERCISE_ANIMATION_BASE = 'https://static.exercisedb.dev/media'
+
+/** Our exercise id → ExerciseDB exercise id. */
+export const EXERCISE_ANIMATION_IDS: Record<string, string> = {
+  db_bench_press: 'SpYC0Kp', incline_db_press: 'ns0SIbU', machine_chest_press: 'DOoWcnA', cable_fly: 'Pr9Rhf4',
+  pec_deck: 'v3xmPAR', push_up: 'I4hDWkc', incline_push_up: 'B1EVP9F', lat_pulldown: 'qdRxqCj', straight_arm_pulldown: 'x69MAlq',
+  assisted_pull_up: 'kiJ4Z2K', db_pullover: '9XjtHvS', seated_cable_row: 'fUBheHs', machine_row: '7I6LNUG',
+  chest_supported_db_row: '7vG5o25', one_arm_db_row: 'C0MA9bC', bent_over_db_row: 'BJ0Hz5L', inverted_row: 'bZGHsAZ',
+  db_shoulder_press: 'znQUdHY', machine_shoulder_press: 'vqsbmL0', arnold_press: 'Xy4jlWA', lateral_raise: 'DsgkuIt',
+  cable_lateral_raise: 'goJ6ezq', db_front_raise: '3eGE2JC', reverse_pec_deck: 'myfUsKf', band_pull_apart: 'sTfvVsG',
+  db_shrug: 'NJzBsGJ', db_curl: '3s4NnTh', hammer_curl: 'slDvUAU', incline_db_curl: 'ae9UoXQ', cable_curl: 'G08RZcQ',
+  preacher_curl_machine: 'b6hQYMb', triceps_pushdown: 'gAwDzB3', overhead_cable_triceps: '2IxROQ1', db_lying_triceps_extension: 'mpKZGWz',
+  machine_triceps_extension: 'Ser9eQp', db_kickback: 'W6PxUkg', reverse_lunge: 'SSsBDwB', leg_extension: 'my33uHU',
+  glute_bridge: 'u0cNiij', single_leg_glute_bridge: 'rmEukuS', db_rdl: 'rR0LJzx', cable_pull_through: 'OM46QHm',
+  lying_leg_curl: '17lJ1kr', seated_leg_curl: 'Zg3XY7P', standing_calf_raise: 'ykUOVze', seated_calf_raise: 'bOOdeyc',
+  calf_press_leg_press: 'ykHcWme', hip_abduction_machine: 'CHpahtl', hip_adduction_machine: 'oHsrypV', dead_bug: 'iny3m5y',
+  pallof_press: '9pa4H5m', cable_crunch: 'WW95auq', reverse_crunch: 'nCU1Ekp', farmers_carry: 'qPEzJjA',
+  stationary_bike: 'a8VDgLw', bike_intervals: 'a8VDgLw', incline_walk: 'rjiM4L3', stair_climber: 'j9Q5crt',
+  elliptical: 'rjtuP6X', bb_front_squat: 'zG0zs85', bb_walking_lunge: 't8iSghb', bb_deadlift: 'ila4NZS',
+  trap_bar_deadlift: 'jQGwmxN', bb_rdl: 'wQ2c4XD', bb_good_morning: 'XlZ4lAC', bb_bench_press: 'EIeI8Vf',
+  bb_incline_bench: '3TZduzM', bb_overhead_press: 'wdRZISl', close_grip_bench: 'J6Dx1Mu', bb_row: 'eZyBC3j',
+  pendlay_row: 'r0z6xzQ', bb_curl: '25GPyDY', kb_swing: 'UHJlbu3', kb_goblet_squat: 'ZA8b5hc', kb_clean: 'LHWF7us',
+  kb_press: 'blBXysN', kb_snatch: 'aXcUyKb', kb_turkish_get_up: 'Ha7SZ3y', pull_up: 'lBDjFxJ', chin_up: 'T2mxWqc',
+  band_assisted_pull_up: 'r1XNRYB', parallel_bar_dip: 'O2K9Vb5', decline_push_up: 'i5cEhka', diamond_push_up: 'soIB2rj',
+  archer_push_up: 'A9qxk2F', wall_handstand_hold: 'XooAdhl', bw_split_squat: '9E25EOx', bulgarian_split_squat: 'qx4fgX7',
+  single_leg_rdl_bw: 'gKozT8X', hanging_leg_raise: 'I3tsCnC', walking_lunge_bw: 'IZVHb27', lateral_lunge: 'py1HSzx',
+  curtsy_lunge: 'gUjqdei', overhead_carry: 'mWBtgmb', renegade_row: 'b9kqlBy', band_chest_press: '4x5Okof',
+  band_overhead_press: 'peAeMR3', band_curl: '3omWx6P', band_monster_walk: 'O95afRA', burpee: 'dK9394r',
+  thruster: 'f7Y9eDZ', jump_rope: 'e1e76I2', mountain_climber: 'RJgzwny', ski_erg: 'vpQaQkH', assisted_dip_machine: 'J60bN17',
+  smith_squat: 'jFtipLl', ab_crunch_machine: 'Wgaz7pm',
 }
 
 export interface ExerciseMedia {
+  /** Looping GIF of the movement, or null when the exercise has no checked animation. */
+  animation: string | null
   /** Start and end position photos ([] when the exercise has no verified photo). */
   images: string[]
-  demoUrl: string
   source: string | null
 }
 
-/** Photos + demo link for one of OUR exercise ids (unknown ids still get a demo search built from the id). */
+/** Animation + photos for one of OUR exercise ids (unknown ids get neither). */
 export function exerciseMedia(id: string): ExerciseMedia {
+  const animId = EXERCISE_ANIMATION_IDS[id]
   const photoId = EXERCISE_PHOTO_IDS[id]
   const images = photoId ? [`${EXERCISE_MEDIA_BASE}/${photoId}/0.jpg`, `${EXERCISE_MEDIA_BASE}/${photoId}/1.jpg`] : []
   return {
+    animation: animId ? `${EXERCISE_ANIMATION_BASE}/${animId}.gif` : null,
     images,
-    demoUrl: demoUrl(EXERCISE_BY_ID[id]?.name ?? id.replace(/_/g, ' ')),
     source: photoId ? EXERCISE_MEDIA_SOURCE : null,
   }
 }

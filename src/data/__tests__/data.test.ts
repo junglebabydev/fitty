@@ -78,6 +78,25 @@ describe('exercises', () => {
     }
   })
 
+  it('no alias phrase is claimed by two exercises', () => {
+    // findExerciseByAlias breaks score ties by library order, so a duplicate phrase
+    // silently makes the later exercise unreachable by voice. One owner per phrase.
+    const owners = new Map<string, string[]>()
+    for (const [id, list] of Object.entries(EXERCISE_ALIASES)) {
+      for (const a of list) owners.set(a, [...(owners.get(a) ?? []), id])
+    }
+    const clashes = [...owners.entries()].filter(([, ids]) => ids.length > 1)
+    expect(clashes, `duplicate aliases: ${JSON.stringify(clashes)}`).toEqual([])
+  })
+
+  it('resolves the unqualified name to the exercise people mean by it', () => {
+    expect(findExerciseByAlias('pull ups 3 sets')?.id).toBe('pull_up')
+    expect(findExerciseByAlias('deadlift 100 for 5')?.id).toBe('bb_deadlift')
+    expect(findExerciseByAlias('overhead press 40 kilos')?.id).toBe('bb_overhead_press')
+    expect(findExerciseByAlias('barbell row 60 for 8')?.id).toBe('bb_row')
+    expect(findExerciseByAlias('kettlebell swing 24 for 20')?.id).toBe('kb_swing')
+  })
+
   it('timed flag is set for planks, carries and cardio', () => {
     for (const id of ['plank', 'side_plank', 'farmers_carry', 'stationary_bike', 'incline_walk', 'swim_freestyle', 'swim_easy']) {
       expect(EXERCISE_BY_ID[id].timed, id).toBe(true)
@@ -93,7 +112,10 @@ describe('exercises', () => {
     expect(findExerciseByAlias('lat pulldown 55 for 10')?.id).toBe('lat_pulldown')
     expect(findExerciseByAlias('incline dumbbell press 22 for 10')?.id).toBe('incline_db_press')
     expect(findExerciseByAlias('seated leg curl 40 kilos')?.id).toBe('seated_leg_curl')
-    expect(findExerciseByAlias('did some deadlifts')?.id).toBe('db_rdl')
+    // Before the barbell pass this resolved to db_rdl, which owned 'deadlifts' only because
+    // no real deadlift existed. With bb_deadlift in the library the plain word means the barbell lift.
+    expect(findExerciseByAlias('did some deadlifts')?.id).toBe('bb_deadlift')
+    expect(findExerciseByAlias('dumbbell rdl 20 for 12')?.id).toBe('db_rdl')
     expect(findExerciseByAlias('weight today 83.4 kilos')).toBeNull()
     expect(findExerciseByAlias('')).toBeNull()
   })
