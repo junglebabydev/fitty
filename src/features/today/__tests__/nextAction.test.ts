@@ -32,4 +32,9 @@ describe('nextAction', () => {
     expect(kind({ sessionStatus: 'skipped', moodLogged: false })).toBe('mood_check_in')
     expect(kind({ sessionStatus: null })).toBe('log_meal')
   })
+
+  it('never points into the hidden Mind pillar', () => {
+    expect(kind({ sessionStatus: 'completed', hour: 21, mind: false })).not.toBe('wind_down')
+    expect(kind({ sessionStatus: 'skipped', moodLogged: false, mind: false })).toBe('log_meal')
+  })
 })

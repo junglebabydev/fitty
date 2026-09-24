@@ -1,9 +1,9 @@
 # Security headers for the static app (Cloudflare Workers static assets read this file from ./dist).
 # They do not apply to /api/ai/*: the Worker sets its own headers there.
 # connect-src is the allow-list of everything the app may talk to: itself, the two AI providers (per-device
-# keys) and the exercise photos. Add a host here when the app gains a new one. See docs/DEPLOY.md §7.
+# keys) and the exercise photos. img-src also allows the ExerciseDB animation host (static.exercisedb.dev). Add a host here when the app gains a new one. See docs/DEPLOY.md §7.
 /*
   Strict-Transport-Security: max-age=31536000; includeSubDomains
   X-Content-Type-Options: nosniff
   Referrer-Policy: no-referrer
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://raw.githubusercontent.com; font-src 'self'; connect-src 'self' https://generativelanguage.googleapis.com https://api.anthropic.com https://raw.githubusercontent.com; worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://raw.githubusercontent.com https://static.exercisedb.dev; font-src 'self'; connect-src 'self' https://generativelanguage.googleapis.com https://api.anthropic.com https://raw.githubusercontent.com; worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'

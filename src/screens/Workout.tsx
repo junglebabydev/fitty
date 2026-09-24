@@ -22,7 +22,12 @@ import {
   type GateEntry, type GateOutcome, type LivePR, type PainOutcome, type SymptomChange,
 } from '../features/workout'
 import { useRestTimer } from '../features/workout/useRestTimer'
-import { DemoLink, MuscleSummary } from '../features/workout/PlanVisuals'
+import { MuscleSummary } from '../features/workout/PlanVisuals'
+import { FocusDone, FocusMode } from '../features/workout/FocusMode'
+import { focusIndex, nextFocusIndex, remainingPlan } from '../features/workout/focus'
+import type { LoggedSet } from '../features/workout/useSetLogger'
+import { isStaleSession, staleWrapUp } from '../features/workout/stale'
+import { StaleSessionSheet } from '../features/workout/StaleSessionSheet'
 
 function safeReadiness(): Readiness | null {
   try { return todayReadiness().state } catch { return null }
@@ -70,6 +75,11 @@ export default function WorkoutScreen() {
   const [finishing, setFinishing] = useState(false)
   const [moreOpen, setMoreOpen] = useState(false)
   const [pr, setPr] = useState<LivePR | null>(null)
+  // A workout left open for hours (stale.ts) asks once per visit whether to wrap it up.
+  const [staleDismissed, setStaleDismissed] = useState(false)
+  const [staleBusy, setStaleBusy] = useState(false)
+  // Focus Mode Prev/Next: an exercise picked by hand (null = follow the plan order).
+  const [browseIdx, setBrowseIdx] = useState<number | null>(null)
   // Pain reported before any set was logged: the next set carries the flag. Kept per session like `stopped`.
   const painNextKey = `workout-painnext-${sessionId}`
   const [painNext, setPainNextState] = useState<Record<string, boolean>>(() => readSessionFlag<Record<string, boolean>>(painNextKey, {}))
@@ -314,8 +324,96 @@ export default function WorkoutScreen() {
   const GateIcon = gate.overall === 'OK' ? ShieldCheck : gate.overall === 'RED' ? ShieldAlert : TriangleAlert
   const gateCls = gate.overall === 'OK' ? 'bg-ok/10 text-ok' : gate.overall === 'RED' ? 'bg-stop/10 text-stop' : 'bg-warn/10 text-warn'
 
+  const stale = isStaleSession(session, now)
+  const wrapUp = staleWrapUp(session, sets)
+  const finishStale = async () => {
+    if (!wrapUp) return
+    setStaleBusy(true)
+    try {
+      await finishSession({ session, sets, rpe: null, durationMin: wrapUp.durationMin, notes: '', symptomChanges: [], writeToHealth: false, completedAt: wrapUp.completedAt })
+      timer.skip()
+      toast.show(`Saved ${sets.length} ${sets.length === 1 ? 'set' : 'sets'} · ${wrapUp.durationMin} min.`, 'success')
+    } catch (e) {
+      toast.show(e instanceof Error ? e.message : 'Could not finish the session.', 'error')
+    } finally {
+      setStaleBusy(false)
+    }
+  }
+  const skipStale = () => {
+    skipSession(session, 'left in progress')
+    timer.skip()
+    toast.show('Marked as skipped. Logged sets stay in your history.', 'info')
+  }
+
+  // Focus Mode (BFT format) is the default while a session runs; ?view=list shows the full list.
+  const focusOn = params.get('view') !== 'list' && session.exercises.length > 0
+  const hasLeft = (i: number) => {
+    const e = session.exercises[i]
+    return !!e && !stopped.includes(e.exerciseId) && (setsFor.get(e.exerciseId)?.length ?? 0) < e.sets
+  }
+  // A hand-picked exercise stays on screen until its sets are done, then the plan order takes over again.
+  const idx = browseIdx != null && hasLeft(browseIdx) ? browseIdx : focusIndex(session.exercises, setsFor, stopped)
+  const left = remainingPlan(session.exercises, setsFor, stopped)
+  const leftSets = left.reduce((n, e) => n + e.sets, 0)
+  const remainingLabel = leftSets <= 1 ? (leftSets === 1 ? 'Last set' : '0 min') : `~${estimateSessionMinutes(left)} min`
+  let prevIdx: number | null = null
+  if (idx != null) for (let i = idx - 1; i >= 0; i--) if (hasLeft(i)) { prevIdx = i; break }
+  const nextIdx = idx != null ? nextFocusIndex(session.exercises, setsFor, stopped, idx) : null
+  const segments = session.exercises.map((e) => ({ done: setsFor.get(e.exerciseId)?.length ?? 0, planned: e.sets, stopped: stopped.includes(e.exerciseId) }))
+  const focusPlanned = idx != null ? session.exercises[idx] : null
+  const focusExercise = focusPlanned ? byId.get(focusPlanned.exerciseId) ?? null : null
+  const onLogged = (planned: PlannedExercise, index: number, s: LoggedSet) => {
+    setPainNext(planned.exerciseId, false)
+    if (s.pr) setPr(s.pr)
+    const doneHere = (setsFor.get(planned.exerciseId)?.length ?? 0) + 1 >= planned.sets
+    const othersLeft = session.exercises.some((_, i) => i !== index && hasLeft(i))
+    if (focusOn && doneHere && !othersLeft) {
+      timer.skip()
+      setFinishOpen(true)
+    } else if (s.restSec > 0) timer.start(s.restSec)
+  }
+
   return (
     <Screen pillar="train" padded={false}>
+      {focusOn && (focusPlanned && focusExercise && idx != null ? (
+        <FocusMode
+          key={`${idx}-${focusPlanned.exerciseId}`}
+          session={session}
+          planned={focusPlanned}
+          exercise={focusExercise}
+          sets={setsFor.get(focusPlanned.exerciseId) ?? []}
+          stopped={stopped.includes(focusPlanned.exerciseId)}
+          painNext={!!painNext[focusPlanned.exerciseId]}
+          index={idx}
+          segments={segments}
+          nextName={nextIdx != null ? byId.get(session.exercises[nextIdx].exerciseId)?.name ?? null : null}
+          onPrev={prevIdx != null ? () => { timer.skip(); setBrowseIdx(prevIdx) } : null}
+          onNext={nextIdx != null ? () => { timer.skip(); setBrowseIdx(nextIdx) } : null}
+          progress={{ logged: sets.length, total: plannedTotal }}
+          elapsed={fmtElapsed(elapsedSec)}
+          remaining={remainingLabel}
+          timer={timer}
+          gate={gate}
+          onLogged={(s) => onLogged(focusPlanned, idx, s)}
+          onList={() => setParams({ view: 'list' })}
+          onPain={() => setPainIndex(idx)}
+          onSubstitute={() => { setSubReason(undefined); setSubIndex(idx) }}
+          onOptions={() => setMoreOpen(true)}
+          onFinish={() => setFinishOpen(true)}
+        />
+      ) : (
+        <FocusDone onFinish={() => setFinishOpen(true)} onList={() => setParams({ view: 'list' })} />
+      ))}
+      <StaleSessionSheet
+        open={stale && !staleDismissed}
+        session={session}
+        setCount={sets.length}
+        wrapUp={wrapUp}
+        busy={staleBusy}
+        onFinish={() => void finishStale()}
+        onSkip={skipStale}
+        onKeepGoing={() => setStaleDismissed(true)}
+      />
       {/* Cancels the wrapper's top inset so the bar owns the safe area while stuck. */}
       <header
         className="sticky top-0 z-30 glass border-b border-line"
@@ -328,6 +426,9 @@ export default function WorkoutScreen() {
             <h1 className="text-[15px] font-semibold leading-tight truncate">{session.name}</h1>
           </div>
           <div className="num text-3xl text-app px-1" role="timer" aria-label={`Elapsed ${fmtElapsed(elapsedSec)}`}>{fmtElapsed(elapsedSec)}</div>
+          {session.exercises.length > 0 && (
+            <button type="button" onClick={() => setParams({})} className="press h-11 px-3 rounded-xl border border-line-strong text-[15px] font-semibold">Focus</button>
+          )}
           <IconButton icon={<Ellipsis size={20} />} label="Session options" onClick={() => setMoreOpen(true)} className="text-muted" />
           <button type="button" onClick={() => setFinishOpen(true)} className="press ml-1 h-11 px-4 rounded-xl bg-accent text-accent-fg text-[15px] font-semibold">
             Finish
@@ -395,11 +496,7 @@ export default function WorkoutScreen() {
                   library={library}
                   stopped={stopped.includes(planned.exerciseId)}
                   painNext={!!painNext[planned.exerciseId]}
-                  onLogged={(s) => {
-                    setPainNext(planned.exerciseId, false)
-                    if (s.restSec > 0) timer.start(s.restSec)
-                    if (s.pr) setPr(s.pr)
-                  }}
+                  onLogged={(s) => onLogged(planned, index, s)}
                   onSubstitute={() => { setSubReason(undefined); setSubIndex(index) }}
                   onPain={() => setPainIndex(index)}
                 />
@@ -530,7 +627,6 @@ function PlannedPreview({ session, byId }: { session: WorkoutSession; byId: Map<
                 </span>
               </span>
             </button>
-            {r.ex && <DemoLink exercise={r.ex} label="" className="shrink-0 w-11 px-0 mr-1" />}
           </li>
         ))}
       </ul>

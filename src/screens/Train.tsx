@@ -2,25 +2,23 @@ import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { BookOpen, ChevronRight, Play, RefreshCw, Sparkles, StretchHorizontal, Zap } from 'lucide-react'
 import type { WorkoutSession } from '../domain/types'
-import { AIBadge, Button, Illustration, Screen, WeekStrip } from '../components'
+import { Button, Illustration, Screen } from '../components'
 import { useQuery } from '../hooks'
 import { PLAN_FOCUSES, estimateSessionMinutes, type PlanFocus } from '../engine'
 import { useAIStatus } from '../features/ai/config'
 import { useSetupGate } from '../features/onboarding/SetupGate'
-import { addDays, cx, dayName, fmtDate, startOfWeek, todayStr } from '../lib/util'
-import { SESSION_TYPE_META, exerciseMap, isMissed, libraryExercises, missedSessions, sessionStatusInfo, weekSessions } from '../features/workout'
+import { cx, dayName, fmtDate, startOfWeek, todayStr } from '../lib/util'
+import { SESSION_TYPE_META, exerciseMap, libraryExercises, missedSessions, sessionStatusInfo, weekSessions } from '../features/workout'
 import { PlanSheet } from '../features/workout/PlanSheet'
 import { MuscleSummary } from '../features/workout/PlanVisuals'
 import { RoutineDetailSheet, RoutinesRow } from '../features/workout/RoutineSheets'
 import { listRoutines, type Routine } from '../features/workout/routines'
 import { LibraryView, WeekPlanView } from '../features/workout/WeekPlan'
 
-type DayState = 'done' | 'planned' | 'missed' | 'rest' | 'today'
-
 const rise = (i: number) => ({ '--i': i }) as CSSProperties
 const STATUS_RANK: Record<WorkoutSession['status'], number> = { in_progress: 0, planned: 1, completed: 2, skipped: 3 }
 
-/** Train (DESIGN §10): week strip · today's session · Plan with AI · routines · this week. Everything else is one tap away. */
+/** Train: today's session · one Plan button · routines · this week. The full week, mobility and the library are one tap away. */
 export default function TrainScreen() {
   const [params] = useSearchParams()
   const view = params.get('view')
@@ -60,19 +58,6 @@ function TrainRoot() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params, setParams])
 
-  const days = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart])
-  const stripDays = useMemo(() => days.map((d) => {
-    const rows = sessions.filter((s) => s.scheduledDate === d && s.status !== 'skipped')
-    const done = rows.filter((s) => s.status === 'completed').length
-    let state: DayState = 'rest'
-    if (rows.length && done === rows.length) state = 'done'
-    else if (d === today) state = 'today'
-    else if (rows.some((s) => isMissed(s, today))) state = 'missed'
-    else if (rows.length) state = 'planned'
-    const value = rows.length ? (done + (rows.some((s) => s.status === 'in_progress') ? 0.5 : 0)) / rows.length : 0
-    return { date: d, label: dayName(d).slice(0, 1), value: Math.min(1, value), state }
-  }), [days, sessions, today])
-
   // Hero: what is actionable today, else the next thing coming up.
   const todays = sessions.filter((s) => s.scheduledDate === today && s.status !== 'skipped').sort((a, b) => STATUS_RANK[a.status] - STATUS_RANK[b.status])[0] ?? null
   const live = sessions.find((s) => s.status === 'in_progress') ?? null
@@ -91,19 +76,13 @@ function TrainRoot() {
   const occupied = useMemo(() => new Set(sessions.filter((s) => s.status !== 'skipped').map((s) => s.scheduledDate)), [sessions])
   const openPlanner = () => { if (setup.require('workout')) { setPlanInit({}); setPlanOpen(true) } }
   const openSession = (id: number) => { if (setup.require('workout')) navigate(`/train/session/${id}`) }
-  const planMinutes = (m: number) => { if (setup.require('workout')) { setPlanInit({ minutes: m }); setPlanOpen(true) } }
   const openRoutine = (r: Routine) => { if (setup.require('workout')) setRoutine(r) }
 
   return (
     <Screen pillar="train" large title="Train" eyebrow={`Week of ${fmtDate(weekStart)}`}>
       <div className="flex flex-col gap-3 pb-8">
-        {/* 1 · week strip */}
-        <div className="anim-rise" style={rise(0)}>
-          <WeekStrip days={stripDays} pillar="train" onSelect={() => navigate('/train?view=week')} />
-        </div>
-
-        {/* 2 · today's session */}
-        <section className="anim-rise rounded-[1.25rem] border border-pillar-line bg-surface p-4" style={rise(1)} aria-label="Today's session">
+        {/* 1 · today's session */}
+        <section className="anim-rise rounded-[1.25rem] border border-pillar-line bg-surface p-4" style={rise(0)} aria-label="Today's session">
           {hero ? (
             <>
               <MuscleSummary exerciseIds={hero.exercises.map((e) => e.exerciseId)} byId={byId} size={112}>
@@ -136,43 +115,20 @@ function TrainRoot() {
           )}
         </section>
 
-        {/* 3 · plan with AI */}
-        <section className="anim-rise rounded-[1.25rem] border border-line bg-surface p-4 relative overflow-hidden" style={rise(2)} aria-label={ai.connected ? 'Plan with AI' : 'Quick plan'}>
-          <div className="flex items-center gap-3">
-            <span className="h-12 w-12 rounded-2xl bg-pillar-soft text-pillar inline-flex items-center justify-center shrink-0 glow-pillar" aria-hidden>
-              {ai.connected ? <Sparkles size={22} /> : <Zap size={22} />}
-            </span>
-            <div className="min-w-0 flex-1">
-              {ai.connected ? <AIBadge /> : <span className="eyebrow text-muted">On this phone</span>}
-              <h2 className="font-semibold text-[17px] leading-tight text-app mt-0.5">{ai.connected ? 'Plan with AI' : 'Quick plan'}</h2>
-            </div>
-            <Button variant="pillar" onClick={openPlanner} aria-label={ai.connected ? 'Plan a workout with AI' : 'Build a quick plan'}>Plan</Button>
-          </div>
-          <div className="mt-3 flex gap-2" role="group" aria-label="Plan by time">
-            {[20, 30, 45, 60].map((m) => (
-              <button
-                key={m}
-                type="button"
-                onClick={() => planMinutes(m)}
-                aria-label={`Plan a ${m} minute session`}
-                className="press flex-1 h-11 rounded-xl border border-line bg-surface-2 text-app"
-              >
-                <span className="num text-xl">{m}</span><span className="text-xs font-medium text-muted ml-1">min</span>
-              </button>
-            ))}
-          </div>
-          {!ai.connected && (
-            <Link to="/settings#ai" className="mt-1 -mb-2 text-[13px] text-muted underline underline-offset-4 min-h-11 inline-flex items-center">Connect AI for tailored plans</Link>
-          )}
-        </section>
+        {/* 2 · one way to plan something new */}
+        <div className="anim-rise" style={rise(1)}>
+          <Button variant="secondary" size="lg" full icon={ai.connected ? <Sparkles size={18} /> : <Zap size={18} />} onClick={openPlanner}>
+            {ai.connected ? 'Plan with AI' : 'Plan a workout'}
+          </Button>
+        </div>
 
-        {/* 4 · routines */}
+        {/* 3 · routines */}
         <section className="anim-rise" style={rise(3)} aria-labelledby="train-routines">
           <h2 id="train-routines" className="eyebrow text-muted px-1 mb-2 mt-2">Routines</h2>
           <RoutinesRow routines={routines} byId={byId} onOpen={openRoutine} />
         </section>
 
-        {/* 5 · this week */}
+        {/* 4 · this week */}
         <section className="anim-rise" style={rise(4)} aria-labelledby="train-week">
           <div className="flex items-center justify-between px-1 mt-2 mb-1">
             <h2 id="train-week" className="eyebrow text-muted">This week</h2>

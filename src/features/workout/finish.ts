@@ -26,6 +26,8 @@ export interface FinishInput {
   notes: string
   symptomChanges: SymptomChange[]
   writeToHealth: boolean
+  /** When the session actually ended (a stale session wrapped up later). Default: now. */
+  completedAt?: string
 }
 
 export interface FinishResult {
@@ -54,7 +56,7 @@ function cardioModality(session: WorkoutSession): string {
 /** Marks the session completed and records symptom changes / cardio summary; then writes to Health if asked. */
 export async function finishSession(input: FinishInput): Promise<FinishResult> {
   const { session } = input
-  const completedAt = nowIso()
+  const completedAt = input.completedAt ?? nowIso()
   const durationMin = clamp(Math.round(input.durationMin), 1, 600)
 
   db.transaction(() => {
