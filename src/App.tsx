@@ -1,4 +1,4 @@
-// App root: boot state machine (db → seed → AI settings), router, onboarding guard, shell.
+// App root: boot state machine (db → owner profile → seed → AI settings), router, onboarding guard, shell.
 import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react'
 import { BrowserRouter, Navigate, Route, Routes, matchPath, useLocation, useNavigate } from 'react-router-dom'
 import { Compass, CopyX, Trash2 } from 'lucide-react'
@@ -10,6 +10,7 @@ import { acquireTabLock } from './db/tabLock'
 import { seedIfEmpty } from './db/seed'
 import { getProfile } from './db/repositories'
 import { applyAISettings } from './features/ai/config'
+import { applyOwnerProfile } from './features/settings/ownerBootstrap'
 
 // --- screens (route table in docs/CONTRACTS.md) -------------------------------------
 
@@ -63,6 +64,8 @@ async function runBoot(): Promise<void> {
   stealNext = false
   if (!owns) throw new OtherTabError()
   await db.init()
+  // Owner profile first: seedIfEmpty() then sees a profile and skips the demo persona.
+  if (applyOwnerProfile()) await db.persist()
   await seedIfEmpty()
   applyAISettings()
 }

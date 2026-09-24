@@ -9,3 +9,5 @@ dev-dist
 .wrangler
 .dev.vars*
 *.tsbuildinfo
+# Owner profile: real personal data, never committed (see src/config/owner.example.ts)
+src/config/owner.local.ts
