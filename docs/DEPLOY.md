@@ -27,10 +27,11 @@ The site works without any of these; AI through the Worker stays off until both 
 
 | Name | Type | What it is |
 |---|---|---|
-| `COACH_BRIDGE_PIN` | Secret | The token the app sends as `x-coach-pin`. Treat it as a bearer token, not a PIN you remember: **at least 16 characters**, generated with `openssl rand -base64 24` and pasted once per device. ASCII only (a browser cannot send other characters in a request header). Its length is what stops guessing. No PIN, no AI: the Worker refuses every call. |
+| `COACH_BRIDGE_PIN` | Secret | The token the app sends as `x-coach-pin`. Treat it as a bearer token, not a PIN you remember: **at least 8 characters**; longer is better, generated with `openssl rand -base64 24` and pasted once per device. ASCII only (a browser cannot send other characters in a request header). Its length is what stops guessing. No PIN, no AI: the Worker refuses every call. |
 | `OPENROUTER_API_KEY` | Secret | OpenRouter key (`sk-or-…`). Used first when present. Default model `google/gemini-3.8-flash`; change it with the plain variable `COACH_OPENROUTER_MODEL`. Every request sends `provider.data_collection = "deny"`, so OpenRouter routes only to providers that do not retain or train on prompts (set `COACH_OPENROUTER_DATA_COLLECTION=allow` to lift that). An OpenRouter key saved under `GEMINI_API_KEY` is recognised by its prefix and is never sent to Google. |
 | `GEMINI_API_KEY` | Secret | Google AI Studio key. Used when there is no OpenRouter key. |
 | `ANTHROPIC_API_KEY` | Secret | Anthropic key. Used when there is no Gemini key, or when `COACH_PROVIDER` is `anthropic`. |
+| `OWNER_PROFILE` | Secret (optional) | The owner's profile as JSON (shape: `OwnerSetup` in `src/config/owner.ts`). On a phone with no profile yet, the hosted app asks for the PIN, loads this from `GET /api/ai/owner` and skips onboarding. Personal data: it lives only here and in the git-ignored `src/config/owner.local.ts`, which only dev builds read, so it is never in the repo or in any production bundle (including `npm run deploy` from the Mac). Set or update it from the Mac with `npm run owner:secret` (reads `owner.local.ts`, pipes the JSON to `wrangler secret put`). Changing it later does not touch a phone that already has a profile. |
 
 Add them in either place:
 1. **Dashboard:** Workers & Pages → `fitty` → Settings → Variables and Secrets → Add → type **Secret** → name and value → Deploy.
@@ -61,7 +62,7 @@ Then open the site → **Settings → AI**, enter the same PIN once per device. 
 Create `.dev.vars` next to `wrangler.jsonc` (it is git-ignored) and run `npx wrangler dev`:
 
 ```
-COACH_BRIDGE_PIN=<16 or more characters, e.g. from openssl rand -base64 24>
+COACH_BRIDGE_PIN=<8 or more characters; a long passphrase is best>
 GEMINI_API_KEY=<your key>
 ```
 
@@ -136,7 +137,7 @@ Security headers for the app itself live in `public/_headers` (HSTS, `nosniff`, 
 |---|---|
 | Build fails: name must match | Rename the Worker in the dashboard to `fitty`, or change `name` in `wrangler.jsonc`. |
 | Settings → AI says a PIN is needed | Enter `COACH_BRIDGE_PIN` on this device. After several wrong tries the Worker may refuse that address for about 10 minutes. |
-| "AI is switched off on this server" | `COACH_BRIDGE_PIN` is missing or shorter than 16 characters. |
+| "AI is switched off on this server" | `COACH_BRIDGE_PIN` is missing or shorter than 8 characters. |
 | AI worked yesterday, now "Couldn't reach the AI bridge" on a good connection | The Cloudflare Access session expired. Open `/api/ai/reauth` (section 4). |
 | "No AI key is configured on the server" | Add `OPENROUTER_API_KEY`, `GEMINI_API_KEY` or `ANTHROPIC_API_KEY` as a Secret and redeploy. |
 | "The OpenRouter account has no credits left" | Add credits at openrouter.ai. |

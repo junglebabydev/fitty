@@ -31,6 +31,7 @@ import { Button, Chip, EmptyState, Field, IconButton, NumberInput, PermissionDen
 import type { Tone } from '../components'
 import { getGoals, getLedger, getNutritionTarget, getProfile, latestBodyMetric, saveProfile, setNutritionTarget, setSetting, upsertGoal } from '../db/repositories'
 import { reseed } from '../db/seed'
+import { FEATURES } from '../config/features'
 import type { Goal, Units, UserProfile } from '../domain/types'
 import { useQuery, useToast } from '../hooks'
 import { getThemePref, setThemePref, type ThemePref } from '../lib/theme'
@@ -309,9 +310,9 @@ function SettingsBody({ profile }: { profile: UserProfile }) {
       <AISection />
 
       <Group title="Integrations & privacy">
-        <Row icon={<FileText size={18} />} title="Reports" subtitle="Blood tests, scans, clinic notes" chevron to="/reports" />
+        {FEATURES.reports && <Row icon={<FileText size={18} />} title="Reports" subtitle="Blood tests, scans, clinic notes" chevron to="/reports" />}
         <Row icon={<HeartPulse size={18} />} title="Apple Health" subtitle="Import an export, or live sync in the iOS app" right={grantedHealth ? `${grantedHealth} live` : undefined} chevron to="/settings/health" />
-        <Row icon={<ScrollText size={18} />} title="Privacy ledger" subtitle="Every AI call that left this phone" right={`${ledgerCount}`} chevron to="/settings/privacy" />
+        {FEATURES.privacyLedger && <Row icon={<ScrollText size={18} />} title="Privacy ledger" subtitle="Every AI call that left this phone" right={`${ledgerCount}`} chevron to="/settings/privacy" />}
         <Row icon={<Database size={18} />} title="Data & storage" subtitle="Export, storage, delete" chevron to="/settings/data" />
       </Group>
 
@@ -399,7 +400,7 @@ const MAC_STEPS: { title: string; body: JSX.Element }[] = [
   { title: 'Keep the server running', body: <>Leave <Code>npm run dev</Code> or <Code>npm run dev:https</Code> running, and open the app from the same Wi-Fi.</> },
 ]
 const CLOUD_STEPS: { title: string; body: JSX.Element }[] = [
-  { title: 'Add two Worker secrets', body: <>Set one AI key (<Code>OPENROUTER_API_KEY</Code>, <Code>GEMINI_API_KEY</Code> or <Code>ANTHROPIC_API_KEY</Code>) and a <Code>COACH_BRIDGE_PIN</Code> of at least 16 characters, with <Code>npx wrangler secret put NAME</Code> or in the Cloudflare dashboard.</> },
+  { title: 'Add two Worker secrets', body: <>Set one AI key (<Code>OPENROUTER_API_KEY</Code>, <Code>GEMINI_API_KEY</Code> or <Code>ANTHROPIC_API_KEY</Code>) and a <Code>COACH_BRIDGE_PIN</Code> of at least 8 characters, with <Code>npx wrangler secret put NAME</Code> or in the Cloudflare dashboard.</> },
   { title: 'Redeploy', body: <>Deploy the Worker again so it picks the secrets up.</> },
   { title: 'Enter the PIN here', body: <>Type the same PIN in the Bridge PIN field, then check again. The API key stays on the Worker.</> },
 ]
@@ -466,9 +467,10 @@ function AISection() {
   const usesBridge = mode === 'auto' || mode === 'claude-code'
   const usesMac = usesBridge && !cloud
   const usesCloud = usesBridge && cloud
-  // Hosted: a Gemini key typed into this device is the main way in, so Auto shows it too. The Worker is optional.
-  const showGemini = mode === 'gemini' || (mode === 'auto' && cloud)
-  const workerInUse = mode === 'claude-code' || status.cloud === 'ok' || status.cloud === 'pin' || status.cloud === 'error' || !!config.bridgePin
+  // Hosted: if a Worker answers at all (connected, wants its PIN, misconfigured, erroring) it leads and the PIN field
+  // comes first. A key typed into this device is the fallback when no Worker answers, or when one is already saved.
+  const workerInUse = mode === 'claude-code' || (cloud && status.cloud !== 'none') || !!config.bridgePin
+  const showGemini = mode === 'gemini' || (mode === 'auto' && cloud && (!workerInUse || !!config.geminiKey))
   const showTest = mode === 'anthropic' || (showGemini && (mode === 'gemini' || status.active !== 'mock'))
   const { line, tone } = aiStateLine(status)
   const busy = checking || status.checking
@@ -700,13 +702,15 @@ function AISection() {
           subtitle="Only the photo you pick"
           control={<Toggle checked={legacy.sendMealPhotos} onChange={(sendMealPhotos) => saveAISettings({ sendMealPhotos })} label="Send meal photos to AI" />}
         />
-        <ControlRow
-          icon={<FileText size={18} />}
-          title="Coach can use report summaries"
-          subtitle="Summaries only, never the files"
-          control={<Toggle checked={shareReports} onChange={setShareReports} label="Let the coach use report summaries" />}
-        />
-        <Row icon={<ScrollText size={18} />} title="Privacy ledger" subtitle="Every AI call, listed" chevron to="/settings/privacy" />
+        {FEATURES.reports && (
+          <ControlRow
+            icon={<FileText size={18} />}
+            title="Coach can use report summaries"
+            subtitle="Summaries only, never the files"
+            control={<Toggle checked={shareReports} onChange={setShareReports} label="Let the coach use report summaries" />}
+          />
+        )}
+        {FEATURES.privacyLedger && <Row icon={<ScrollText size={18} />} title="Privacy ledger" subtitle="Every AI call, listed" chevron to="/settings/privacy" />}
       </Group>
 
       <Sheet open={howTo} onClose={() => setHowTo(false)} title={cloud ? 'AI on my Cloudflare Worker' : 'Claude on my Mac'} footer={<Button full size="lg" onClick={() => { setHowTo(false); checkAgain() }}>Done, check again</Button>}>

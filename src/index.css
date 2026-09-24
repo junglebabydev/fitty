@@ -13,20 +13,20 @@
 :root {
   color-scheme: light;
 
-  /* Light — warm paper */
-  --c-bg: #f5f2ea;
-  --c-fg: #14161a;
-  --c-surface: #fffdf8;
-  --c-surface-2: #ece8de;
-  --c-surface-3: #e2ddd1;
-  --c-line: rgba(20, 22, 26, 0.10);
-  --c-line-strong: rgba(20, 22, 26, 0.18);
-  --c-muted: #565c66;
-  --c-faint: #7b818c;
-  --c-accent: #14161a;          /* monochrome primary action */
-  --c-accent-fg: #fffdf8;
-  --c-accent-soft: rgba(20, 22, 26, 0.07);
-  --c-shadow: rgba(40, 32, 16, 0.10);
+  /* Light — Apple Health: grey grouped background, white cards */
+  --c-bg: #f2f2f7;
+  --c-fg: #1c1c1e;
+  --c-surface: #ffffff;
+  --c-surface-2: #eaeaef;
+  --c-surface-3: #dfdfe5;
+  --c-line: rgba(60, 60, 67, 0.13);
+  --c-line-strong: rgba(60, 60, 67, 0.24);
+  --c-muted: #6c6c70;
+  --c-faint: #8e8e93;
+  --c-accent: #1c1c1e;          /* monochrome primary action */
+  --c-accent-fg: #ffffff;
+  --c-accent-soft: rgba(28, 28, 30, 0.06);
+  --c-shadow: rgba(16, 18, 24, 0.10);
 
   /* Pillars (light) */
   --c-train: #c2410c;
@@ -48,7 +48,7 @@
   /* Active pillar for the current screen; Screen sets data-pillar. */
   --pillar: var(--c-fg);
 
-  --grain-opacity: 0.035;
+  --grain-opacity: 0.015;
 }
 
 :root[data-theme="dark"] {

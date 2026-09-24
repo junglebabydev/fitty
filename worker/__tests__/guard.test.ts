@@ -25,7 +25,7 @@ describe('PIN', () => {
     expect(await checkPin(undefined, 'anything-at-all')).toBe('unset')
     expect(await checkPin('   ', 'anything-at-all')).toBe('unset')
     expect(await checkPin('1234', '1234')).toBe('too_short')
-    expect(await checkPin('fifteen-chars-x', 'fifteen-chars-x')).toBe('too_short') // a bearer token, not a PIN: 16 or more
+    expect(await checkPin('seven-c', 'seven-c')).toBe('too_short') // under MIN_PIN_LENGTH
     expect(await checkPin('a-long-enough-pin', null)).toBe('missing')
     expect(await checkPin('a-long-enough-pin', '')).toBe('missing')
     expect(await checkPin('a-long-enough-pin', 'a-long-enough-pim')).toBe('wrong')

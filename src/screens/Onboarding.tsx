@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Check, ChevronLeft, TriangleAlert } from 'lucide-react'
 import { Button, Screen } from '../components'
+import { FEATURES } from '../config/features'
 import { useToast } from '../hooks'
 import { nowIso, todayStr } from '../lib/util'
 import { buildBaseline, localBaseline, type Baseline } from '../features/ai/intake'
@@ -47,7 +48,10 @@ export default function OnboardingScreen() {
   // Depth: a first run starts with the essentials (about 2 minutes); the full intake adds lifestyle detail.
   // Re-running from Settings always shows everything.
   const [depth, setDepth] = useState<'quick' | 'full'>(() => (s.rerun ? 'full' : 'quick'))
-  const steps = useMemo(() => (depth === 'full' ? STEPS : STEPS.filter((d) => QUICK_STEP_IDS.has(d.id))), [depth])
+  const steps = useMemo(() => {
+    const all = FEATURES.reports ? STEPS : STEPS.filter((d) => d.id !== 'reports')
+    return depth === 'full' ? all : all.filter((d) => QUICK_STEP_IDS.has(d.id))
+  }, [depth])
   const def = steps[Math.min(step, steps.length - 1)]
   const last = step >= steps.length - 1
 

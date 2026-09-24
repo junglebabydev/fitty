@@ -154,7 +154,7 @@ export function describeAI(s: AISettings, active: AIProviderId, bridge: BridgeHe
   if (host === 'cloud') {
     // Hosted, Auto, nothing connected. A Worker that is set up only needs its PIN; otherwise the device key is the way in.
     const state = cloudBridgeState(bridge)
-    return state === 'pin' || state === 'error' ? describeCloud(s, bridge) : 'AI is not connected yet. Add a Gemini API key in Settings → AI.'
+    return state === 'none' ? 'AI is not connected yet. Add an API key in Settings → AI.' : describeCloud(s, bridge)
   }
   if (bridge?.auth === 'signed_out') return bridge.message
   return 'AI is not connected yet. Sign in to Claude Code on your Mac, or add an API key in Settings → AI.'
@@ -175,9 +175,10 @@ export function aiStateLine(s: AIStatus): { line: string; tone: 'ok' | 'warn' | 
   if (s.host === 'cloud') {
     if (s.cloud === 'pin') return { line: 'Bridge PIN needed', tone: 'warn' }
     if (s.cloud === 'error') return { line: 'Your Worker is not connected', tone: 'warn' }
-    // The Worker is optional, so a server without secrets is only a problem when the owner chose it.
-    if (s.mode === 'claude-code') return { line: s.cloud === 'secrets' ? 'Worker secrets needed' : 'Your Worker is not answering', tone: 'warn' }
-    return { line: 'Demo mode', tone: 'muted' }
+    // A Worker that answers but is not set up correctly (PIN too short, no key) says so in its message: surface it.
+    if (s.cloud === 'secrets') return { line: 'Your Worker needs setup', tone: 'warn' }
+    if (s.mode === 'claude-code') return { line: 'Your Worker is not answering', tone: 'warn' }
+    return { line: 'AI not connected', tone: 'muted' }
   }
   if (s.bridge?.auth === 'signed_out') return { line: 'Sign in needed on your Mac', tone: 'warn' }
   if (s.mode === 'claude-code') return { line: 'Your Mac is not answering', tone: 'warn' }

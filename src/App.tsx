@@ -1,4 +1,4 @@
-// App root: boot state machine (db → seed → AI settings), router, onboarding guard, shell.
+// App root: boot state machine (db → owner profile → seed → AI settings), router, onboarding guard, shell.
 import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react'
 import { BrowserRouter, Navigate, Route, Routes, matchPath, useLocation, useNavigate } from 'react-router-dom'
 import { Compass, CopyX, Trash2 } from 'lucide-react'
@@ -8,9 +8,12 @@ import { useQuery, useToast } from './hooks'
 import { db } from './db/database'
 import { acquireTabLock } from './db/tabLock'
 import { seedIfEmpty } from './db/seed'
-import { applyAISettings } from './features/ai/config'
+import { applyAISettings, inferBridgeHost } from './features/ai/config'
 import { RequireSetup } from './features/onboarding/SetupGate'
 import { isOnboarded, onboardingSkipped } from './features/onboarding/setup'
+import { applyOwnerProfile } from './features/settings/ownerBootstrap'
+// Not lazy: OnboardingGate renders it outside the Suspense boundary.
+import OwnerUnlockScreen from './screens/OwnerUnlock'
 
 // --- screens (route table in docs/CONTRACTS.md) -------------------------------------
 
@@ -64,6 +67,8 @@ async function runBoot(): Promise<void> {
   stealNext = false
   if (!owns) throw new OtherTabError()
   await db.init()
+  // Owner profile first: seedIfEmpty() then sees a profile and skips the demo persona.
+  if (applyOwnerProfile()) await db.persist()
   await seedIfEmpty()
   applyAISettings()
 }
@@ -202,7 +207,10 @@ function PersistWatcher() {
 
 function Shell() {
   const { pathname } = useLocation()
-  const hideTabs = HIDE_TABS_PATTERNS.some((p) => matchPath(p, pathname) !== null)
+  // No profile yet (owner unlock or onboarding): nothing behind the tabs to go to. A profile that
+  // skipped the intake does browse, so it keeps its tabs.
+  const ready = useQuery(() => isOnboarded() || onboardingSkipped(), [])
+  const hideTabs = !ready || HIDE_TABS_PATTERNS.some((p) => matchPath(p, pathname) !== null)
   return (
     <AppShell hideTabs={hideTabs}>
       <ErrorBoundary resetKey={pathname}>
@@ -217,19 +225,25 @@ function Shell() {
 }
 
 /**
- * Sends un-onboarded profiles to /onboarding, unless they tapped "Skip for now" on the welcome
- * screen: those browse the app and meet the setup gate (features/onboarding/setup.ts) at the
- * actions that need a real profile. Onboarded profiles may still visit /onboarding: Settings and
- * Coach link there to re-run the wizard, which detects rerun mode itself (Cancel + "Save changes"
- * both return to /settings).
+ * Sends un-onboarded profiles to /onboarding; on the hosted site it first offers to load the
+ * owner profile from the Worker with the PIN. The one exception is "Skip for now" on the welcome
+ * screen: those profiles browse the app and meet the setup gate (features/onboarding/setup.ts) at
+ * the actions that need a real profile. Onboarded profiles may still visit /onboarding: Settings
+ * and Coach link there to re-run the wizard, which detects rerun mode itself (Cancel + "Save
+ * changes" both return to /settings).
  */
 function OnboardingGate({ children }: { children: ReactNode }) {
   const { pathname } = useLocation()
   const onboarded = useQuery(() => isOnboarded(), [])
   const skipped = useQuery(() => onboardingSkipped(), [])
+  const [skipUnlock, setSkipUnlock] = useState(false)
   const atOnboarding = pathname === '/onboarding'
-  if (!onboarded && !skipped && !atOnboarding) return <Navigate to="/onboarding" replace />
-  return <>{children}</>
+  if (onboarded || skipped || atOnboarding) return <>{children}</>
+  // Hosted site, fresh phone: offer to load the owner profile from the Worker before falling back to the wizard.
+  if (!skipUnlock && inferBridgeHost(window.location.hostname) === 'cloud') {
+    return <OwnerUnlockScreen onSkip={() => setSkipUnlock(true)} />
+  }
+  return <Navigate to="/onboarding" replace />
 }
 
 function AppRoutes() {

@@ -10,6 +10,7 @@ import {
   BarChart, Button, Card, Chip, Divider, HeroNumber, IconButton, LineChart, ListRow, NumberInput, PILLARS, RangeTabs, Screen, Segmented,
   Sheet, StatTile,
 } from '../components'
+import { FEATURES } from '../config/features'
 import { useQuery, useToast } from '../hooks'
 import {
   addBodyMetric, addPhoto, dailyTotalsRange, deletePhoto, getBodyMetrics, getExercises, getGoals, getMoodLogs, getPhotos,
@@ -715,8 +716,12 @@ export default function ProgressScreen() {
         <div {...rise(3)}>
           <Card flush>
             <ListRow icon={<BarChart3 size={18} />} title="See adherence" chevron onClick={() => setDetail('adherence')} />
-            <Divider inset />
-            <ListRow icon={<FileText size={18} />} title="Reports" chevron to="/reports" />
+            {FEATURES.reports && (
+              <>
+                <Divider inset />
+                <ListRow icon={<FileText size={18} />} title="Reports" chevron to="/reports" />
+              </>
+            )}
           </Card>
         </div>
       </div>

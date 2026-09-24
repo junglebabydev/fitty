@@ -152,18 +152,23 @@ describe('describeAI + aiStateLine', () => {
   it('Cloudflare Worker chosen but without secrets', () => {
     const st = statusFor(settings({ mode: 'claude-code' }), cloudNoSecrets, 'fitty.example.workers.dev')
     expect(st.message).toMatch(/COACH_BRIDGE_PIN/)
-    expect(aiStateLine(st)).toEqual({ line: 'Worker secrets needed', tone: 'warn' })
+    expect(aiStateLine(st)).toEqual({ line: 'Your Worker needs setup', tone: 'warn' })
     const silent = statusFor(settings({ mode: 'claude-code' }), { ...cloudNoSecrets, message: '' }, 'fitty.example.workers.dev')
     expect(silent.message).toBe(CLOUD_SECRETS_MESSAGE)
   })
 
-  it('hosted, auto, nothing set up: points at the device key and stays in demo', () => {
-    for (const bridge of [null, cloudNoSecrets]) {
-      const st = statusFor(settings(), bridge, 'fitty.example.workers.dev')
-      expect(st.active).toBe('mock')
-      expect(st.message).toBe('AI is not connected yet. Add a Gemini API key in Settings → AI.')
-      expect(aiStateLine(st)).toEqual({ line: 'Demo mode', tone: 'muted' })
-    }
+  it('hosted, auto, no Worker answering: points at a device key', () => {
+    const st = statusFor(settings(), null, 'fitty.example.workers.dev')
+    expect(st.active).toBe('mock')
+    expect(st.message).toBe('AI is not connected yet. Add an API key in Settings → AI.')
+    expect(aiStateLine(st)).toEqual({ line: 'AI not connected', tone: 'muted' })
+  })
+
+  it('hosted, auto, a Worker that answers but is misconfigured: its own message is shown, never hidden behind demo copy', () => {
+    const st = statusFor(settings(), cloudNoSecrets, 'fitty.example.workers.dev')
+    expect(st.active).toBe('mock')
+    expect(st.message).toMatch(/COACH_BRIDGE_PIN/)
+    expect(aiStateLine(st)).toEqual({ line: 'Your Worker needs setup', tone: 'warn' })
   })
 
   it('Cloudflare Worker with a rejected upstream key shows the Worker message, never the Mac sign-in line', () => {
