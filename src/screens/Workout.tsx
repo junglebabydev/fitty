@@ -26,6 +26,8 @@ import { MuscleSummary } from '../features/workout/PlanVisuals'
 import { FocusDone, FocusMode } from '../features/workout/FocusMode'
 import { focusIndex, nextFocusIndex, remainingPlan } from '../features/workout/focus'
 import type { LoggedSet } from '../features/workout/useSetLogger'
+import { isStaleSession, staleWrapUp } from '../features/workout/stale'
+import { StaleSessionSheet } from '../features/workout/StaleSessionSheet'
 
 function safeReadiness(): Readiness | null {
   try { return todayReadiness().state } catch { return null }
@@ -73,6 +75,9 @@ export default function WorkoutScreen() {
   const [finishing, setFinishing] = useState(false)
   const [moreOpen, setMoreOpen] = useState(false)
   const [pr, setPr] = useState<LivePR | null>(null)
+  // A workout left open for hours (stale.ts) asks once per visit whether to wrap it up.
+  const [staleDismissed, setStaleDismissed] = useState(false)
+  const [staleBusy, setStaleBusy] = useState(false)
   // Pain reported before any set was logged: the next set carries the flag. Kept per session like `stopped`.
   const painNextKey = `workout-painnext-${sessionId}`
   const [painNext, setPainNextState] = useState<Record<string, boolean>>(() => readSessionFlag<Record<string, boolean>>(painNextKey, {}))
@@ -317,6 +322,27 @@ export default function WorkoutScreen() {
   const GateIcon = gate.overall === 'OK' ? ShieldCheck : gate.overall === 'RED' ? ShieldAlert : TriangleAlert
   const gateCls = gate.overall === 'OK' ? 'bg-ok/10 text-ok' : gate.overall === 'RED' ? 'bg-stop/10 text-stop' : 'bg-warn/10 text-warn'
 
+  const stale = isStaleSession(session, now)
+  const wrapUp = staleWrapUp(session, sets)
+  const finishStale = async () => {
+    if (!wrapUp) return
+    setStaleBusy(true)
+    try {
+      await finishSession({ session, sets, rpe: null, durationMin: wrapUp.durationMin, notes: '', symptomChanges: [], writeToHealth: false, completedAt: wrapUp.completedAt })
+      timer.skip()
+      toast.show(`Saved ${sets.length} ${sets.length === 1 ? 'set' : 'sets'} · ${wrapUp.durationMin} min.`, 'success')
+    } catch (e) {
+      toast.show(e instanceof Error ? e.message : 'Could not finish the session.', 'error')
+    } finally {
+      setStaleBusy(false)
+    }
+  }
+  const skipStale = () => {
+    skipSession(session, 'left in progress')
+    timer.skip()
+    toast.show('Marked as skipped. Logged sets stay in your history.', 'info')
+  }
+
   // Focus Mode (BFT format) is the default while a session runs; ?view=list shows the full list.
   const focusOn = params.get('view') !== 'list' && session.exercises.length > 0
   const idx = focusIndex(session.exercises, setsFor, stopped)
@@ -362,6 +388,16 @@ export default function WorkoutScreen() {
       ) : (
         <FocusDone onFinish={() => setFinishOpen(true)} onList={() => setParams({ view: 'list' })} />
       ))}
+      <StaleSessionSheet
+        open={stale && !staleDismissed}
+        session={session}
+        setCount={sets.length}
+        wrapUp={wrapUp}
+        busy={staleBusy}
+        onFinish={() => void finishStale()}
+        onSkip={skipStale}
+        onKeepGoing={() => setStaleDismissed(true)}
+      />
       {/* Cancels the wrapper's top inset so the bar owns the safe area while stuck. */}
       <header
         className="sticky top-0 z-30 glass border-b border-line"
