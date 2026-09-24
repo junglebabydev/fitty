@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { evaluateSymptomGate, findSubstitute, isExerciseAllowed } from '../symptomGate'
+import { baselineAvoidTags, evaluateSymptomGate, findSubstitute, isExerciseAllowed } from '../symptomGate'
 import { LIBRARY, byId, sym } from './fixtures'
 
 describe('evaluateSymptomGate (PRD §9.3 mapping)', () => {
@@ -99,5 +99,28 @@ describe('isExerciseAllowed / findSubstitute', () => {
     const gate = evaluateSymptomGate([sym('neck', 8)])
     const lib = [byId('db_shoulder_press'), byId('machine_shoulder_press')]
     expect(findSubstitute(byId('db_shoulder_press'), gate, lib)).toBeNull()
+  })
+})
+
+describe('baselineAvoidTags (standing condition flags, not today)', () => {
+  it('returns nothing when the user has no condition flags, so the whole library stays reachable', () => {
+    expect(baselineAvoidTags([])).toEqual([])
+  })
+
+  it('maps a knee flag to the knee AMBER tags only', () => {
+    expect(baselineAvoidTags(['knee_left']).sort()).toEqual(['deep_knee_flexion', 'impact'])
+  })
+
+  it('unions the tags across regions without duplicates', () => {
+    const tags = baselineAvoidTags(['knee_left', 'knee_right', 'back_lower'])
+    expect(new Set(tags).size).toBe(tags.length)
+    expect(tags.sort()).toEqual(['axial_load', 'deep_knee_flexion', 'impact', 'spinal_flexion'])
+  })
+
+  it('never returns a RED-only tag — a baseline flag is not an acute symptom', () => {
+    const tags = baselineAvoidTags(['knee_left', 'back_lower', 'neck'])
+    expect(tags).not.toContain('knee_load')
+    expect(tags).not.toContain('spinal_load')
+    expect(tags).not.toContain('neck_load')
   })
 })

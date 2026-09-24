@@ -53,6 +53,17 @@ const TAGS_BY_GROUP: Record<RegionGroup, { amber: SafetyTag[]; red: SafetyTag[] 
   other: { amber: [], red: [] },
 }
 
+/**
+ * Standing avoid-tags for a baseline condition flag (not today's symptoms): the AMBER
+ * set for that region's group. A user with no condition flags gets nothing back, which
+ * is what keeps the whole exercise library reachable for everyone else.
+ */
+export function baselineAvoidTags(regions: Region[]): SafetyTag[] {
+  const out = new Set<SafetyTag>()
+  for (const r of regions) for (const t of TAGS_BY_GROUP[regionGroup(r)].amber) out.add(t)
+  return [...out]
+}
+
 const LEVEL_RANK: Record<GateLevel, number> = { OK: 0, AMBER: 1, RED: 2 }
 
 export function regionLabel(region: Region): string {

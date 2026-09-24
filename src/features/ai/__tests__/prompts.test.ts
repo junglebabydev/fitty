@@ -94,3 +94,33 @@ describe('report and meal prompts', () => {
     expect(REFINE_SCHEMA.required).toEqual(['items'])
   })
 })
+
+describe('buildPlannerSystem standing rules (derived, not persona-hardcoded)', () => {
+  const base = { allowed: [], gate: { regions: [], avoidTags: [], overall: 'OK' as const, advice: [] } }
+
+  it('tells the model the full library is open when the user has no condition flags', () => {
+    const s = buildPlannerSystem({ ...base, baselineAvoid: [] })
+    expect(s).toContain('no standing physical constraints')
+    expect(s).not.toContain('no deep knee flexion under load')
+    expect(s).not.toContain('no running, jumping')
+  })
+
+  it('emits only the clauses the user’s own flags justify', () => {
+    const s = buildPlannerSystem({ ...base, baselineAvoid: ['impact', 'deep_knee_flexion'] })
+    expect(s).toContain('no running, jumping or other impact')
+    expect(s).toContain('no deep knee flexion under load')
+    expect(s).not.toContain('nothing pressed or held overhead')
+  })
+
+  it('keeps the medical-advice guard in both branches', () => {
+    for (const avoid of [[], ['overhead' as const]]) {
+      expect(buildPlannerSystem({ ...base, baselineAvoid: avoid })).toContain('Never diagnose and never give medical advice')
+    }
+  })
+
+  it('does not invent a condo-gym inventory when equipment is unknown', () => {
+    const s = buildPlannerSystem({ ...base, baselineAvoid: [] })
+    expect(s).not.toContain('lat pulldown, adjustable bench')
+    expect(s).toContain('EQUIPMENT: unspecified')
+  })
+})
