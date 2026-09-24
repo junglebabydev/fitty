@@ -334,10 +334,6 @@ export default function EatScreen() {
               <MacroRing label="Calories" unit="kcal" value={totals.kcal} target={target.kcal} mode={mode} tone="text-app" />
               <MacroRing label="Protein" unit="g" value={totals.proteinG} target={target.proteinG} mode={mode} tone="text-protein" />
             </span>
-            <span className="flex justify-center gap-8 mt-3 text-[13px] text-muted">
-              <span>Carbs <span className="num text-[18px] text-carbs">{fmtInt(totals.carbsG)}</span><span className="tnum"> / {fmtInt(target.carbsG)} g</span></span>
-              <span>Fat <span className="num text-[18px] text-fat">{fmtInt(totals.fatG)}</span><span className="tnum"> / {fmtInt(target.fatG)} g</span></span>
-            </span>
           </button>
         </div>
 
