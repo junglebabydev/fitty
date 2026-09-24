@@ -260,3 +260,32 @@ describe('chat and json', () => {
     expect([noKey.status, (await noKey.json() as { kind: string }).kind]).toEqual([503, 'auth'])
   })
 })
+
+describe('owner profile', () => {
+  const OWNER = JSON.stringify({ name: 'Sam', dob: '1990-01-15' })
+
+  it('returns the OWNER_PROFILE secret only with the right PIN, never cached', async () => {
+    const refused: Record<string, string>[] = [{}, { 'x-coach-pin': 'not-the-right-pin' }]
+    for (const headers of refused) {
+      const res = await worker.fetch(get('/api/ai/owner', headers), env({ OWNER_PROFILE: OWNER }))
+      expect(res.status).toBe(403)
+      expect(await res.text()).not.toContain('Sam')
+    }
+    const res = await worker.fetch(get('/api/ai/owner', { 'x-coach-pin': PIN }), env({ OWNER_PROFILE: OWNER }))
+    expect([res.status, res.headers.get('cache-control'), await res.json()]).toEqual([200, 'no-store', { ok: true, owner: { name: 'Sam', dob: '1990-01-15' } }])
+    expect(upstream).not.toHaveBeenCalled()
+  })
+
+  it('refuses cross-origin reads even with the right PIN', async () => {
+    const res = await worker.fetch(get('/api/ai/owner', { 'x-coach-pin': PIN, 'sec-fetch-site': 'cross-site' }), env({ OWNER_PROFILE: OWNER }))
+    expect(res.status).toBe(403)
+  })
+
+  it('answers 404 when no profile is set and 500 when the secret is not JSON, without echoing it', async () => {
+    const none = await worker.fetch(get('/api/ai/owner', { 'x-coach-pin': PIN }), env())
+    expect([none.status, (await none.json() as { ok: boolean }).ok]).toEqual([404, false])
+    const bad = await worker.fetch(get('/api/ai/owner', { 'x-coach-pin': PIN }), env({ OWNER_PROFILE: '{name: Sam' }))
+    expect(bad.status).toBe(500)
+    expect(await bad.text()).not.toContain('Sam')
+  })
+})

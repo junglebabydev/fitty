@@ -12,7 +12,8 @@
     "dev:https": "COACH_HTTPS=1 vite --host",
     "typecheck:worker": "tsc -p worker/tsconfig.json --noEmit",
     "deploy": "npm run build && wrangler deploy",
-    "cf:dry": "wrangler deploy --dry-run --outdir .wrangler/dry"
+    "cf:dry": "wrangler deploy --dry-run --outdir .wrangler/dry",
+    "owner:secret": "node --experimental-strip-types --no-warnings -e \"import('./src/config/owner.local.ts').then(m => process.stdout.write(JSON.stringify(m.OWNER)))\" | wrangler secret put OWNER_PROFILE"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.124.0",

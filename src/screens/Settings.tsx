@@ -31,6 +31,7 @@ import { Button, Chip, EmptyState, Field, IconButton, NumberInput, PermissionDen
 import type { Tone } from '../components'
 import { getGoals, getLedger, getNutritionTarget, getProfile, latestBodyMetric, saveProfile, setNutritionTarget, setSetting, upsertGoal } from '../db/repositories'
 import { reseed } from '../db/seed'
+import { FEATURES } from '../config/features'
 import type { Goal, Units, UserProfile } from '../domain/types'
 import { useQuery, useToast } from '../hooks'
 import { getThemePref, setThemePref, type ThemePref } from '../lib/theme'
@@ -309,9 +310,9 @@ function SettingsBody({ profile }: { profile: UserProfile }) {
       <AISection />
 
       <Group title="Integrations & privacy">
-        <Row icon={<FileText size={18} />} title="Reports" subtitle="Blood tests, scans, clinic notes" chevron to="/reports" />
+        {FEATURES.reports && <Row icon={<FileText size={18} />} title="Reports" subtitle="Blood tests, scans, clinic notes" chevron to="/reports" />}
         <Row icon={<HeartPulse size={18} />} title="Apple Health" subtitle="Import an export, or live sync in the iOS app" right={grantedHealth ? `${grantedHealth} live` : undefined} chevron to="/settings/health" />
-        <Row icon={<ScrollText size={18} />} title="Privacy ledger" subtitle="Every AI call that left this phone" right={`${ledgerCount}`} chevron to="/settings/privacy" />
+        {FEATURES.privacyLedger && <Row icon={<ScrollText size={18} />} title="Privacy ledger" subtitle="Every AI call that left this phone" right={`${ledgerCount}`} chevron to="/settings/privacy" />}
         <Row icon={<Database size={18} />} title="Data & storage" subtitle="Export, storage, delete" chevron to="/settings/data" />
       </Group>
 
@@ -701,13 +702,15 @@ function AISection() {
           subtitle="Only the photo you pick"
           control={<Toggle checked={legacy.sendMealPhotos} onChange={(sendMealPhotos) => saveAISettings({ sendMealPhotos })} label="Send meal photos to AI" />}
         />
-        <ControlRow
-          icon={<FileText size={18} />}
-          title="Coach can use report summaries"
-          subtitle="Summaries only, never the files"
-          control={<Toggle checked={shareReports} onChange={setShareReports} label="Let the coach use report summaries" />}
-        />
-        <Row icon={<ScrollText size={18} />} title="Privacy ledger" subtitle="Every AI call, listed" chevron to="/settings/privacy" />
+        {FEATURES.reports && (
+          <ControlRow
+            icon={<FileText size={18} />}
+            title="Coach can use report summaries"
+            subtitle="Summaries only, never the files"
+            control={<Toggle checked={shareReports} onChange={setShareReports} label="Let the coach use report summaries" />}
+          />
+        )}
+        {FEATURES.privacyLedger && <Row icon={<ScrollText size={18} />} title="Privacy ledger" subtitle="Every AI call, listed" chevron to="/settings/privacy" />}
       </Group>
 
       <Sheet open={howTo} onClose={() => setHowTo(false)} title={cloud ? 'AI on my Cloudflare Worker' : 'Claude on my Mac'} footer={<Button full size="lg" onClick={() => { setHowTo(false); checkAgain() }}>Done, check again</Button>}>

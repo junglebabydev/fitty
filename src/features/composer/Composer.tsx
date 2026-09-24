@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom'
 import { ArrowUp, Camera, ChevronRight, FileUp, Image, LoaderCircle, Mic, Plus, Sparkles, Square } from 'lucide-react'
 import { aiConnected, isAIError } from '../../ai'
 import { Button, Sheet, TAB_BAR_HEIGHT, useToast } from '../../components'
+import { FEATURES } from '../../config/features'
 import { addMoodLog } from '../../db/repositories'
 import { VALENCE_WORDS, parseVoiceCommand, type ParsedCommand } from '../../engine'
 import { cx, nowIso } from '../../lib/util'
@@ -282,7 +283,7 @@ export function Composer({ context, placeholder = 'Ask or log anything…' }: Co
         <div className="flex flex-col gap-2 pt-1">
           <PlusRow icon={<Camera size={21} />} label="Snap a meal" sub="Opens the camera" onClick={snapMeal} />
           <PlusRow icon={<Image size={21} />} label="Choose a photo" sub="From your library" onClick={choosePhoto} />
-          <PlusRow icon={<FileUp size={21} />} label="Upload a report" sub="Blood test, scan or clinic letter" onClick={uploadReport} />
+          {FEATURES.reports && <PlusRow icon={<FileUp size={21} />} label="Upload a report" sub="Blood test, scan or clinic letter" onClick={uploadReport} />}
           {!ai.connected && (
             <button type="button" onClick={() => { setPlusOpen(false); navigate('/settings#ai') }} className="press mt-1 flex min-h-11 items-center gap-2 px-1 text-left text-[13px] leading-snug text-muted">
               <Sparkles size={15} className="shrink-0" aria-hidden />
