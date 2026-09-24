@@ -1,4 +1,4 @@
-// Exercise animations, photos and demo links.
+// Exercise animations and photos.
 //
 // Photos come from free-exercise-db (https://github.com/yuhonas/free-exercise-db). The repository is
 // released under the Unlicense (LICENSE.md) and describes itself as an "Open Public Domain Exercise
@@ -14,8 +14,6 @@
 // A few photos use different equipment from our variant (barbell hip thrust, kettlebell goblet squat,
 // dumbbell rear lunge) and may show a fuller range than our knee-friendly versions: the photo
 // illustrates the movement, the exercise's own instructions set the range and load.
-
-import { EXERCISE_BY_ID } from './exercises'
 
 export const EXERCISE_MEDIA_SOURCE = 'free-exercise-db (public domain, Unlicense)'
 export const EXERCISE_MEDIA_BASE = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises'
@@ -143,21 +141,15 @@ export const EXERCISE_ANIMATION_IDS: Record<string, string> = {
   smith_squat: 'jFtipLl', ab_crunch_machine: 'Wgaz7pm',
 }
 
-/** A YouTube search for the movement's form; works for every exercise, mapped or not. */
-export function demoUrl(name: string): string {
-  return 'https://www.youtube.com/results?search_query=' + encodeURIComponent(name + ' proper form')
-}
-
 export interface ExerciseMedia {
   /** Looping GIF of the movement, or null when the exercise has no checked animation. */
   animation: string | null
   /** Start and end position photos ([] when the exercise has no verified photo). */
   images: string[]
-  demoUrl: string
   source: string | null
 }
 
-/** Animation + photos + demo link for one of OUR exercise ids (unknown ids still get a demo search built from the id). */
+/** Animation + photos for one of OUR exercise ids (unknown ids get neither). */
 export function exerciseMedia(id: string): ExerciseMedia {
   const animId = EXERCISE_ANIMATION_IDS[id]
   const photoId = EXERCISE_PHOTO_IDS[id]
@@ -165,7 +157,6 @@ export function exerciseMedia(id: string): ExerciseMedia {
   return {
     animation: animId ? `${EXERCISE_ANIMATION_BASE}/${animId}.gif` : null,
     images,
-    demoUrl: demoUrl(EXERCISE_BY_ID[id]?.name ?? id.replace(/_/g, ' ')),
     source: photoId ? EXERCISE_MEDIA_SOURCE : null,
   }
 }

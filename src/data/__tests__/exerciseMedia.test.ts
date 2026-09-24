@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { EXERCISES, EXERCISE_BY_ID } from '../exercises'
-import { EXERCISE_ANIMATION_BASE, EXERCISE_ANIMATION_IDS, EXERCISE_MEDIA_BASE, EXERCISE_PHOTO_IDS, demoUrl, exerciseMedia } from '../exerciseMedia'
+import { EXERCISE_ANIMATION_BASE, EXERCISE_ANIMATION_IDS, EXERCISE_MEDIA_BASE, EXERCISE_PHOTO_IDS, exerciseMedia } from '../exerciseMedia'
 import { SESSION_TEMPLATES } from '../../engine/planner'
 
 describe('exerciseMedia', () => {
@@ -14,14 +14,13 @@ describe('exerciseMedia', () => {
     }
   })
 
-  it('returns two photo URLs, a demo link and the source for a mapped exercise', () => {
+  it('returns two photo URLs and the source for a mapped exercise', () => {
     const m = exerciseMedia('db_bench_press')
     expect(m.images).toEqual([
       `${EXERCISE_MEDIA_BASE}/Dumbbell_Bench_Press/0.jpg`,
       `${EXERCISE_MEDIA_BASE}/Dumbbell_Bench_Press/1.jpg`,
     ])
     expect(m.source).toContain('free-exercise-db')
-    expect(m.demoUrl).toBe(demoUrl('Dumbbell Bench Press'))
   })
 
   it('falls back cleanly for unmapped and unknown ids', () => {
@@ -29,16 +28,7 @@ describe('exerciseMedia', () => {
       const m = exerciseMedia(id)
       expect(m.images).toEqual([])
       expect(m.source).toBeNull()
-      expect(m.demoUrl).toMatch(/^https:\/\/www\.youtube\.com\/results\?search_query=/)
     }
-  })
-
-  it('builds an encoded YouTube search link', () => {
-    expect(demoUrl('Push-Up & Row')).toBe('https://www.youtube.com/results?search_query=Push-Up%20%26%20Row%20proper%20form')
-  })
-
-  it('gives every exercise a demo link built from its name', () => {
-    for (const e of EXERCISES) expect(exerciseMedia(e.id).demoUrl).toBe(demoUrl(e.name))
   })
 
   it('covers most of the library and nearly all template exercises', () => {

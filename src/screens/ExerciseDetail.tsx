@@ -69,21 +69,10 @@ export default function ExerciseDetailScreen() {
   return (
     <Screen pillar="train" title={exercise.name} back eyebrow={`${exercise.equipment} · ${exercise.pattern.replace(/_/g, ' ')}${timed ? ' · timed' : ''}`}>
       <div className="flex flex-col gap-3 pb-32">
-        {/* Hero: the movement itself (animation, photos or muscle map), with the credit and a quiet way out to YouTube */}
+        {/* Hero: the movement itself (animation, photos or muscle map) */}
         <div className="anim-rise">
           <ExerciseVisual exercise={exercise} size="hero" />
-          <div className="mt-1.5 flex items-center justify-between gap-3 px-1 text-[12px] text-faint">
-            <span>{media.animation ? 'Animation: ExerciseDB' : ''}</span>
-            <a
-              href={media.demoUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="press inline-flex min-h-11 items-center underline underline-offset-2"
-              aria-label={`Search YouTube for ${exercise.name} form (opens in a new tab)`}
-            >
-              Search YouTube
-            </a>
-          </div>
+          {media.animation && <p className="mt-1.5 px-1 text-[12px] text-faint">Animation: ExerciseDB</p>}
         </div>
 
         {/* Muscles */}

@@ -22,7 +22,7 @@ import {
   type GateEntry, type GateOutcome, type LivePR, type PainOutcome, type SymptomChange,
 } from '../features/workout'
 import { useRestTimer } from '../features/workout/useRestTimer'
-import { DemoLink, MuscleSummary } from '../features/workout/PlanVisuals'
+import { MuscleSummary } from '../features/workout/PlanVisuals'
 
 function safeReadiness(): Readiness | null {
   try { return todayReadiness().state } catch { return null }
@@ -530,7 +530,6 @@ function PlannedPreview({ session, byId }: { session: WorkoutSession; byId: Map<
                 </span>
               </span>
             </button>
-            {r.ex && <DemoLink exercise={r.ex} label="" className="shrink-0 w-11 px-0 mr-1" />}
           </li>
         ))}
       </ul>
