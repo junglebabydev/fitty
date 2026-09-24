@@ -1,5 +1,6 @@
 import { NavLink } from 'react-router-dom'
 import { Brain, Dumbbell, MessageSquare, Sun, Utensils, type LucideIcon } from 'lucide-react'
+import { FEATURES } from '../config/features'
 import { cx } from '../lib/util'
 import type { Pillar } from './pillars'
 
@@ -17,7 +18,7 @@ export const TABS: TabItem[] = [
   { to: '/', label: 'Today', icon: Sun, end: true, pillar: 'today' },
   { to: '/train', label: 'Train', icon: Dumbbell, pillar: 'train' },
   { to: '/eat', label: 'Eat', icon: Utensils, pillar: 'eat' },
-  { to: '/mind', label: 'Mind', icon: Brain, pillar: 'mind' },
+  ...(FEATURES.mind ? [{ to: '/mind', label: 'Mind', icon: Brain, pillar: 'mind' } as TabItem] : []),
   { to: '/coach', label: 'Coach', icon: MessageSquare, pillar: 'coach' },
 ]
 
