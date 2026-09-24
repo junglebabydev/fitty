@@ -1,13 +1,13 @@
 import { useMemo, useState, type CSSProperties } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { ArrowRight, CalendarDays, CalendarPlus, ChevronRight, Play, Plus, RefreshCw, Search, SkipForward, StretchHorizontal } from 'lucide-react'
 import type { Exercise, WorkoutSession } from '../../domain/types'
-import { Button, Card, ExerciseVisual, ListRow, Screen, Segmented, TextInput, WeekStrip, useToast } from '../../components'
+import { Button, Card, Chip, ExerciseVisual, ListRow, Screen, Segmented, TextInput, WeekStrip, useToast } from '../../components'
 import { useQuery } from '../../hooks'
-import { deleteSession, getSetting, updateSession } from '../../db/repositories'
+import { deleteSession, getProfile, getSetting, updateSession } from '../../db/repositories'
 import { estimateSessionMinutes, type ReflowMove } from '../../engine'
-import { findExerciseByAlias } from '../../data'
 import { addDays, cx, dayName, fmtDate, startOfWeek, todayStr } from '../../lib/util'
+import { LIBRARY_AREAS, libraryResults, type LibraryArea } from './library'
 import { AddSessionSheet, ReflowSheet, RescheduleSheet, SkipSheet } from './PlanSheets'
 import { SAFETY_TAG_SHORT, SESSION_TYPE_META, TIER_OPTIONS, TRAIN_TIER_SETTING, isMissed, libraryExercises, sessionStatusInfo, weekTierOf, type Tier } from './helpers'
 import { addSessionFromTemplate, applyReflow, applyTier, computeReflow, missedSessions, planWeek, weekSessions } from './plan'
@@ -255,14 +255,35 @@ export function WeekPlanView() {
   )
 }
 
-/** Exercise library (behind Train → Library): search, then visual rows that open the exercise detail. */
+/**
+ * Exercise library (behind Train → Library): body-area tabs and "your equipment" by default, search across
+ * everything, then visual rows that open the exercise detail. The tab and filter live in the URL so Back from an
+ * exercise returns to the same view.
+ */
 export function LibraryView() {
   const library = useQuery(libraryExercises, [])
+  const profileEquipment = useQuery(() => getProfile()?.equipment ?? [], [])
+  const [params, setParams] = useSearchParams()
   const [query, setQuery] = useState('')
-  const results = useMemo(() => filterLibrary(library, query), [library, query])
+  const areaParam = params.get('area')
+  const area: LibraryArea = LIBRARY_AREAS.some((a) => a.value === areaParam) ? (areaParam as LibraryArea) : 'all'
+  const canFilter = profileEquipment.length > 0
+  const mineOnly = canFilter && params.get('equipment') !== 'all'
+  const searching = query.trim().length > 0
+  const results = useMemo(
+    () => libraryResults(library, { query, area, mineOnly, profileEquipment }),
+    [library, query, area, mineOnly, profileEquipment],
+  )
+  const setParam = (key: string, value: string | null) => {
+    const next = new URLSearchParams(params)
+    if (value == null) next.delete(key)
+    else next.set(key, value)
+    setParams(next, { replace: true })
+  }
+  const areaLabel = LIBRARY_AREAS.find((a) => a.value === area)?.label ?? 'All'
 
   return (
-    <Screen pillar="train" title="Library" back="/train" backLabel="Train" eyebrow={`${library.length} exercises`}>
+    <Screen pillar="train" title="Library" back="/train" backLabel="Train" eyebrow={searching ? `Searching all ${library.length} exercises` : `${results.length} of ${library.length} exercises`}>
       <div className="flex flex-col gap-3 pb-32">
         <TextInput
           icon={<Search size={16} />}
@@ -272,8 +293,37 @@ export function LibraryView() {
           onChange={(e) => setQuery(e.target.value)}
           autoCapitalize="none"
         />
+        {!searching && (
+          <>
+            <div role="group" aria-label="Body area" className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-0.5 [scrollbar-width:none]">
+              {LIBRARY_AREAS.map((a) => (
+                <Chip key={a.value} selected={a.value === area} onClick={() => setParam('area', a.value === 'all' ? null : a.value)} className="shrink-0">
+                  {a.label}
+                </Chip>
+              ))}
+            </div>
+            {canFilter && (
+              <Segmented
+                size="sm"
+                label="Equipment"
+                options={[{ value: 'mine', label: 'My equipment' }, { value: 'all', label: 'All equipment' }]}
+                value={mineOnly ? 'mine' : 'all'}
+                onChange={(v) => setParam('equipment', v === 'all' ? 'all' : null)}
+              />
+            )}
+          </>
+        )}
         {results.length === 0 ? (
-          <Card><p className="voice text-lg text-muted text-center py-2">Nothing matches “{query}”.</p></Card>
+          <Card>
+            {searching ? (
+              <p className="voice text-lg text-muted text-center py-2">Nothing matches “{query}”.</p>
+            ) : (
+              <div className="flex flex-col items-center gap-3 py-2 text-center">
+                <p className="voice text-lg text-muted">No {areaLabel.toLowerCase()} exercises with your equipment.</p>
+                <Button variant="secondary" size="sm" onClick={() => setParam('equipment', 'all')}>Show all equipment</Button>
+              </div>
+            )}
+          </Card>
         ) : (
           <ul className="flex flex-col gap-2">
             {results.map((e) => (
@@ -349,27 +399,4 @@ function SessionCard({ session: s, today, highlighted, onOpen, onMove, onSkip }:
       )}
     </div>
   )
-}
-
-function filterLibrary(list: Exercise[], q: string): Exercise[] {
-  const query = q.trim().toLowerCase()
-  if (!query) return list
-  const tokens = query.split(/\s+/).filter(Boolean)
-  const score = (e: Exercise) => {
-    const hay = `${e.name} ${e.equipment} ${e.pattern.replace(/_/g, ' ')} ${e.primaryMuscles.join(' ')} ${e.secondaryMuscles.join(' ')}`.toLowerCase()
-    let s = 0
-    for (const t of tokens) {
-      if (e.name.toLowerCase().startsWith(t)) s += 3
-      else if (e.name.toLowerCase().includes(t)) s += 2
-      else if (hay.includes(t)) s += 1
-      else return 0
-    }
-    return s
-  }
-  const scored = list.map((e) => ({ e, s: score(e) })).filter((x) => x.s > 0)
-  // Alias hit (e.g. "bench" → Dumbbell Bench Press) floats to the top.
-  const alias = findExerciseByAlias(query, list)
-  scored.sort((a, b) => Number(b.e.id === alias?.id) - Number(a.e.id === alias?.id) || b.s - a.s || a.e.name.localeCompare(b.e.name))
-  if (alias && !scored.some((x) => x.e.id === alias.id)) scored.unshift({ e: alias, s: 99 })
-  return scored.map((x) => x.e)
 }
