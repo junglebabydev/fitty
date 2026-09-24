@@ -22,6 +22,7 @@ import { importHealthData } from '../features/settings/healthImport'
 import { KEYS, readHealthPermissions } from '../features/settings/keys'
 import { nextAction, type NextActionKind } from '../features/today/nextAction'
 import { ReadinessCenter, ReadinessSheet, ReasonChips } from '../features/today/readiness'
+import { FEATURES } from '../config/features'
 import { EatTile, MindTile, RestTile, TrainTile } from '../features/today/tiles'
 import { BulletList, Rise, greeting } from '../features/today/ui'
 
@@ -109,6 +110,7 @@ export default function TodayScreen() {
     proteinG: facts.intakeToday.proteinG,
     proteinExpectedG: facts.proteinPaceExpected,
     moodLogged: !!moodToday,
+    mind: FEATURES.mind,
   })
   const ActionIcon = ACTION_ICON[action.kind]
 
@@ -232,20 +234,20 @@ export default function TodayScreen() {
               onClick={() => navigate('/eat')}
             />
           </Rise>
-          <Rise i={4} className="grid min-w-0">
+          {FEATURES.sleepTile && <Rise i={4} className="grid min-w-0">
             <RestTile
               lastMin={lastNight?.durationMin ?? null}
               avgMin={facts.sleepAvg7Min}
               onClick={() => (lastNight ? navigate('/sleep') : navigate('/sleep', { state: { log: true } }))}
             />
-          </Rise>
-          <Rise i={5} className="grid min-w-0">
+          </Rise>}
+          {FEATURES.mind && <Rise i={5} className="grid min-w-0">
             <MindTile
               valence={moodToday?.valence ?? null}
               word={moodToday ? VALENCE_WORDS[moodToday.valence] ?? 'Logged' : null}
               onClick={() => navigate(moodToday ? '/mind' : '/mind?checkin=1')}
             />
-          </Rise>
+          </Rise>}
         </div>
       </div>
 

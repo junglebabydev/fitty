@@ -18,6 +18,8 @@ export interface NextActionInput {
   /** Protein expected by this hour to be on pace. */
   proteinExpectedG: number
   moodLogged: boolean
+  /** Mind pillar shown (FEATURES.mind). When off, never suggest the wind-down or the mood check-in. Default on. */
+  mind?: boolean
 }
 
 export interface NextAction { kind: NextActionKind; label: string }
@@ -47,9 +49,10 @@ export function nextAction(i: NextActionInput): NextAction {
     if (i.hour >= EVENING_HOUR && i.canShorten) return pick('start_short')
     return pick('start_workout')
   }
-  if (i.hour >= WIND_DOWN_HOUR) return pick('wind_down')
+  const mind = i.mind ?? true
+  if (mind && i.hour >= WIND_DOWN_HOUR) return pick('wind_down')
   if (i.mealsToday === 0 || i.proteinG < PROTEIN_BEHIND_FRACTION * i.proteinExpectedG) return pick('log_meal')
   if (!i.checkedIn && i.hour < 12) return pick('morning_check_in')
-  if (!i.moodLogged) return pick('mood_check_in')
+  if (mind && !i.moodLogged) return pick('mood_check_in')
   return pick('log_meal')
 }
