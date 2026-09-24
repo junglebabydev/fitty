@@ -8,10 +8,12 @@ import {
   ChartLine, ChevronRight, ClipboardCheck, Clock, Inbox, Moon, Play, Settings, Smile, StretchHorizontal, Utensils, type LucideIcon,
 } from 'lucide-react'
 import type { WorkoutSession } from '../domain/types'
-import { dateOf, dayName, fmtDate, toDateStr } from '../lib/util'
+import { addDays, dateOf, dayName, fmtDate, toDateStr } from '../lib/util'
 import { AIStatusChip, Button, IconButton, PillarDial, Screen, Sheet } from '../components'
 import { useNow, useQuery, useToast } from '../hooks'
-import { getCheckIn, getMealsForDate, getPendingDecisions, getSetting, lastNightSleep, moodLogsForDate, updateSession } from '../db/repositories'
+import { getCheckIn, getMealsForDate, getPendingDecisions, getSessions, getSetting, lastNightSleep, moodLogsForDate, updateSession } from '../db/repositories'
+import { isStaleSession } from '../features/workout/stale'
+import { startedLabel } from '../features/workout/StaleSessionSheet'
 import { EXERCISE_BY_ID } from '../data'
 import { SESSION_TEMPLATES, VALENCE_WORDS, computeDailyPriority, estimateSessionMinutes, shortenedVersion } from '../engine'
 import { getHealthBridge } from '../native'
@@ -97,6 +99,9 @@ export default function TodayScreen() {
   }, [today, toast])
 
   const session = facts.plannedToday
+  // A workout started and never finished gets a nudge to wrap it up. The window runs a week ahead too: a
+  // session can be started early, before its scheduled date.
+  const staleSession = useQuery(() => getSessions(addDays(today, -14), addDays(today, 7)).find((s) => isStaleSession(s)) ?? null, [today, hour])
   const short = useMemo(() => (session ? shortenedVersion(session.exercises) : []), [session])
   const blocked = facts.readiness.state === 'RED' || facts.gate.overall === 'RED'
 
@@ -183,6 +188,20 @@ export default function TodayScreen() {
           <ReasonChips reasons={facts.readiness.reasons} onOpen={() => setReasonsOpen(true)} />
         </Rise>
 
+        {staleSession && staleSession.id !== session?.id && (
+          <button
+            type="button"
+            onClick={() => navigate(`/train/session/${staleSession.id}`)}
+            className="press flex min-h-14 w-full items-center gap-3 rounded-[1.25rem] border border-warn/40 bg-warn/5 px-4 py-3 text-left"
+          >
+            <span className="min-w-0 flex-1">
+              <span className="block text-[15px] font-semibold text-app">{staleSession.name.replace(/\s*\(.*\)$/, '')} is still open</span>
+              <span className="block text-[13px] text-muted">{startedLabel(staleSession.startedAt)}. Wrap it up or mark it skipped.</span>
+            </span>
+            <ChevronRight size={18} className="shrink-0 text-faint" aria-hidden />
+          </button>
+        )}
+
         {/* 3. One coach sentence, one action. */}
         <Rise i={1}>
           <section className="relative rounded-[1.25rem] border border-line bg-surface p-4" aria-label="Coach">
@@ -200,7 +219,7 @@ export default function TodayScreen() {
             )}
             <p className={`voice m-0 text-xl leading-snug text-balance ${pending.length > 0 ? 'pr-12' : ''}`}>{priority.headline}</p>
             <div className="mt-3.5 flex items-center gap-1">
-              <Button full size="lg" icon={<ActionIcon size={20} />} onClick={doAction}>{action.label}</Button>
+              <Button full size="lg" icon={<ActionIcon size={20} />} onClick={doAction}>{action.kind === 'continue_workout' && session && staleSession?.id === session.id ? 'Wrap up your workout' : action.label}</Button>
               <button
                 type="button"
                 onClick={() => setWhyOpen(true)}
