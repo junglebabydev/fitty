@@ -13,7 +13,6 @@ import { TIMED_IDS, type ProgressionAction, type ProgressionResult } from '../..
 import { cx, nowIso } from '../../lib/util'
 import { evaluateProgressionWithPain } from './gate'
 import { bestE1RM, fmtSec, summarizeSets } from './helpers'
-import { DemoLink } from './PlanVisuals'
 import { useVoiceSet } from './useVoiceSet'
 
 /** A personal best detected the moment a set is committed. */
@@ -295,11 +294,10 @@ export function ExerciseCard({ session, index, planned, exercise, sets, library,
         />
       </div>
 
-      {/* Active card leads with the visual; the demo opens in a new tab. */}
+      {/* Active card leads with the visual. */}
       {!collapsed && (
         <div className="relative mt-1.5 mb-1">
           <ExerciseVisual exercise={exercise} size="card" className="max-h-[168px]" />
-          <DemoLink exercise={exercise} className="glass absolute left-2 bottom-2 border border-line text-app!" />
         </div>
       )}
 
