@@ -44,17 +44,22 @@ function usePrefersReducedMotion(): boolean {
   return reduced
 }
 
-/** Photo when the exercise has a verified one; otherwise (or on load error) a tinted MuscleMap tile. */
+/**
+ * Best available picture of the movement: the looping animation, then the verified photos, then (or on load
+ * error) a tinted MuscleMap tile. Reduced motion skips the animation.
+ */
 export function ExerciseVisual({ exercise, size = 'card', className }: ExerciseVisualProps) {
-  const { images } = exerciseMedia(exercise.id)
+  const { animation, images } = exerciseMedia(exercise.id)
+  const [animFailed, setAnimFailed] = useState(false)
   const [failed, setFailed] = useState(false)
   const [frame, setFrame] = useState(0)
   const reduced = usePrefersReducedMotion()
 
-  // A new exercise gets a fresh chance to load its photo.
-  useEffect(() => { setFailed(false); setFrame(0) }, [exercise.id])
+  // A new exercise gets a fresh chance to load its media.
+  useEffect(() => { setAnimFailed(false); setFailed(false); setFrame(0) }, [exercise.id])
 
-  const showPhoto = images.length > 0 && !failed
+  const showAnim = !!animation && !animFailed && !reduced
+  const showPhoto = !showAnim && images.length > 0 && !failed
   const crossfade = showPhoto && size === 'hero' && images.length > 1 && !reduced
 
   useEffect(() => {
@@ -66,6 +71,26 @@ export function ExerciseVisual({ exercise, size = 'card', className }: ExerciseV
   const map = (h: number, view: 'both' | 'front' | 'back' = 'both') => (
     <MuscleMap primary={exercise.primaryMuscles} secondary={exercise.secondaryMuscles} size={h} view={view} ariaLabel="" />
   )
+
+  if (showAnim) {
+    return (
+      <div
+        role="img"
+        aria-label={exercise.name}
+        className={cx('relative overflow-hidden border border-line bg-media', FRAME[size], className)}
+      >
+        <img
+          src={animation}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          draggable={false}
+          onError={() => setAnimFailed(true)}
+          className="absolute inset-0 h-full w-full object-contain"
+        />
+      </div>
+    )
+  }
 
   if (showPhoto) {
     const shown = size === 'hero' ? images.slice(0, 2) : images.slice(0, 1)

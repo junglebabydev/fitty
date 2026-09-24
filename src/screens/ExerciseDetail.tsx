@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeftRight, ChevronDown, CircleAlert, PlayCircle, ShieldCheck, TriangleAlert, Trophy } from 'lucide-react'
+import { ArrowLeftRight, ChevronDown, CircleAlert, ShieldCheck, TriangleAlert, Trophy } from 'lucide-react'
 import type { Exercise } from '../domain/types'
 import { Button, Card, EmptyState, ExerciseVisual, LineChart, MuscleMap, Screen } from '../components'
 import { exerciseMedia } from '../data/exerciseMedia'
@@ -64,22 +64,27 @@ export default function ExerciseDetailScreen() {
     else headline = `${delta > 0 ? 'Up' : 'Down'} ${fmtValue(Math.abs(delta))} ${unit}${sinceText}.`
   }
 
+  const media = exerciseMedia(exercise.id)
+
   return (
     <Screen pillar="train" title={exercise.name} back eyebrow={`${exercise.equipment} · ${exercise.pattern.replace(/_/g, ' ')}${timed ? ' · timed' : ''}`}>
       <div className="flex flex-col gap-3 pb-32">
-        {/* Hero: the movement itself, then the demo */}
+        {/* Hero: the movement itself (animation, photos or muscle map), with the credit and a quiet way out to YouTube */}
         <div className="anim-rise">
           <ExerciseVisual exercise={exercise} size="hero" />
+          <div className="mt-1.5 flex items-center justify-between gap-3 px-1 text-[12px] text-faint">
+            <span>{media.animation ? 'Animation: ExerciseDB' : ''}</span>
+            <a
+              href={media.demoUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="press inline-flex min-h-11 items-center underline underline-offset-2"
+              aria-label={`Search YouTube for ${exercise.name} form (opens in a new tab)`}
+            >
+              Search YouTube
+            </a>
+          </div>
         </div>
-        <a
-          href={exerciseMedia(exercise.id).demoUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="press anim-rise h-14 rounded-2xl bg-accent text-accent-fg text-[17px] font-semibold inline-flex items-center justify-center gap-2.5"
-          aria-label={`Watch a ${exercise.name} demo (opens in a new tab)`}
-        >
-          <PlayCircle size={20} aria-hidden />Watch demo
-        </a>
 
         {/* Muscles */}
         <Card eyebrow="Muscles" className="anim-rise">
