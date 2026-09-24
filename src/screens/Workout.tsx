@@ -78,6 +78,8 @@ export default function WorkoutScreen() {
   // A workout left open for hours (stale.ts) asks once per visit whether to wrap it up.
   const [staleDismissed, setStaleDismissed] = useState(false)
   const [staleBusy, setStaleBusy] = useState(false)
+  // Focus Mode Prev/Next: an exercise picked by hand (null = follow the plan order).
+  const [browseIdx, setBrowseIdx] = useState<number | null>(null)
   // Pain reported before any set was logged: the next set carries the flag. Kept per session like `stopped`.
   const painNextKey = `workout-painnext-${sessionId}`
   const [painNext, setPainNextState] = useState<Record<string, boolean>>(() => readSessionFlag<Record<string, boolean>>(painNextKey, {}))
@@ -345,17 +347,27 @@ export default function WorkoutScreen() {
 
   // Focus Mode (BFT format) is the default while a session runs; ?view=list shows the full list.
   const focusOn = params.get('view') !== 'list' && session.exercises.length > 0
-  const idx = focusIndex(session.exercises, setsFor, stopped)
+  const hasLeft = (i: number) => {
+    const e = session.exercises[i]
+    return !!e && !stopped.includes(e.exerciseId) && (setsFor.get(e.exerciseId)?.length ?? 0) < e.sets
+  }
+  // A hand-picked exercise stays on screen until its sets are done, then the plan order takes over again.
+  const idx = browseIdx != null && hasLeft(browseIdx) ? browseIdx : focusIndex(session.exercises, setsFor, stopped)
   const left = remainingPlan(session.exercises, setsFor, stopped)
   const leftSets = left.reduce((n, e) => n + e.sets, 0)
-  const remainingLabel = leftSets <= 1 ? (leftSets === 1 ? 'Last set' : 'All done') : `~${estimateSessionMinutes(left)} min left`
+  const remainingLabel = leftSets <= 1 ? (leftSets === 1 ? 'Last set' : '0 min') : `~${estimateSessionMinutes(left)} min`
+  let prevIdx: number | null = null
+  if (idx != null) for (let i = idx - 1; i >= 0; i--) if (hasLeft(i)) { prevIdx = i; break }
+  const nextIdx = idx != null ? nextFocusIndex(session.exercises, setsFor, stopped, idx) : null
+  const segments = session.exercises.map((e) => ({ done: setsFor.get(e.exerciseId)?.length ?? 0, planned: e.sets, stopped: stopped.includes(e.exerciseId) }))
   const focusPlanned = idx != null ? session.exercises[idx] : null
   const focusExercise = focusPlanned ? byId.get(focusPlanned.exerciseId) ?? null : null
   const onLogged = (planned: PlannedExercise, index: number, s: LoggedSet) => {
     setPainNext(planned.exerciseId, false)
     if (s.pr) setPr(s.pr)
     const doneHere = (setsFor.get(planned.exerciseId)?.length ?? 0) + 1 >= planned.sets
-    if (focusOn && doneHere && nextFocusIndex(session.exercises, setsFor, stopped, index) == null && focusIndex(session.exercises, setsFor, stopped) === index) {
+    const othersLeft = session.exercises.some((_, i) => i !== index && hasLeft(i))
+    if (focusOn && doneHere && !othersLeft) {
       timer.skip()
       setFinishOpen(true)
     } else if (s.restSec > 0) timer.start(s.restSec)
@@ -372,7 +384,11 @@ export default function WorkoutScreen() {
           sets={setsFor.get(focusPlanned.exerciseId) ?? []}
           stopped={stopped.includes(focusPlanned.exerciseId)}
           painNext={!!painNext[focusPlanned.exerciseId]}
-          position={{ n: idx + 1, total: session.exercises.length }}
+          index={idx}
+          segments={segments}
+          nextName={nextIdx != null ? byId.get(session.exercises[nextIdx].exerciseId)?.name ?? null : null}
+          onPrev={prevIdx != null ? () => { timer.skip(); setBrowseIdx(prevIdx) } : null}
+          onNext={nextIdx != null ? () => { timer.skip(); setBrowseIdx(nextIdx) } : null}
           progress={{ logged: sets.length, total: plannedTotal }}
           elapsed={fmtElapsed(elapsedSec)}
           remaining={remainingLabel}
