@@ -351,6 +351,7 @@ export default function WorkoutScreen() {
           elapsed={fmtElapsed(elapsedSec)}
           remaining={remainingLabel}
           timer={timer}
+          gate={gate}
           onLogged={(s) => onLogged(focusPlanned, idx, s)}
           onList={() => setParams({ view: 'list' })}
           onPain={() => setPainIndex(idx)}

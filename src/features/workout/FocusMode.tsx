@@ -3,8 +3,9 @@
 // time, and one big button. Logging goes through useSetLogger, so rows match the list view exactly.
 // Rendered by WorkoutScreen, which owns the gate, rest timer, pain, substitute and finish handlers.
 import { useEffect, useState } from 'react'
-import { ArrowLeftRight, Bandage, Check, Ellipsis, Flag, List, Play, Settings2 } from 'lucide-react'
+import { ArrowLeftRight, Bandage, Check, Ellipsis, Flag, List, Play, Settings2, ShieldAlert, TriangleAlert } from 'lucide-react'
 import type { Exercise, ExerciseSet, PlannedExercise, WorkoutSession } from '../../domain/types'
+import type { GateResult } from '../../engine'
 import { Button, ExerciseVisual, Field, IconButton, ListRow, NumberInput, Sheet } from '../../components'
 import { cx } from '../../lib/util'
 import { fmtClock, fmtLoad } from './helpers'
@@ -24,6 +25,8 @@ export interface FocusModeProps {
   elapsed: string
   remaining: string
   timer: RestTimer
+  /** Today's symptom gate: shown only when it changed something (not OK). */
+  gate: Pick<GateResult, 'overall' | 'advice'>
   onLogged(set: LoggedSet): void
   onList(): void
   onPain(): void
@@ -56,6 +59,7 @@ export function FocusMode(p: FocusModeProps) {
   const { timed, loadable, reps, setReps, load, setLoad, duration, setDuration, canLog } = logger
   const [menuOpen, setMenuOpen] = useState(false)
   const [adjustOpen, setAdjustOpen] = useState(false)
+  const [gateOpen, setGateOpen] = useState(false)
   const [timedEndAt, setTimedEndAt] = useState<number | null>(null)
   const [timedStartAt, setTimedStartAt] = useState<number | null>(null)
 
@@ -107,9 +111,19 @@ export function FocusMode(p: FocusModeProps) {
           <IconButton icon={<Ellipsis size={22} />} label="Exercise options" onClick={() => setMenuOpen(true)} className="-mr-2 text-muted" />
         </div>
 
-        {/* Clocks */}
-        <div className="flex items-baseline justify-between text-[13px] text-muted">
+        {/* Clocks, plus the gate state only when the gate changed something */}
+        <div className="flex items-baseline justify-between gap-2 text-[13px] text-muted">
           <span role="timer" aria-label={`Elapsed ${p.elapsed}`}><span className="num text-xl text-app">{p.elapsed}</span> elapsed</span>
+          {p.gate.overall !== 'OK' && (
+            <button
+              type="button"
+              onClick={() => setGateOpen(true)}
+              className={cx('press inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-xs font-semibold', p.gate.overall === 'RED' ? 'bg-stop/10 text-stop' : 'bg-warn/10 text-warn')}
+            >
+              {p.gate.overall === 'RED' ? <ShieldAlert size={13} aria-hidden /> : <TriangleAlert size={13} aria-hidden />}
+              {p.gate.overall === 'RED' ? 'Protect it today' : 'Modified today'}
+            </button>
+          )}
           <span>{p.remaining}</span>
         </div>
 
@@ -178,6 +192,15 @@ export function FocusMode(p: FocusModeProps) {
           <ListRow icon={<Settings2 size={18} />} title="Session options" subtitle="Shorten or skip the session" onClick={() => { setMenuOpen(false); p.onOptions() }} />
           <ListRow icon={<Flag size={18} />} title="Finish session" onClick={() => { setMenuOpen(false); p.onFinish() }} />
         </div>
+      </Sheet>
+
+      <Sheet open={gateOpen} onClose={() => setGateOpen(false)} title={p.gate.overall === 'RED' ? 'Protect it today' : 'Modified for today'}>
+        <ul className="flex flex-col gap-2 pt-1 text-[15px] leading-snug">
+          {p.gate.advice.map((a, i) => <li key={i}>{a}</li>)}
+        </ul>
+        {p.gate.overall === 'RED' && (
+          <p className="mt-3 text-sm text-muted leading-snug">Provocative exercises were swapped or removed. This is not a diagnosis — pain above 5/10 or red-flag symptoms that persist warrant a clinical assessment.</p>
+        )}
       </Sheet>
 
       <Sheet open={adjustOpen} onClose={() => setAdjustOpen(false)} title="Adjust this set" footer={<Button full onClick={() => setAdjustOpen(false)}>Done</Button>}>
