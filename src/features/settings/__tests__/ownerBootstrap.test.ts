@@ -17,7 +17,7 @@ import {
 import { SEED_PROFILE, seedIfEmpty } from '../../../db/seed'
 import { OWNER as EXAMPLE } from '../../../config/owner.example'
 import { addDays, startOfWeek } from '../../../lib/util'
-import { applyOwnerProfile } from '../ownerBootstrap'
+import { applyOwnerProfile, parseOwnerSetup, unlockOwnerProfile } from '../ownerBootstrap'
 
 const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 const TODAY = '2026-09-24'
@@ -33,6 +33,7 @@ beforeEach(() => {
 })
 
 afterAll(() => {
+  vi.unstubAllGlobals()
   errorSpy.mockRestore()
 })
 
@@ -70,5 +71,51 @@ describe('applyOwnerProfile', () => {
     expect(getProfile()?.name).toBe(EXAMPLE.name)
     expect(tableCounts().sleep_records ?? 0).toBe(0)
     expect(getSetting('ai.provider', '')).toBe('mock')
+  })
+})
+
+describe('parseOwnerSetup', () => {
+  it('accepts the example after a JSON round trip and drops unknown keys', () => {
+    const r = parseOwnerSetup({ ...JSON.parse(JSON.stringify(EXAMPLE)), extra: 'x' })
+    const conditions = EXAMPLE.conditions.map((c) => ({ ...c, baselineNotes: '' }))
+    expect(r).toEqual({ ok: true, owner: { ...EXAMPLE, conditions } })
+  })
+
+  it('names the first bad field', () => {
+    expect(parseOwnerSetup(null)).toMatchObject({ ok: false })
+    expect(parseOwnerSetup({ ...EXAMPLE, sex: 'x' })).toEqual({ ok: false, problem: '"sex" is missing or invalid' })
+    expect(parseOwnerSetup({ ...EXAMPLE, conditions: [{ region: 'elbow', label: 'Elbow' }] })).toEqual({ ok: false, problem: '"conditions" is missing or invalid' })
+  })
+
+  it('runs the wizard step checks on the values', () => {
+    expect(parseOwnerSetup({ ...EXAMPLE, heightCm: 20 })).toEqual({ ok: false, problem: 'Height should be between 100 and 250 cm.' })
+    expect(parseOwnerSetup({ ...EXAMPLE, daysMin: 5, daysTarget: 4 })).toEqual({ ok: false, problem: 'Minimum ≤ target ≤ stretch.' })
+  })
+})
+
+describe('unlockOwnerProfile', () => {
+  const reply = (status: number, body: unknown) => vi.fn(async () => new Response(JSON.stringify(body), { status }))
+
+  it('fetches with the PIN, applies the profile and saves the PIN', async () => {
+    const fetchMock = reply(200, { ok: true, owner: EXAMPLE })
+    vi.stubGlobal('fetch', fetchMock)
+    expect(await unlockOwnerProfile('  a-long-enough-pin ')).toBeNull()
+    expect(fetchMock).toHaveBeenCalledWith('/api/ai/owner', expect.objectContaining({ headers: { 'x-coach-pin': 'a-long-enough-pin' } }))
+    expect(getProfile()).toMatchObject({ name: EXAMPLE.name, onboarded: true })
+    expect(getSetting('ai.bridgePin', '')).toBe('a-long-enough-pin')
+  })
+
+  it('reports a refused PIN, a missing profile, a bad profile and a network failure without writing anything', async () => {
+    vi.stubGlobal('fetch', reply(403, { ok: false, kind: 'forbidden', message: 'PIN required.' }))
+    expect(await unlockOwnerProfile('wrong-pin-123')).toBe('That PIN was not accepted.')
+    vi.stubGlobal('fetch', reply(404, { ok: false, kind: 'failed', message: 'No owner profile is set on this server.' }))
+    expect(await unlockOwnerProfile('a-long-enough-pin')).toBe('No owner profile is set on this server.')
+    vi.stubGlobal('fetch', reply(200, { ok: true, owner: { ...EXAMPLE, dob: '' } }))
+    expect(await unlockOwnerProfile('a-long-enough-pin')).toBe('The profile on the server is not usable: Enter your date of birth.')
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('offline') }))
+    expect(await unlockOwnerProfile('a-long-enough-pin')).toMatch(/Couldn't reach the server/)
+    expect(await unlockOwnerProfile('   ')).toBe('Enter the PIN.')
+    expect(getProfile()).toBeNull()
+    expect(getSetting('ai.bridgePin', '')).toBe('')
   })
 })

@@ -2,6 +2,9 @@
 // import.meta.glob turns a missing file into an empty match, so a fresh clone still builds and boots into
 // onboarding. Copy ./owner.example.ts to ./owner.local.ts to use it. Applied at boot by
 // features/settings/ownerBootstrap.ts.
+// Dev builds only (npm run dev, vitest): a production build never contains the file, even one made on this Mac,
+// so the profile cannot end up in a deployed bundle. The hosted site gets it from the Worker's OWNER_PROFILE
+// secret instead (`npm run owner:secret`), loaded on a fresh phone with the PIN (docs/DEPLOY.md §2).
 import type { Region, UserProfile } from '../domain/types'
 import type { Activity } from '../engine'
 import type { DietPattern } from '../features/settings/keys'
@@ -32,7 +35,9 @@ export interface OwnerSetup {
   diet: DietPattern
 }
 
-const found = import.meta.glob<{ OWNER: OwnerSetup }>('./owner.local.ts', { eager: true })
+const found: Record<string, { OWNER: OwnerSetup }> = import.meta.env.DEV
+  ? import.meta.glob<{ OWNER: OwnerSetup }>('./owner.local.ts', { eager: true })
+  : {}
 
 export const OWNER: OwnerSetup | null = Object.values(found)[0]?.OWNER ?? null
 

@@ -8,6 +8,9 @@
 //   POST /api/ai/chat   { system, turns, attachments? }          → { ok, text, meta }
 //   POST /api/ai/json   { system, prompt, schema, attachments? } → { ok, data, meta }
 //   errors              → { ok: false, kind, message }
+//   GET  /api/ai/owner  → { ok, owner }: the owner profile from the OWNER_PROFILE secret (JSON), so a fresh phone can
+//                         skip onboarding without the profile ever being in the repo or the static bundle. Same guards
+//                         and PIN as the AI calls; 404 when the secret is not set.
 //   GET  /api/ai/reauth → 302 to "/". Worker only: a navigation the service worker never answers from its cache, so an
 //                         expired Cloudflare Access session gets the Access login and then lands back in the app.
 //
@@ -15,7 +18,7 @@
 // HTTPS, and is size-, rate- and token-capped. Secrets and upstream error bodies never reach the client, and no
 // CORS headers are ever sent. Validation and limits live in ./guard (pure, unit-tested).
 //
-// Secrets:  OPENROUTER_API_KEY, GEMINI_API_KEY and/or ANTHROPIC_API_KEY, plus COACH_BRIDGE_PIN.
+// Secrets:  OPENROUTER_API_KEY, GEMINI_API_KEY and/or ANTHROPIC_API_KEY, plus COACH_BRIDGE_PIN. Optional: OWNER_PROFILE.
 // Vars:     COACH_PROVIDER ('openrouter' | 'gemini' | 'anthropic'), COACH_OPENROUTER_MODEL, COACH_OPENROUTER_DATA_COLLECTION,
 //           COACH_GEMINI_MODEL, COACH_MODEL.
 // Bindings: AI_LIMITER (Workers Rate Limiting, per client address), DAILY_BUDGET (Durable Object, calls per day).
@@ -31,6 +34,8 @@ import {
 
 export interface Env extends CoachEnv {
   ASSETS: { fetch(request: Request): Promise<Response> }
+  /** The owner's profile as JSON (shape: OwnerSetup in src/config/owner.ts). A secret: personal data, never in git. */
+  OWNER_PROFILE?: string
   /** Workers Rate Limiting binding (wrangler.jsonc → ratelimits). Optional so tests and bare setups run without it. */
   AI_LIMITER?: { limit(options: { key: string }): Promise<{ success: boolean }> }
   /** Durable Object namespace of DailyBudget (wrangler.jsonc → durable_objects). */
@@ -144,6 +149,16 @@ const chat = (req: ChatRequest) => (up: Upstream) =>
 const json = (req: JsonRequest) => (up: Upstream) =>
   up.provider === 'openrouter' ? openRouterJson(up.apiKey, up.model, up.policy, req) : up.provider === 'gemini' ? geminiJson(up.apiKey, up.model, req) : anthropicJson(up.apiKey, up.model, req)
 
+/** The OWNER_PROFILE secret, parsed. Only reached after the PIN check; the app validates the shape. */
+function owner(env: Env): Response {
+  const raw = (env.OWNER_PROFILE ?? '').trim()
+  if (!raw) throw new BridgeError('failed', 'No owner profile is set on this server.', 404)
+  let data: unknown
+  try { data = JSON.parse(raw) }
+  catch { throw new BridgeError('failed', 'The OWNER_PROFILE secret is not valid JSON.', 500) }
+  return send(200, { ok: true, owner: data })
+}
+
 async function handleAi(request: Request, env: Env, path: string, ctx?: Ctx): Promise<Response> {
   try {
     if (!isSecureRequest(request.url)) throw new BridgeError('forbidden', 'HTTPS only.', 403)
@@ -151,7 +166,8 @@ async function handleAi(request: Request, env: Env, path: string, ctx?: Ctx): Pr
       throw new BridgeError('forbidden', 'Cross-origin requests are not allowed.', 403)
     }
     const isHealth = path === '/health' && request.method === 'GET'
-    if (!isHealth && request.method !== 'POST') throw new BridgeError('bad_request', 'POST only.', 405)
+    const isOwner = path === '/owner' && request.method === 'GET'
+    if (!isHealth && !isOwner && request.method !== 'POST') throw new BridgeError('bad_request', 'POST only.', 405)
 
     // Per client address: the address for IPv4, the /64 for IPv6.
     const ip = pinFailKey(request.headers.get('cf-connecting-ip') ?? 'unknown')
@@ -177,6 +193,7 @@ async function handleAi(request: Request, env: Env, path: string, ctx?: Ctx): Pr
     }
 
     if (isHealth) return send(200, await health(env))
+    if (isOwner) return owner(env)
 
     if (path !== '/chat' && path !== '/json') throw new BridgeError('bad_request', 'Unknown endpoint.', 404)
     const body = parseBody(await readTextCapped(request.body, request.headers.get('content-length')))

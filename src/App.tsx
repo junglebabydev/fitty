@@ -9,8 +9,10 @@ import { db } from './db/database'
 import { acquireTabLock } from './db/tabLock'
 import { seedIfEmpty } from './db/seed'
 import { getProfile } from './db/repositories'
-import { applyAISettings } from './features/ai/config'
+import { applyAISettings, inferBridgeHost } from './features/ai/config'
 import { applyOwnerProfile } from './features/settings/ownerBootstrap'
+// Not lazy: OnboardingGate renders it outside the Suspense boundary.
+import OwnerUnlockScreen from './screens/OwnerUnlock'
 
 // --- screens (route table in docs/CONTRACTS.md) -------------------------------------
 
@@ -204,7 +206,9 @@ function PersistWatcher() {
 
 function Shell() {
   const { pathname } = useLocation()
-  const hideTabs = HIDE_TABS_PATTERNS.some((p) => matchPath(p, pathname) !== null)
+  // No profile yet (owner unlock or onboarding): nothing behind the tabs to go to.
+  const onboarded = useQuery(() => getProfile()?.onboarded ?? false, [])
+  const hideTabs = !onboarded || HIDE_TABS_PATTERNS.some((p) => matchPath(p, pathname) !== null)
   return (
     <AppShell hideTabs={hideTabs}>
       <ErrorBoundary resetKey={pathname}>
@@ -219,14 +223,20 @@ function Shell() {
 }
 
 /**
- * Sends un-onboarded profiles to /onboarding. Onboarded profiles may still visit
+ * Sends un-onboarded profiles to /onboarding; on the hosted site it first offers to
+ * load the owner profile from the Worker with the PIN. Onboarded profiles may still visit
  * /onboarding: Settings and Coach link there to re-run the wizard, which detects
  * rerun mode itself (Cancel + "Save changes" both return to /settings).
  */
 function OnboardingGate({ children }: { children: ReactNode }) {
   const { pathname } = useLocation()
   const onboarded = useQuery(() => getProfile()?.onboarded ?? false, [])
+  const [skipUnlock, setSkipUnlock] = useState(false)
   const atOnboarding = pathname === '/onboarding'
+  // Hosted site, fresh phone: offer to load the owner profile from the Worker before falling back to the wizard.
+  if (!onboarded && !atOnboarding && !skipUnlock && inferBridgeHost(window.location.hostname) === 'cloud') {
+    return <OwnerUnlockScreen onSkip={() => setSkipUnlock(true)} />
+  }
   if (!onboarded && !atOnboarding) return <Navigate to="/onboarding" replace />
   return <>{children}</>
 }
