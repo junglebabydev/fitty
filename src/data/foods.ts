@@ -1,6 +1,13 @@
 import type { FoodItem, Macros } from '../domain/types'
 
-export type FoodOrigin = 'SG hawker' | 'SG cafe' | 'generic' | 'branded'
+export type FoodOrigin =
+  | 'SG hawker' | 'SG cafe' | 'generic' | 'branded'
+  | 'Indian' | 'Western' | 'Chinese' | 'Malay' | 'Indonesian'
+
+// Cuisine packs added alongside the Singapore set so the library is usable
+// outside SG. Every entry gets its cuisine as a lower-case tag so search and
+// the coach can filter by it.
+export const CUISINE_ORIGINS: FoodOrigin[] = ['Indian', 'Western', 'Chinese', 'Malay', 'Indonesian']
 
 export interface FoodRecord {
   id: string
@@ -20,12 +27,18 @@ export interface FoodRecord {
 
 export const SG_SOURCE_TAG = 'HPB-style estimate'
 
+// Cuisine-pack values are typical-portion estimates, not label or USDA values.
+// Tagged so the UI can show them with the same honesty as the SG entries.
+export const CUISINE_SOURCE_TAG = 'typical portion estimate'
+
 function f(
   id: string, name: string, origin: FoodOrigin,
   kcal: number, proteinG: number, carbsG: number, fatG: number,
   servingG: number, servingLabel: string, tags: string[],
 ): FoodRecord {
-  const allTags = origin === 'SG hawker' || origin === 'SG cafe' ? [...tags, SG_SOURCE_TAG] : tags
+  const allTags = origin === 'SG hawker' || origin === 'SG cafe'
+    ? [...tags, SG_SOURCE_TAG]
+    : CUISINE_ORIGINS.includes(origin) ? [...tags, origin.toLowerCase(), CUISINE_SOURCE_TAG] : tags
   return { id, name, brandOrOrigin: origin, per100g: { kcal, proteinG, carbsG, fatG }, servingG, servingLabel, tags: allTags }
 }
 
@@ -276,7 +289,216 @@ const BRANDED: FoodRecord[] = [
   f('marigold_hl_milk', 'Marigold HL milk', 'branded', 44, 3.5, 5, 1.2, 250, '1 glass', ['milk', 'dairy', 'drink']),
 ]
 
-export const FOODS: FoodRecord[] = [...SG_HAWKER, ...SG_CAFE, ...GENERIC, ...BRANDED]
+const INDIAN: FoodRecord[] = [
+  f('butter_chicken', 'Butter chicken', 'Indian', 150, 11, 5, 9.5, 300, '1 portion', ['chicken', 'dinner', 'curry', 'high protein']),
+  f('chicken_tikka_masala', 'Chicken tikka masala', 'Indian', 145, 11.5, 5.5, 8.8, 300, '1 portion', ['chicken', 'dinner', 'curry', 'high protein']),
+  f('tandoori_chicken', 'Tandoori chicken', 'Indian', 165, 25, 2, 6.5, 180, '2 pieces', ['chicken', 'high protein', 'lean', 'dinner']),
+  f('chicken_curry_indian', 'Chicken curry (home style)', 'Indian', 130, 12, 4, 7, 300, '1 bowl', ['chicken', 'curry', 'dinner', 'high protein']),
+  f('rogan_josh', 'Rogan josh (lamb)', 'Indian', 165, 13, 4, 11, 300, '1 portion', ['lamb', 'curry', 'dinner']),
+  f('chicken_korma', 'Chicken korma', 'Indian', 160, 11, 7, 10, 300, '1 portion', ['chicken', 'curry', 'dinner']),
+  f('kadai_chicken', 'Kadai chicken', 'Indian', 135, 13, 5, 7, 300, '1 portion', ['chicken', 'curry', 'high protein']),
+  f('fish_curry_indian', 'Fish curry', 'Indian', 110, 12, 3.5, 5.5, 280, '1 bowl', ['fish', 'curry', 'high protein', 'lean']),
+  f('egg_curry_indian', 'Egg curry', 'Indian', 130, 8.5, 4, 9, 280, '1 bowl', ['egg', 'curry', 'protein']),
+  f('seekh_kebab', 'Seekh kebab (mutton)', 'Indian', 215, 18, 3, 14.5, 150, '2 skewers', ['lamb', 'high protein', 'snack']),
+  f('dal_tadka', 'Dal tadka', 'Indian', 110, 5.5, 13, 4, 250, '1 bowl', ['lentils', 'vegetarian', 'fibre', 'protein']),
+  f('dal_makhani', 'Dal makhani', 'Indian', 145, 6, 14, 7.5, 250, '1 bowl', ['lentils', 'vegetarian', 'fibre']),
+  f('chana_masala', 'Chana masala', 'Indian', 130, 6, 17, 4.5, 250, '1 bowl', ['chickpeas', 'vegetarian', 'fibre', 'protein']),
+  f('rajma', 'Rajma (kidney bean curry)', 'Indian', 120, 6, 17, 3.5, 250, '1 bowl', ['vegetarian', 'fibre', 'protein']),
+  f('sambar', 'Sambar', 'Indian', 65, 3.2, 9, 2, 250, '1 bowl', ['lentils', 'vegetarian', 'light', 'fibre']),
+  f('rasam', 'Rasam', 'Indian', 35, 1.5, 5, 1, 200, '1 bowl', ['vegetarian', 'light', 'soup']),
+  f('palak_paneer', 'Palak paneer', 'Indian', 150, 8, 6, 11, 250, '1 portion', ['paneer', 'vegetarian', 'protein']),
+  f('paneer_tikka', 'Paneer tikka', 'Indian', 230, 16, 6, 16, 150, '1 portion', ['paneer', 'vegetarian', 'high protein']),
+  f('matar_paneer', 'Matar paneer', 'Indian', 145, 8, 9, 9, 250, '1 portion', ['paneer', 'vegetarian', 'protein']),
+  f('aloo_gobi', 'Aloo gobi', 'Indian', 95, 3, 12, 4.5, 200, '1 portion', ['vegetarian', 'vegetables', 'side']),
+  f('baingan_bharta', 'Baingan bharta', 'Indian', 90, 2.2, 8, 6, 200, '1 portion', ['vegetarian', 'vegetables', 'side']),
+  f('chapati', 'Chapati / roti', 'Indian', 300, 9, 49, 7.5, 45, '1 chapati', ['carbs', 'side', 'bread']),
+  f('naan_plain', 'Naan, plain', 'Indian', 310, 9, 52, 7, 90, '1 naan', ['carbs', 'side', 'bread']),
+  f('butter_naan', 'Butter naan', 'Indian', 345, 8.5, 50, 12, 95, '1 naan', ['carbs', 'side', 'bread']),
+  f('aloo_paratha', 'Aloo paratha', 'Indian', 265, 6, 36, 10.5, 120, '1 paratha', ['carbs', 'breakfast', 'vegetarian']),
+  f('idli', 'Idli', 'Indian', 135, 4.5, 28, 0.6, 120, '3 pieces', ['breakfast', 'light', 'vegetarian', 'carbs']),
+  f('uttapam', 'Uttapam', 'Indian', 175, 5, 29, 4.5, 150, '1 piece', ['breakfast', 'vegetarian', 'carbs']),
+  f('medu_vada', 'Medu vada', 'Indian', 300, 7, 32, 16, 80, '2 pieces', ['breakfast', 'fried', 'vegetarian', 'snack']),
+  f('upma', 'Upma', 'Indian', 155, 4, 24, 5, 200, '1 bowl', ['breakfast', 'vegetarian', 'carbs']),
+  f('poha', 'Poha', 'Indian', 140, 3, 24, 4, 200, '1 bowl', ['breakfast', 'vegetarian', 'light', 'carbs']),
+  f('mutton_biryani', 'Mutton biryani', 'Indian', 185, 8.5, 22, 7, 400, '1 plate', ['rice', 'lamb', 'lunch', 'dinner']),
+  f('veg_pulao', 'Vegetable pulao', 'Indian', 160, 3.5, 26, 5, 300, '1 plate', ['rice', 'vegetarian', 'lunch', 'carbs']),
+  f('jeera_rice', 'Jeera rice', 'Indian', 175, 3.4, 30, 4.6, 200, '1 portion', ['rice', 'side', 'carbs']),
+  f('curd_rice', 'Curd rice', 'Indian', 110, 3.5, 17, 3, 250, '1 bowl', ['rice', 'dairy', 'light']),
+  f('raita', 'Raita', 'Indian', 55, 3, 5, 2.5, 150, '1 small bowl', ['dairy', 'side', 'light']),
+  f('samosa', 'Samosa', 'Indian', 290, 5, 32, 15.5, 60, '1 piece', ['snack', 'fried', 'vegetarian']),
+  f('pakora', 'Pakora', 'Indian', 315, 6.5, 30, 18.5, 80, '1 portion', ['snack', 'fried', 'vegetarian']),
+  f('papadum', 'Papadum', 'Indian', 370, 20, 45, 12, 15, '2 pieces', ['side', 'snack']),
+  f('mango_lassi', 'Mango lassi', 'Indian', 95, 2.5, 17, 1.8, 300, '1 glass', ['drink', 'sweet', 'dairy']),
+  f('sweet_lassi', 'Sweet lassi', 'Indian', 85, 2.8, 14, 1.8, 300, '1 glass', ['drink', 'sweet', 'dairy']),
+  f('salted_lassi', 'Salted lassi (chaas)', 'Indian', 45, 2.8, 4, 1.6, 300, '1 glass', ['drink', 'dairy', 'light']),
+  f('masala_chai', 'Masala chai (with sugar)', 'Indian', 60, 1.6, 9.5, 1.8, 180, '1 cup', ['drink', 'tea', 'sweet']),
+  f('filter_coffee_indian', 'South Indian filter coffee', 'Indian', 70, 2, 10, 2.4, 120, '1 cup', ['drink', 'coffee', 'sweet']),
+  f('gulab_jamun', 'Gulab jamun', 'Indian', 330, 4, 50, 13, 80, '2 pieces', ['sweet', 'dessert']),
+  f('kheer', 'Kheer (rice pudding)', 'Indian', 145, 3.5, 22, 4.8, 150, '1 bowl', ['sweet', 'dessert', 'dairy']),
+  f('jalebi', 'Jalebi', 'Indian', 390, 2, 70, 11, 60, '1 portion', ['sweet', 'dessert', 'fried']),
+]
+
+const WESTERN: FoodRecord[] = [
+  f('roast_chicken_dinner', 'Roast chicken with vegetables', 'Western', 135, 16, 8, 4.5, 400, '1 plate', ['chicken', 'dinner', 'high protein']),
+  f('steak_and_chips', 'Steak and chips', 'Western', 210, 15, 17, 9.5, 400, '1 plate', ['beef', 'dinner', 'high protein']),
+  f('spaghetti_bolognese', 'Spaghetti bolognese', 'Western', 135, 7.5, 17, 4.2, 400, '1 plate', ['pasta', 'dinner', 'protein']),
+  f('carbonara', 'Spaghetti carbonara', 'Western', 195, 8.5, 21, 8.5, 350, '1 plate', ['pasta', 'dinner']),
+  f('lasagna', 'Lasagna', 'Western', 150, 8.5, 13, 7.2, 350, '1 portion', ['pasta', 'dinner', 'protein']),
+  f('mac_and_cheese', 'Macaroni and cheese', 'Western', 185, 7.5, 20, 8.5, 300, '1 portion', ['pasta', 'dinner']),
+  f('chicken_parmigiana', 'Chicken parmigiana', 'Western', 195, 17, 12, 9, 320, '1 portion', ['chicken', 'dinner', 'high protein']),
+  f('shepherds_pie', 'Shepherd\u2019s pie', 'Western', 125, 7.5, 12, 5, 350, '1 portion', ['beef', 'dinner', 'protein']),
+  f('chili_con_carne', 'Chili con carne', 'Western', 115, 9, 9, 4.5, 300, '1 bowl', ['beef', 'dinner', 'protein', 'fibre']),
+  f('beef_stew', 'Beef stew', 'Western', 105, 9.5, 7, 4, 350, '1 bowl', ['beef', 'dinner', 'protein']),
+  f('pork_chop_western', 'Pork chop, grilled', 'Western', 200, 26, 0, 10.5, 180, '1 chop', ['pork', 'high protein', 'dinner']),
+  f('bangers_and_mash', 'Bangers and mash', 'Western', 175, 7.5, 17, 8.5, 350, '1 plate', ['pork', 'dinner']),
+  f('roast_beef_slices', 'Roast beef, sliced', 'Western', 160, 26, 0, 6, 120, '1 portion', ['beef', 'high protein', 'lean']),
+  f('caesar_salad', 'Caesar salad with chicken', 'Western', 135, 10, 5, 8.5, 300, '1 bowl', ['salad', 'protein', 'lunch']),
+  f('greek_salad', 'Greek salad', 'Western', 110, 3.5, 5, 8.5, 300, '1 bowl', ['salad', 'vegetarian', 'lunch']),
+  f('club_sandwich', 'Club sandwich', 'Western', 230, 12, 22, 11, 250, '1 sandwich', ['sandwich', 'lunch', 'protein']),
+  f('blt_sandwich', 'BLT sandwich', 'Western', 245, 9, 24, 12.5, 220, '1 sandwich', ['sandwich', 'lunch']),
+  f('tuna_mayo_sandwich', 'Tuna mayo sandwich', 'Western', 215, 11, 24, 8.5, 220, '1 sandwich', ['sandwich', 'lunch', 'protein']),
+  f('chicken_wrap', 'Grilled chicken wrap', 'Western', 185, 13, 20, 6.5, 280, '1 wrap', ['wrap', 'lunch', 'protein']),
+  f('burrito_chicken', 'Chicken burrito', 'Western', 175, 10, 21, 5.8, 400, '1 burrito', ['lunch', 'protein', 'carbs']),
+  f('quesadilla', 'Cheese quesadilla', 'Western', 265, 11, 25, 13.5, 200, '1 quesadilla', ['lunch', 'cheese']),
+  f('beef_tacos', 'Beef tacos', 'Western', 200, 11, 19, 9.5, 250, '2 tacos', ['lunch', 'protein']),
+  f('nachos_loaded', 'Loaded nachos', 'Western', 290, 9, 28, 16, 250, '1 portion', ['snack', 'sharing', 'cheese']),
+  f('full_english', 'Full English breakfast', 'Western', 200, 12, 10, 13, 450, '1 plate', ['breakfast', 'protein', 'fried']),
+  f('scrambled_eggs_toast', 'Scrambled eggs on toast', 'Western', 185, 9.5, 15, 9.5, 250, '1 plate', ['breakfast', 'egg', 'protein']),
+  f('omelette_cheese', 'Cheese omelette', 'Western', 185, 13, 1.5, 14.5, 180, '1 omelette', ['breakfast', 'egg', 'high protein']),
+  f('pancakes_syrup', 'Pancakes with syrup', 'Western', 265, 5, 45, 7.5, 220, '1 stack', ['breakfast', 'sweet']),
+  f('french_toast', 'French toast', 'Western', 230, 7, 29, 9.5, 200, '1 serve', ['breakfast', 'sweet']),
+  f('waffle_plain', 'Waffle, plain', 'Western', 290, 7, 33, 14, 120, '1 waffle', ['breakfast', 'sweet']),
+  f('bagel_cream_cheese', 'Bagel with cream cheese', 'Western', 280, 10, 41, 8.5, 150, '1 bagel', ['breakfast', 'carbs']),
+  f('tomato_soup', 'Tomato soup', 'Western', 45, 1.3, 7, 1.5, 300, '1 bowl', ['soup', 'light', 'vegetarian']),
+  f('chicken_noodle_soup', 'Chicken noodle soup', 'Western', 45, 3.2, 5.5, 1.2, 350, '1 bowl', ['soup', 'light', 'protein']),
+  f('minestrone', 'Minestrone', 'Western', 48, 2, 8, 1.1, 350, '1 bowl', ['soup', 'light', 'vegetarian', 'fibre']),
+  f('mushroom_risotto', 'Mushroom risotto', 'Western', 150, 4, 22, 5, 350, '1 plate', ['rice', 'dinner', 'vegetarian']),
+  f('paella', 'Paella', 'Western', 145, 9, 19, 4, 400, '1 plate', ['rice', 'dinner', 'protein']),
+  f('gnocchi_tomato', 'Gnocchi with tomato sauce', 'Western', 145, 4.5, 25, 3.2, 350, '1 plate', ['pasta', 'dinner', 'vegetarian']),
+  f('hot_dog', 'Hot dog', 'Western', 245, 10, 20, 14, 150, '1 hot dog', ['snack', 'fast food']),
+  f('garlic_bread', 'Garlic bread', 'Western', 350, 8, 42, 17, 80, '2 slices', ['side', 'carbs']),
+  f('apple_pie', 'Apple pie', 'Western', 265, 2.4, 37, 12, 120, '1 slice', ['sweet', 'dessert']),
+  f('cheesecake', 'Cheesecake', 'Western', 320, 5.5, 26, 22, 110, '1 slice', ['sweet', 'dessert', 'dairy']),
+  f('brownie', 'Chocolate brownie', 'Western', 420, 5, 50, 23, 70, '1 piece', ['sweet', 'dessert']),
+  f('tiramisu', 'Tiramisu', 'Western', 285, 4.5, 28, 17, 110, '1 portion', ['sweet', 'dessert', 'dairy']),
+]
+
+const CHINESE: FoodRecord[] = [
+  f('kung_pao_chicken', 'Kung pao chicken', 'Chinese', 165, 13, 8, 9.5, 280, '1 portion', ['chicken', 'dinner', 'high protein']),
+  f('sweet_sour_pork', 'Sweet and sour pork', 'Chinese', 210, 10, 22, 9.5, 280, '1 portion', ['pork', 'dinner']),
+  f('mapo_tofu', 'Mapo tofu', 'Chinese', 135, 8.5, 5, 9, 250, '1 portion', ['tofu', 'protein', 'dinner']),
+  f('twice_cooked_pork', 'Twice-cooked pork', 'Chinese', 245, 12, 6, 19, 250, '1 portion', ['pork', 'dinner']),
+  f('beef_broccoli', 'Beef and broccoli', 'Chinese', 125, 12, 6, 6, 280, '1 portion', ['beef', 'high protein', 'vegetables']),
+  f('cumin_lamb', 'Cumin lamb', 'Chinese', 215, 17, 5, 14, 250, '1 portion', ['lamb', 'high protein', 'dinner']),
+  f('general_tso_chicken', 'General Tso\u2019s chicken', 'Chinese', 230, 12, 22, 11, 280, '1 portion', ['chicken', 'dinner', 'fried']),
+  f('orange_chicken', 'Orange chicken', 'Chinese', 240, 11, 27, 10.5, 280, '1 portion', ['chicken', 'dinner', 'fried', 'sweet']),
+  f('salt_pepper_squid', 'Salt and pepper squid', 'Chinese', 215, 15, 14, 11, 200, '1 portion', ['seafood', 'protein', 'fried']),
+  f('steamed_fish_ginger', 'Steamed fish, ginger and scallion', 'Chinese', 115, 17, 1.5, 4.5, 250, '1 portion', ['fish', 'high protein', 'lean']),
+  f('hong_shao_rou', 'Braised pork belly (hong shao rou)', 'Chinese', 340, 13, 5, 30, 180, '1 portion', ['pork', 'dinner']),
+  f('lions_head_meatballs', 'Lion\u2019s head meatballs', 'Chinese', 225, 13, 6, 17, 250, '1 portion', ['pork', 'protein']),
+  f('peking_duck_pancakes', 'Peking duck with pancakes', 'Chinese', 225, 14, 18, 11, 200, '2 pancakes', ['duck', 'dinner', 'protein']),
+  f('dan_dan_noodles', 'Dan dan noodles', 'Chinese', 185, 7.5, 22, 7.5, 350, '1 bowl', ['noodles', 'lunch', 'dinner']),
+  f('zhajiangmian', 'Zhajiangmian', 'Chinese', 175, 7, 24, 5.8, 350, '1 bowl', ['noodles', 'lunch', 'dinner']),
+  f('beef_chow_fun', 'Beef chow fun', 'Chinese', 175, 8, 21, 6.5, 350, '1 plate', ['noodles', 'beef', 'dinner']),
+  f('chow_mein_chicken', 'Chicken chow mein', 'Chinese', 165, 8.5, 20, 5.8, 350, '1 plate', ['noodles', 'chicken', 'dinner']),
+  f('lamian_beef_soup', 'Beef lamian (hand-pulled noodle soup)', 'Chinese', 95, 6, 13, 2.2, 500, '1 bowl', ['noodles', 'soup', 'protein']),
+  f('yangzhou_fried_rice', 'Yangzhou fried rice', 'Chinese', 180, 6.5, 25, 6, 350, '1 plate', ['rice', 'lunch', 'dinner']),
+  f('egg_fried_rice', 'Egg fried rice', 'Chinese', 175, 5, 26, 5.5, 300, '1 plate', ['rice', 'egg', 'lunch']),
+  f('congee_plain_chinese', 'Congee, plain', 'Chinese', 45, 1, 9, 0.3, 400, '1 bowl', ['rice', 'breakfast', 'light']),
+  f('jiaozi_pork', 'Pork dumplings (jiaozi), boiled', 'Chinese', 215, 9, 26, 8.5, 150, '6 pieces', ['dumpling', 'lunch', 'protein']),
+  f('potstickers', 'Potstickers (pan-fried)', 'Chinese', 245, 9, 27, 11, 150, '6 pieces', ['dumpling', 'fried', 'lunch']),
+  f('xiaolongbao', 'Xiaolongbao', 'Chinese', 235, 10, 24, 10.5, 130, '6 pieces', ['dumpling', 'dim sum', 'protein']),
+  f('siu_mai', 'Siu mai', 'Chinese', 205, 12, 15, 10.5, 120, '4 pieces', ['dim sum', 'protein']),
+  f('har_gow', 'Har gow (prawn dumpling)', 'Chinese', 150, 8, 21, 3.5, 120, '4 pieces', ['dim sum', 'seafood', 'protein']),
+  f('char_siu_bao', 'Char siu bao', 'Chinese', 245, 8, 38, 6.5, 90, '1 bun', ['dim sum', 'carbs', 'pork']),
+  f('spring_rolls_chinese', 'Spring rolls', 'Chinese', 245, 5, 28, 12.5, 100, '2 rolls', ['snack', 'fried', 'dim sum']),
+  f('wonton_soup_chinese', 'Wonton soup', 'Chinese', 60, 4.5, 6, 2, 400, '1 bowl', ['soup', 'light', 'protein']),
+  f('hot_sour_soup', 'Hot and sour soup', 'Chinese', 50, 3, 6, 1.6, 350, '1 bowl', ['soup', 'light']),
+  f('egg_drop_soup', 'Egg drop soup', 'Chinese', 40, 2.8, 3.5, 1.6, 350, '1 bowl', ['soup', 'light', 'egg']),
+  f('scallion_pancake', 'Scallion pancake', 'Chinese', 320, 6, 36, 17, 100, '1 piece', ['snack', 'fried', 'carbs']),
+  f('mantou', 'Mantou (steamed bun)', 'Chinese', 225, 7, 47, 0.9, 80, '1 bun', ['carbs', 'side']),
+  f('bok_choy_garlic', 'Stir-fried bok choy with garlic', 'Chinese', 55, 2, 4, 3.5, 150, '1 portion', ['vegetables', 'side', 'light', 'vegetarian']),
+  f('gai_lan_oyster', 'Gai lan in oyster sauce', 'Chinese', 60, 2.6, 5, 3.4, 150, '1 portion', ['vegetables', 'side', 'light']),
+  f('eggplant_garlic_sauce', 'Eggplant in garlic sauce', 'Chinese', 115, 1.8, 10, 7.5, 200, '1 portion', ['vegetables', 'vegetarian', 'side']),
+  f('hotpot_mixed', 'Hotpot, mixed (broth, meat, vegetables)', 'Chinese', 95, 9, 4, 4.5, 600, '1 serving', ['dinner', 'sharing', 'protein']),
+]
+
+const MALAY: FoodRecord[] = [
+  f('beef_rendang', 'Beef rendang', 'Malay', 225, 17, 5, 15, 200, '1 portion', ['beef', 'dinner', 'high protein', 'curry']),
+  f('rendang_ayam', 'Chicken rendang', 'Malay', 190, 16, 5, 12, 200, '1 portion', ['chicken', 'dinner', 'high protein', 'curry']),
+  f('ayam_masak_merah', 'Ayam masak merah', 'Malay', 165, 15, 7, 9, 220, '1 portion', ['chicken', 'dinner', 'protein']),
+  f('ayam_percik', 'Ayam percik', 'Malay', 175, 17, 5, 10, 200, '1 portion', ['chicken', 'high protein', 'dinner']),
+  f('daging_masak_kicap', 'Daging masak kicap', 'Malay', 175, 17, 6, 9.5, 200, '1 portion', ['beef', 'high protein', 'dinner']),
+  f('masak_lemak_cili_api', 'Masak lemak cili api', 'Malay', 150, 9, 5, 11, 220, '1 portion', ['curry', 'dinner']),
+  f('ikan_bakar', 'Ikan bakar (grilled fish)', 'Malay', 145, 21, 2, 6, 200, '1 fish', ['fish', 'high protein', 'lean', 'dinner']),
+  f('asam_pedas', 'Asam pedas ikan', 'Malay', 95, 12, 4, 3.5, 300, '1 bowl', ['fish', 'protein', 'lean', 'soup']),
+  f('sambal_udang', 'Sambal udang (prawn sambal)', 'Malay', 130, 15, 5, 5.5, 180, '1 portion', ['seafood', 'high protein', 'spicy']),
+  f('sambal_sotong', 'Sambal sotong (squid sambal)', 'Malay', 135, 14, 6, 6, 180, '1 portion', ['seafood', 'protein', 'spicy']),
+  f('sup_tulang', 'Sup tulang', 'Malay', 105, 10, 3, 5.5, 350, '1 bowl', ['beef', 'soup', 'protein']),
+  f('sayur_lodeh', 'Sayur lodeh', 'Malay', 85, 2.5, 7, 5.5, 250, '1 bowl', ['vegetables', 'vegetarian', 'side']),
+  f('kerabu_taugeh', 'Kerabu taugeh (bean sprout salad)', 'Malay', 55, 3, 5, 2.6, 150, '1 portion', ['vegetables', 'light', 'side', 'vegetarian']),
+  f('tahu_goreng_malay', 'Tahu goreng with peanut sauce', 'Malay', 195, 10, 10, 13, 180, '1 portion', ['tofu', 'vegetarian', 'protein', 'fried']),
+  f('begedil', 'Begedil (potato cutlet)', 'Malay', 230, 5, 24, 12.5, 60, '2 pieces', ['side', 'fried', 'snack']),
+  f('serunding', 'Serunding (meat floss)', 'Malay', 380, 32, 15, 22, 30, '1 portion', ['beef', 'high protein', 'side']),
+  f('achar', 'Achar (pickled vegetables)', 'Malay', 95, 1.5, 10, 5.5, 80, '1 portion', ['vegetables', 'side', 'light']),
+  f('kuah_kacang', 'Kuah kacang (peanut sauce)', 'Malay', 265, 8, 15, 19, 50, '1 portion', ['side', 'sauce']),
+  f('ketupat', 'Ketupat', 'Malay', 130, 2.5, 29, 0.3, 120, '2 pieces', ['rice', 'carbs', 'side']),
+  f('lemang', 'Lemang', 'Malay', 200, 3, 32, 7, 120, '1 portion', ['rice', 'carbs', 'side']),
+  f('nasi_kerabu', 'Nasi kerabu', 'Malay', 150, 7, 23, 3.5, 350, '1 plate', ['rice', 'lunch', 'dinner']),
+  f('nasi_dagang', 'Nasi dagang', 'Malay', 210, 7, 28, 8, 350, '1 plate', ['rice', 'breakfast', 'lunch']),
+  f('nasi_ambeng', 'Nasi ambeng', 'Malay', 195, 8.5, 26, 6.5, 400, '1 portion', ['rice', 'lunch', 'sharing']),
+  f('roti_jala', 'Roti jala', 'Malay', 180, 5, 26, 6, 100, '1 portion', ['carbs', 'side']),
+  f('murtabak_mutton', 'Murtabak, mutton', 'Malay', 255, 11, 26, 12, 250, '1 portion', ['lunch', 'dinner', 'protein']),
+  f('kueh_lapis', 'Kueh lapis', 'Malay', 330, 3, 48, 14, 60, '1 slice', ['sweet', 'dessert']),
+  f('seri_muka', 'Seri muka', 'Malay', 245, 3.5, 38, 9, 60, '1 piece', ['sweet', 'dessert']),
+  f('kuih_ketayap', 'Kuih ketayap', 'Malay', 215, 3, 32, 8.5, 60, '2 pieces', ['sweet', 'dessert']),
+  f('bubur_cha_cha', 'Bubur cha cha', 'Malay', 105, 1.2, 17, 3.8, 250, '1 bowl', ['sweet', 'dessert']),
+  f('air_bandung', 'Air bandung', 'Malay', 80, 1.2, 16, 1.4, 300, '1 glass', ['drink', 'sweet', 'milk']),
+  f('teh_halia', 'Teh halia', 'Malay', 75, 1.6, 13, 1.8, 200, '1 cup', ['drink', 'tea', 'sweet']),
+  f('cincau_drink', 'Cincau (grass jelly drink)', 'Malay', 45, 0.2, 11, 0.1, 300, '1 glass', ['drink', 'sweet']),
+]
+
+const INDONESIAN: FoodRecord[] = [
+  f('nasi_goreng', 'Nasi goreng', 'Indonesian', 175, 6, 25, 5.8, 350, '1 plate', ['rice', 'lunch', 'dinner']),
+  f('nasi_uduk', 'Nasi uduk', 'Indonesian', 185, 3.5, 28, 6.5, 300, '1 plate', ['rice', 'breakfast', 'carbs']),
+  f('nasi_kuning', 'Nasi kuning', 'Indonesian', 180, 3.5, 28, 6, 300, '1 plate', ['rice', 'breakfast', 'carbs']),
+  f('nasi_campur_id', 'Nasi campur', 'Indonesian', 170, 8, 22, 5.8, 400, '1 plate', ['rice', 'lunch', 'protein']),
+  f('gado_gado', 'Gado-gado', 'Indonesian', 135, 6, 11, 8, 300, '1 plate', ['vegetarian', 'salad', 'protein', 'lunch']),
+  f('karedok', 'Karedok', 'Indonesian', 120, 5, 9, 7.5, 250, '1 plate', ['vegetarian', 'salad', 'light']),
+  f('urap', 'Urap (coconut vegetable salad)', 'Indonesian', 95, 3, 7, 6, 180, '1 portion', ['vegetables', 'vegetarian', 'side']),
+  f('rujak', 'Rujak (fruit salad with sauce)', 'Indonesian', 85, 1.2, 19, 0.6, 250, '1 portion', ['fruit', 'snack', 'sweet']),
+  f('soto_ayam_id', 'Soto ayam', 'Indonesian', 55, 5, 3.5, 2.4, 400, '1 bowl', ['chicken', 'soup', 'light', 'protein']),
+  f('soto_betawi', 'Soto betawi', 'Indonesian', 110, 7.5, 4, 7.5, 400, '1 bowl', ['beef', 'soup', 'protein']),
+  f('rawon', 'Rawon', 'Indonesian', 105, 9, 4, 6, 400, '1 bowl', ['beef', 'soup', 'protein']),
+  f('bakso', 'Bakso (meatball soup)', 'Indonesian', 70, 5.5, 6, 2.6, 400, '1 bowl', ['soup', 'protein', 'lunch']),
+  f('mie_ayam', 'Mie ayam', 'Indonesian', 165, 8, 22, 5, 350, '1 bowl', ['noodles', 'chicken', 'lunch']),
+  f('kwetiau_goreng', 'Kwetiau goreng', 'Indonesian', 180, 7, 24, 6.2, 350, '1 plate', ['noodles', 'lunch', 'dinner']),
+  f('bubur_ayam', 'Bubur ayam', 'Indonesian', 65, 3.5, 10, 1.4, 400, '1 bowl', ['rice', 'breakfast', 'light', 'protein']),
+  f('ayam_bakar', 'Ayam bakar', 'Indonesian', 180, 20, 4, 9.5, 200, '1 portion', ['chicken', 'high protein', 'dinner']),
+  f('ayam_goreng_lengkuas', 'Ayam goreng lengkuas', 'Indonesian', 245, 21, 5, 16, 180, '1 portion', ['chicken', 'fried', 'high protein']),
+  f('opor_ayam', 'Opor ayam', 'Indonesian', 165, 14, 4, 11, 250, '1 portion', ['chicken', 'curry', 'protein']),
+  f('semur_daging', 'Semur daging', 'Indonesian', 160, 15, 6, 9, 220, '1 portion', ['beef', 'high protein', 'dinner']),
+  f('gudeg', 'Gudeg', 'Indonesian', 125, 3.5, 14, 6.5, 250, '1 portion', ['vegetarian', 'sweet', 'dinner']),
+  f('pecel_lele', 'Pecel lele (fried catfish)', 'Indonesian', 195, 18, 4, 12, 200, '1 portion', ['fish', 'fried', 'high protein']),
+  f('sate_kambing', 'Sate kambing (mutton satay)', 'Indonesian', 215, 19, 4, 14, 150, '5 sticks', ['lamb', 'high protein', 'snack']),
+  f('sate_padang', 'Sate padang', 'Indonesian', 180, 15, 8, 10, 180, '1 portion', ['beef', 'protein', 'snack']),
+  f('tempe_goreng', 'Tempe goreng', 'Indonesian', 270, 17, 12, 18, 80, '3 pieces', ['tempeh', 'vegetarian', 'high protein', 'fried']),
+  f('tahu_isi', 'Tahu isi', 'Indonesian', 240, 8, 20, 14.5, 80, '2 pieces', ['tofu', 'vegetarian', 'fried', 'snack']),
+  f('perkedel', 'Perkedel', 'Indonesian', 235, 5, 24, 13, 60, '2 pieces', ['side', 'fried', 'snack']),
+  f('bakwan', 'Bakwan (vegetable fritter)', 'Indonesian', 265, 4, 27, 15.5, 60, '2 pieces', ['snack', 'fried', 'vegetarian']),
+  f('lumpia_semarang', 'Lumpia semarang', 'Indonesian', 230, 7, 26, 11, 100, '2 rolls', ['snack', 'fried']),
+  f('sambal_terasi', 'Sambal terasi', 'Indonesian', 90, 3, 8, 5, 30, '1 tablespoon', ['sauce', 'side', 'spicy']),
+  f('sambal_matah', 'Sambal matah', 'Indonesian', 165, 1.5, 6, 15, 30, '1 tablespoon', ['sauce', 'side', 'spicy']),
+  f('martabak_manis', 'Martabak manis', 'Indonesian', 360, 7, 45, 17, 120, '1 slice', ['sweet', 'dessert', 'snack']),
+  f('martabak_telur', 'Martabak telur', 'Indonesian', 265, 10, 22, 15, 150, '1 portion', ['snack', 'egg', 'fried']),
+  f('pisang_goreng', 'Pisang goreng', 'Indonesian', 225, 2, 33, 9.5, 100, '2 pieces', ['snack', 'fried', 'sweet', 'fruit']),
+  f('es_teler', 'Es teler', 'Indonesian', 110, 1.2, 19, 3.4, 300, '1 bowl', ['sweet', 'dessert', 'drink']),
+]
+
+export const FOODS: FoodRecord[] = [
+  ...SG_HAWKER, ...SG_CAFE, ...GENERIC, ...BRANDED,
+  ...INDIAN, ...WESTERN, ...CHINESE, ...MALAY, ...INDONESIAN,
+]
 
 export const FOOD_BY_ID: Record<string, FoodRecord> = Object.fromEntries(FOODS.map(x => [x.id, x]))
 
