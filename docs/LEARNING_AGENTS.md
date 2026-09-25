@@ -9,6 +9,30 @@ Status legend: **planned** (in the PRD, not built), **built** (merged, with file
 
 ---
 
+## Phase notes
+
+### Phase 1: prompt as sections (built)
+**Teaches:** prompt composition, and golden tests for prompts.
+**Read, in order:** `src/engine/__tests__/coachPrompt.test.ts` (golden files in `__golden__/`), then
+`src/engine/coachPrompt.ts` (`PromptSection`, `SECTION_ORDER`, `assembleCoachPrompt`), then
+`buildCoachSystemPrompt` in `src/engine/coach.ts`, which is now three lines.
+**The idea:** a prompt is code. Split it into pure functions, and pin the output with a golden file
+so a refactor can't change a word by accident. Frameworks call these "prompt templates". Here they
+are plain functions you can unit test.
+**Try:** change one word in `rulesSection`, run `npx vitest run coachPrompt` and read the diff.
+
+### Phase 2: safety screen before the model (built)
+**Teaches:** input guardrails, and keeping sensitive text away from the model.
+**Read, in order:** `src/engine/__tests__/chatSafety.test.ts` (the trigger and false-positive
+tables), then `src/engine/chatSafety.ts`, then `toModelTurns` and `tagSafety` in
+`src/features/coach/chat.ts`, then the first lines of `send()` in `src/screens/Coach.tsx` and
+`submit()` in `src/features/composer/Composer.tsx`.
+**The idea:** the cheapest, most reliable guardrail is code that runs before any model. It is
+deterministic, works offline and can't be talked out of its job. Frameworks offer "input rails"
+(NeMo Guardrails) or moderation APIs; a regex table with tests is the simple version. The screened
+text is replaced in history, so later model calls never see it.
+**Try:** add a phrase to `MUST_NOT_TRIGGER` that you think is a false positive, and see whether it passes.
+
 ## 1. Agents: tool calling, planning, reasoning, memory
 
 **The idea.** An agent is a loop: a model reads the conversation, then either answers or asks to

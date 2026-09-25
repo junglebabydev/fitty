@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { baselineContext, firstSentence, isLongReply, proposalsLabel, readSource, tagSource } from '../chat'
+import { REDACTED_SAFETY_TURN } from '../../../engine'
+import { baselineContext, firstSentence, isLongReply, latestSafetyKind, proposalsLabel, readSafety, readSource, tagSafety, tagSource, toModelTurns } from '../chat'
 
 describe('reply source tag', () => {
   const evidence = [1, 2, 3, 4].map((n) => ({ label: `L${n}`, value: `${n}` }))
@@ -44,5 +45,35 @@ describe('baselineContext', () => {
     expect(baselineContext({ summary: '  ' })).toBeUndefined()
     expect(baselineContext({ summary: 'Training twice a week.', watchouts: ['Left knee', 7, ''] })).toBe('Training twice a week. Watch-outs: Left knee.')
     expect(baselineContext({ summary: 'Training twice a week.' })).toBe('Training twice a week.')
+  })
+})
+
+describe('safety tag and redaction', () => {
+  const msg = (role: 'user' | 'coach', content: string, evidence: { label: string; value: string }[] = []) => ({ role, content, evidence })
+
+  it('is hidden from chips, survives the three-chip cut and reads back', () => {
+    const stored = tagSafety('self_harm')
+    expect(readSafety(stored)).toBe('self_harm')
+    expect(readSource(stored)).toEqual({ source: 'local', evidence: [] })
+    const retagged = tagSource([...stored, ...[1, 2, 3, 4].map((n) => ({ label: `L${n}`, value: `${n}` }))], 'ai')
+    expect(readSafety(retagged)).toBe('self_harm')
+    expect(readSource(retagged).evidence).toHaveLength(3)
+  })
+
+  it('replaces a screened user message in model turns, and nothing else', () => {
+    const turns = toModelTurns([
+      msg('user', 'what should I eat'),
+      msg('coach', 'Protein first.'),
+      msg('user', 'I want to hurt myself'),
+      msg('coach', 'fixed reply', tagSafety('self_harm')),
+      msg('user', 'ok thanks'),
+    ])
+    expect(turns.map((t) => t.content)).toEqual(['what should I eat', 'Protein first.', REDACTED_SAFETY_TURN, 'fixed reply', 'ok thanks'])
+    expect(JSON.stringify(turns)).not.toMatch(/hurt myself/)
+  })
+
+  it('finds the latest safety kind', () => {
+    expect(latestSafetyKind([msg('coach', 'a'), msg('coach', 'b', tagSafety('disordered_eating')), msg('coach', 'c')])).toBe('disordered_eating')
+    expect(latestSafetyKind([msg('coach', 'a')])).toBeNull()
   })
 })

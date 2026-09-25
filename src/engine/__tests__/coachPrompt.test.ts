@@ -59,3 +59,15 @@ describe('coach prompt sections', () => {
     expect(s.lastIndexOf('HEALTH REPORTS')).toBeGreaterThan(s.indexOf('PROPOSAL:'))
   })
 })
+
+describe('safety note section', () => {
+  it('appears right after the rules only when a recent message was screened', () => {
+    const facts = seedFacts()
+    const base = { facts, profileSummary: 'p', priority: computeDailyPriority(facts) }
+    expect(assembleCoachPrompt({ ...base, extras: {} })).not.toMatch(/SAFETY NOTE/)
+    const s = assembleCoachPrompt({ ...base, extras: { safetyKind: 'medical_emergency' } })
+    expect(s).toMatch(/SAFETY NOTE: .*possible emergency symptoms/)
+    expect(s.indexOf('SAFETY NOTE')).toBeGreaterThan(s.indexOf('RULES'))
+    expect(s.indexOf('SAFETY NOTE')).toBeLessThan(s.indexOf('PROFILE'))
+  })
+})

@@ -2,13 +2,17 @@
 // context that returns its lines, or null to leave itself out. The assembler joins sections with one blank line.
 // Order is a contract: guardrails first, variable-length context (reports) last, because the Worker cuts the
 // prompt from the end (MAX_SYSTEM_CHARS).
+import { safetyNoteLine, type SafetyKind } from './chatSafety'
 import type { CoachFacts, CoachPriority } from './coach'
 import { VALENCE_WORDS } from './mind'
 import { regionLabel } from './symptomGate'
 import { dayName, fmtDuration } from '../lib/util'
 
-/** Optional extra context: the onboarding baseline and one line per shared health report (only when the user opted in). */
-export interface CoachPromptExtras { baseline?: string; reports?: string[] }
+/**
+ * Optional extra context: the onboarding baseline, one line per shared health report (only when the user opted in),
+ * and the kind of a recent safety screen hit (never its text).
+ */
+export interface CoachPromptExtras { baseline?: string; reports?: string[]; safetyKind?: SafetyKind }
 
 export interface PromptContext {
   facts: CoachFacts
@@ -50,6 +54,9 @@ export const rulesSection: PromptSection = () => [
   '- Mood and stress are context, not findings. Never diagnose, never name a condition, never score how the user feels. When mood is low or stress is high, be warm and plain: suggest a short breathing session in Mind or talking to someone they trust. Never cancel or block training on mood alone. The journal is private and is not part of your context; do not ask to see it.',
   '- Metric units. Keep answers short (under 120 words) unless asked for detail. Plain text only: no markdown, no headings, no bullet lists. No emoji.',
 ]
+
+/** Present only while a recent message was screened by L1 (docs/PRD_COACH_CHAT.md §5.4). */
+export const safetyNoteSection: PromptSection = ({ extras }) => (extras.safetyKind ? [safetyNoteLine(extras.safetyKind)] : null)
 
 export const profileSection: PromptSection = (ctx) => [`PROFILE: ${ctx.profileSummary}`]
 
@@ -100,6 +107,7 @@ export const reportsSection: PromptSection = ({ extras }) => {
 export const SECTION_ORDER: PromptSection[] = [
   identitySection,
   rulesSection,
+  safetyNoteSection,
   profileSection,
   factsSection,
   prioritySection,
