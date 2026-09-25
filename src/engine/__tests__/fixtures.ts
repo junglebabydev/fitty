@@ -1,4 +1,8 @@
 // Shared fixtures for engine tests. Not a test file.
+import { addDays } from '../../lib/util'
+import type { CoachFacts } from '../coach'
+import { computeReadiness } from '../readiness'
+import { evaluateSymptomGate } from '../symptomGate'
 import type { DailyCheckIn, Exercise, ExerciseSet, RedFlags, Region, SafetyTag, SymptomCheck, WorkoutSession, NutritionTarget } from '../../domain/types'
 
 export const TODAY = '2026-09-10' // Thursday
@@ -91,3 +95,32 @@ export function session(templateKey: string, scheduledDate: string, status: Work
 }
 
 export const TARGET: NutritionTarget = { id: 1, startDate: '2026-08-01', endDate: null, kcal: 2050, proteinG: 150, carbsG: 190, fatG: 65, rationale: 'seed' }
+
+/** The PRD seed scenario as coach facts: AMBER readiness (short sleep, mild knee), upper-body session planned, only coffee so far. */
+export function seedFacts(over: Partial<CoachFacts> = {}): CoachFacts {
+  const symptoms = [sym('knee_left', 2)]
+  const readiness = computeReadiness({ sleepLastNightMin: 370, sleepAvg7Min: 425, symptoms, checkIn: checkIn({ soreness: 2 }), sessionsLast7: 2 })
+  const planned = session('upper_a', TODAY, 'planned')
+  return {
+    today: TODAY,
+    hourNow: 12,
+    readiness,
+    gate: evaluateSymptomGate(symptoms),
+    plannedToday: planned,
+    sessionsThisWeek: [session('upper_a', WEEK_START, 'completed'), planned, session('full_b', addDays(WEEK_START, 4)), session('conditioning_bike', addDays(WEEK_START, 5))],
+    weekTier: 'target',
+    intakeToday: { kcal: 5, proteinG: 0, carbsG: 1, fatG: 0 },
+    target: TARGET,
+    proteinPaceExpected: 45,
+    savedMealNames: ['Chicken rice, no skin, extra cucumber', 'Fish soup with rice', 'Greek yogurt, whey & berries'],
+    recentHighProteinFoods: ['Chicken breast', 'Greek yogurt'],
+    weight: { latest: 84.0, avg7: 84.2, prevAvg7: 84.6, goal: 74 },
+    sleepLastNightMin: 370,
+    sleepAvg7Min: 425,
+    missedThisWeek: 0,
+    nutritionTrend: null,
+    stalls: [],
+    loggedMealDaysLast7: 5,
+    ...over,
+  }
+}

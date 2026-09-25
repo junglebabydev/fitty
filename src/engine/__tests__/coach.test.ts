@@ -4,37 +4,9 @@ import { answerLocally, buildCoachSystemPrompt, computeDailyPriority, generatePr
 import { evaluateNutritionTrend } from '../nutrition'
 import { computeReadiness } from '../readiness'
 import { evaluateSymptomGate } from '../symptomGate'
-import { TARGET, TODAY, WEEK_START, checkIn, session, sym } from './fixtures'
+import { TARGET, TODAY, WEEK_START, checkIn, seedFacts, session, sym } from './fixtures'
 
 const GUILT = /\b(lazy|shame|shameful|fail|failed|failure|guilt|guilty|pathetic|excuse)\b/i
-
-function seedFacts(over: Partial<CoachFacts> = {}): CoachFacts {
-  const symptoms = [sym('knee_left', 2)]
-  const readiness = computeReadiness({ sleepLastNightMin: 370, sleepAvg7Min: 425, symptoms, checkIn: checkIn({ soreness: 2 }), sessionsLast7: 2 })
-  const planned = session('upper_a', TODAY, 'planned')
-  return {
-    today: TODAY,
-    hourNow: 12,
-    readiness,
-    gate: evaluateSymptomGate(symptoms),
-    plannedToday: planned,
-    sessionsThisWeek: [session('upper_a', WEEK_START, 'completed'), planned, session('full_b', addDays(WEEK_START, 4)), session('conditioning_bike', addDays(WEEK_START, 5))],
-    weekTier: 'target',
-    intakeToday: { kcal: 5, proteinG: 0, carbsG: 1, fatG: 0 },
-    target: TARGET,
-    proteinPaceExpected: 45,
-    savedMealNames: ['Chicken rice, no skin, extra cucumber', 'Fish soup with rice', 'Greek yogurt, whey & berries'],
-    recentHighProteinFoods: ['Chicken breast', 'Greek yogurt'],
-    weight: { latest: 84.0, avg7: 84.2, prevAvg7: 84.6, goal: 74 },
-    sleepLastNightMin: 370,
-    sleepAvg7Min: 425,
-    missedThisWeek: 0,
-    nutritionTrend: null,
-    stalls: [],
-    loggedMealDaysLast7: 5,
-    ...over,
-  }
-}
 
 describe('computeDailyPriority (PRD §13)', () => {
   it('seed scenario: upper-body session, low-impact conditioning, high-protein lunch, evidence sleep + knee + protein', () => {
