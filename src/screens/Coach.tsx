@@ -19,7 +19,7 @@ import {
   getNutritionTarget, getPendingDecisions, getProfile, getSession, getSetting, getSleepRecords,
 } from '../db/repositories'
 import {
-  ageAt, answerLocally, buildCoachSystemPrompt, computeDailyPriority, checkReply, moodSummary, regionLabel, screenMessage, weeklyReview,
+  ageAt, answerLocally, buildAgentPrompt, computeDailyPriority, checkReply, routeDeterministic, moodSummary, regionLabel, screenMessage, weeklyReview,
   type CoachFacts, type CoachPriority, type CoachPromptExtras,
 } from '../engine'
 import { aiConnected, coachChat, isAIError } from '../ai'
@@ -32,7 +32,8 @@ import {
   acceptDecision, decisionKindLabel, extractProposalLine, isReversible, numberOr, rejectDecision, revertDecision, syncProposals,
 } from '../features/coach/apply'
 import {
-  baselineContext, firstSentence, isLongReply, latestSafetyKind, proposalsLabel, readSafety, readSource, tagSafety, tagSource, toModelTurns,
+  baselineContext, firstSentence, isLongReply, latestAgent, latestSafetyKind, proposalsLabel, readSafety, readSource, tagAgent, tagSafety, tagSource,
+  toModelTurns,
 } from '../features/coach/chat'
 import { SupportSheet } from '../features/mind/SupportSheet'
 
@@ -506,14 +507,16 @@ export default function CoachScreen() {
     setThinking(true)
     try {
       const recent = getMessages(SAFETY_LOOKBACK)
-      const system = buildCoachSystemPrompt(f, summaryRef.current, promptExtras(recent))
+      // Pick the specialist (docs/PRD_COACH_CHAT.md §11.2). Undecided goes to the generalist coach.
+      const agent = routeDeterministic(q, latestAgent(recent)).agent ?? 'coach'
+      const system = buildAgentPrompt(agent, { facts: f, profileSummary: summaryRef.current, priority: computeDailyPriority(f), extras: promptExtras(recent) })
       const turns = toModelTurns(getMessages(MAX_TURNS + 1)).slice(-MAX_TURNS)
       // L3 reply check (docs/PRD_COACH_CHAT.md §7): a rejected reply is never shown and never becomes a proposal.
       const checked = checkReply(await coachChat(system, turns), system)
       if (!checked.ok) { replyLocally('AI reply withheld. Answered from your data.'); return }
       const reply = checked.text
       const evidence = computeDailyPriority(f).evidence
-      addMessage({ ts: nowIso(), role: 'coach', content: reply, evidence: tagSource(evidence, 'ai') })
+      addMessage({ ts: nowIso(), role: 'coach', content: reply, evidence: tagSource(tagAgent(evidence, agent), 'ai') })
       const proposal = extractProposalLine(reply)
       if (proposal) {
         // A suggestion only: it becomes a pending proposal the user can Accept or keep current.

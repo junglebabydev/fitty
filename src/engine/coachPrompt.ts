@@ -60,26 +60,41 @@ export const safetyNoteSection: PromptSection = ({ extras }) => (extras.safetyKi
 
 export const profileSection: PromptSection = (ctx) => [`PROFILE: ${ctx.profileSummary}`]
 
-export const factsSection: PromptSection = ({ facts: f }) => {
+/** One named line per fact, so agents can take a slice (docs/PRD_COACH_CHAT.md §11.1). */
+export type FactKey = 'date' | 'readiness' | 'gate' | 'session' | 'week' | 'intake' | 'meals' | 'weight' | 'sleep' | 'logging' | 'trend' | 'stalls' | 'mind'
+
+/** Order matters: it is the order of the FACTS block. */
+export const FACT_KEYS: FactKey[] = ['date', 'readiness', 'gate', 'session', 'week', 'intake', 'meals', 'weight', 'sleep', 'logging', 'trend', 'stalls', 'mind']
+
+export function factLines(f: CoachFacts): Partial<Record<FactKey, string>> {
   const week = f.sessionsThisWeek.map((s) => `${dayName(s.scheduledDate)} ${s.name} [${s.status}]`).join('; ') || 'none planned'
   const trend = f.nutritionTrend
-  return [
-    'FACTS (from the local database)',
-    `- Date/time: ${f.today} ${String(f.hourNow).padStart(2, '0')}:00`,
-    `- Readiness: ${f.readiness.state} — ${f.readiness.reasons.join('; ')}`,
-    `- Symptom gate: ${f.gate.overall}${f.gate.regions.length ? ' — ' + f.gate.regions.map((r) => `${regionLabel(r.region)} ${r.level} (pain ${r.painScore}/10${r.redFlags.length ? ', ' + r.redFlags.join(', ') : ''})`).join('; ') : ''}${f.gate.avoidTags.length ? `; avoid: ${f.gate.avoidTags.join(', ')}` : ''}`,
-    `- Today's session: ${f.plannedToday ? `${f.plannedToday.name} [${f.plannedToday.status}]` : 'none'}`,
-    `- This week (${f.weekTier} tier): ${week}; missed: ${f.missedThisWeek}`,
-    `- Intake today: ${fmtN(f.intakeToday.kcal)} / ${fmtN(f.target.kcal)} kcal, protein ${Math.round(f.intakeToday.proteinG)} / ${f.target.proteinG} g (expected ~${Math.round(f.proteinPaceExpected)} g by now)`,
-    `- Saved meals: ${f.savedMealNames.join('; ') || 'none'}; recent high-protein foods: ${f.recentHighProteinFoods.join(', ') || 'none'}`,
-    `- Weight: ${f.weight.latest != null ? `${f.weight.latest.toFixed(1)} kg` : 'unknown'}, 7-day avg ${f.weight.avg7 != null ? f.weight.avg7.toFixed(1) : '—'} kg (prev ${f.weight.prevAvg7 != null ? f.weight.prevAvg7.toFixed(1) : '—'} kg), goal ${f.weight.goal ?? '—'} kg`,
-    `- Sleep: ${f.sleepLastNightMin != null ? fmtDuration(f.sleepLastNightMin) : 'unknown'} last night, 7-day avg ${f.sleepAvg7Min != null ? fmtDuration(f.sleepAvg7Min) : '—'}`,
-    `- Meal logging: ${f.loggedMealDaysLast7} of the last 7 days`,
-    `- Nutrition trend: ${trend ? trend.flags.map((x) => `${x.kind}: ${x.message}`).join(' | ') || 'no flags' : 'not evaluated'}${trend?.proposal ? ` | pending proposal: ${trend.proposal.summary}` : ''}`,
-    `- Stalls: ${f.stalls.map((s) => s.exerciseName).join(', ') || 'none'}`,
-    ...(f.mind ? [mindFactLine(f.mind)] : []),
-  ]
+  return {
+    date: `- Date/time: ${f.today} ${String(f.hourNow).padStart(2, '0')}:00`,
+    readiness: `- Readiness: ${f.readiness.state} — ${f.readiness.reasons.join('; ')}`,
+    gate: `- Symptom gate: ${f.gate.overall}${f.gate.regions.length ? ' — ' + f.gate.regions.map((r) => `${regionLabel(r.region)} ${r.level} (pain ${r.painScore}/10${r.redFlags.length ? ', ' + r.redFlags.join(', ') : ''})`).join('; ') : ''}${f.gate.avoidTags.length ? `; avoid: ${f.gate.avoidTags.join(', ')}` : ''}`,
+    session: `- Today's session: ${f.plannedToday ? `${f.plannedToday.name} [${f.plannedToday.status}]` : 'none'}`,
+    week: `- This week (${f.weekTier} tier): ${week}; missed: ${f.missedThisWeek}`,
+    intake: `- Intake today: ${fmtN(f.intakeToday.kcal)} / ${fmtN(f.target.kcal)} kcal, protein ${Math.round(f.intakeToday.proteinG)} / ${f.target.proteinG} g (expected ~${Math.round(f.proteinPaceExpected)} g by now)`,
+    meals: `- Saved meals: ${f.savedMealNames.join('; ') || 'none'}; recent high-protein foods: ${f.recentHighProteinFoods.join(', ') || 'none'}`,
+    weight: `- Weight: ${f.weight.latest != null ? `${f.weight.latest.toFixed(1)} kg` : 'unknown'}, 7-day avg ${f.weight.avg7 != null ? f.weight.avg7.toFixed(1) : '—'} kg (prev ${f.weight.prevAvg7 != null ? f.weight.prevAvg7.toFixed(1) : '—'} kg), goal ${f.weight.goal ?? '—'} kg`,
+    sleep: `- Sleep: ${f.sleepLastNightMin != null ? fmtDuration(f.sleepLastNightMin) : 'unknown'} last night, 7-day avg ${f.sleepAvg7Min != null ? fmtDuration(f.sleepAvg7Min) : '—'}`,
+    logging: `- Meal logging: ${f.loggedMealDaysLast7} of the last 7 days`,
+    trend: `- Nutrition trend: ${trend ? trend.flags.map((x) => `${x.kind}: ${x.message}`).join(' | ') || 'no flags' : 'not evaluated'}${trend?.proposal ? ` | pending proposal: ${trend.proposal.summary}` : ''}`,
+    stalls: `- Stalls: ${f.stalls.map((s) => s.exerciseName).join(', ') || 'none'}`,
+    ...(f.mind ? { mind: mindFactLine(f.mind) } : {}),
+  }
 }
+
+/** The FACTS block with only these keys (in FACT_KEYS order). */
+export function factsSectionFor(keys: FactKey[]): PromptSection {
+  return ({ facts }) => {
+    const lines = factLines(facts)
+    return ['FACTS (from the local database)', ...FACT_KEYS.filter((k) => keys.includes(k) && lines[k]).map((k) => lines[k] as string)]
+  }
+}
+
+export const factsSection: PromptSection = factsSectionFor(FACT_KEYS)
 
 export const prioritySection: PromptSection = ({ priority }) => [
   "TODAY'S COMPUTED PRIORITY (from the rules engine — reinforce it, do not contradict it)",

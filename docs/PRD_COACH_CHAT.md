@@ -363,7 +363,10 @@ The user sees **one voice, "Coach"**, as in Fitbit's coach. The agent id is stor
 
 1. **L1 safety screen** (§5). A hit never reaches routing.
 2. **Deterministic rules**:
-   - a body region (`parseRegion`) or a pain word → `symptoms`, whatever comes later
+   - a strong pain word ("hurts", "pain", "tweaked", "numb") → `symptoms`, whatever comes later; a
+     weak one ("sore", "stiff", "tight") → `symptoms` only next to a body region (`parseRegion`).
+     *(Changed while building: `parseRegion` alone matches "back squat", "shoulder press" and "hip
+     thrust", so a region on its own does not force `symptoms`.)*
    - a single clear keyword domain (the regexes in `answerLocally`) → that agent, no LLM call
    - a short follow-up ("and tomorrow?", "why?") → the previous message's `_agent`
 3. **Decision-model classifier (Jev, §11.6)**: one call with only the current message (after L1

@@ -2,7 +2,7 @@
 // and the extra context handed to the system prompt. No database access here.
 import type { ChatTurn } from '../../ai'
 import type { CoachDecision, CoachMessage, Evidence } from '../../domain/types'
-import { REDACTED_SAFETY_TURN, isSafetyKind, type SafetyKind } from '../../engine'
+import { REDACTED_SAFETY_TURN, isAgentId, isSafetyKind, type AgentId, type SafetyKind } from '../../engine'
 
 /** Who wrote a coach reply. Stored as one reserved evidence entry so the message schema stays unchanged. */
 export type ReplySource = 'ai' | 'local'
@@ -10,16 +10,32 @@ export const SOURCE_LABEL = '_source'
 export const MAX_EVIDENCE = 3
 /** Marks a fixed safety reply (L1, docs/PRD_COACH_CHAT.md §5). Hidden like the source tag. */
 export const SAFETY_LABEL = '_safety'
-const RESERVED = new Set([SOURCE_LABEL, SAFETY_LABEL])
+/** Which specialist agent answered (docs/PRD_COACH_CHAT.md §11.1). Hidden; keeps follow-ups with the same agent. */
+export const AGENT_LABEL = '_agent'
+const RESERVED = new Set([SOURCE_LABEL, SAFETY_LABEL, AGENT_LABEL])
 const visible = (evidence: Evidence[]) => evidence.filter((e) => !RESERVED.has(e.label))
 
 export function tagSource(evidence: Evidence[], source: ReplySource): Evidence[] {
-  const safety = evidence.filter((e) => e.label === SAFETY_LABEL)
-  return [...visible(evidence).slice(0, MAX_EVIDENCE), ...safety, { label: SOURCE_LABEL, value: source }]
+  const kept = evidence.filter((e) => e.label === SAFETY_LABEL || e.label === AGENT_LABEL)
+  return [...visible(evidence).slice(0, MAX_EVIDENCE), ...kept, { label: SOURCE_LABEL, value: source }]
 }
 
 export function tagSafety(kind: SafetyKind): Evidence[] {
   return tagSource([{ label: SAFETY_LABEL, value: kind }], 'local')
+}
+
+export function tagAgent(evidence: Evidence[], agent: AgentId): Evidence[] {
+  return [...evidence.filter((e) => e.label !== AGENT_LABEL), { label: AGENT_LABEL, value: agent }]
+}
+
+/** The agent that wrote the most recent coach reply among these messages, or null. */
+export function latestAgent(messages: Pick<CoachMessage, 'role' | 'evidence'>[]): AgentId | null {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].role !== 'coach') continue
+    const v = messages[i].evidence.find((e) => e.label === AGENT_LABEL)?.value
+    return isAgentId(v) ? v : null
+  }
+  return null
 }
 
 /** The safety kind of a fixed safety reply, or null. */

@@ -48,6 +48,19 @@ which is why Phase 7 (the eval) exists.
 **Try:** ask the coach "how many calories in 3 eggs?". If it answers with a number that isn't in
 your facts, you'll see "AI reply withheld".
 
+### Phase 4: specialist agents and keyword routing (built)
+**Teaches:** multi-agent routing without a framework.
+**Read, in order:** `src/engine/__tests__/coachAgents.test.ts` (the routing table), then
+`src/engine/coachAgents.ts` (`agentSections`, `routeDeterministic`), then `factLines` and
+`factsSectionFor` in `src/engine/coachPrompt.ts`, then the three routing lines in `send()` in
+`src/screens/Coach.tsx`.
+**The idea:** an "agent" here is just a different prompt: the same guardrails, a FOCUS line, and
+a slice of the facts. The router is a function that returns an agent id. Rules go first because
+they're free and testable; only undecided messages will need a model (Phase 5). In LangGraph, this
+function is a conditional edge, and each agent is a node.
+**Try:** type "back squat or leg press?" and then "my back hurts". Watch the FOCUS line change in
+the request body (DevTools → Network → `/api/ai/chat`).
+
 ## 1. Agents: tool calling, planning, reasoning, memory
 
 **The idea.** An agent is a loop: a model reads the conversation, then either answers or asks to

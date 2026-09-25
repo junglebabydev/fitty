@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { REDACTED_SAFETY_TURN } from '../../../engine'
-import { baselineContext, firstSentence, isLongReply, latestSafetyKind, proposalsLabel, readSafety, readSource, tagSafety, tagSource, toModelTurns } from '../chat'
+import { baselineContext, firstSentence, isLongReply, latestAgent, latestSafetyKind, proposalsLabel, readSafety, readSource, tagAgent, tagSafety, tagSource, toModelTurns } from '../chat'
 
 describe('reply source tag', () => {
   const evidence = [1, 2, 3, 4].map((n) => ({ label: `L${n}`, value: `${n}` }))
@@ -75,5 +75,20 @@ describe('safety tag and redaction', () => {
   it('finds the latest safety kind', () => {
     expect(latestSafetyKind([msg('coach', 'a'), msg('coach', 'b', tagSafety('disordered_eating')), msg('coach', 'c')])).toBe('disordered_eating')
     expect(latestSafetyKind([msg('coach', 'a')])).toBeNull()
+  })
+})
+
+describe('agent tag', () => {
+  it('is hidden, survives source tagging and is read from the latest coach reply', () => {
+    const stored = tagSource(tagAgent([{ label: 'Sleep', value: '6h' }], 'recovery'), 'ai')
+    expect(readSource(stored)).toEqual({ source: 'ai', evidence: [{ label: 'Sleep', value: '6h' }] })
+    const msgs = [
+      { role: 'coach' as const, evidence: tagAgent([], 'training') },
+      { role: 'user' as const, evidence: [] },
+      { role: 'coach' as const, evidence: stored },
+      { role: 'user' as const, evidence: [] },
+    ]
+    expect(latestAgent(msgs)).toBe('recovery')
+    expect(latestAgent([{ role: 'coach', evidence: [] }])).toBeNull()
   })
 })
