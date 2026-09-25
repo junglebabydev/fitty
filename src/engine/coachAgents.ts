@@ -113,3 +113,17 @@ export const DECISION_MIN_CONFIDENCE = 0.6
 export function agentFromDecision(d: { choice: string; confidence: number }): AgentId {
   return isAgentId(d.choice) && d.confidence >= DECISION_MIN_CONFIDENCE ? d.choice : 'coach'
 }
+
+// --- tools (§12.1) --------------------------------------------------------------------------------------------
+
+export type ToolName = 'get_sleep' | 'get_training' | 'get_exercise_history' | 'get_nutrition' | 'search_library'
+
+/** Read-only tools each agent may call. The conservative agents (symptoms, mind) get none. */
+export const AGENT_TOOLS: Record<AgentId, readonly ToolName[]> = {
+  coach: ['get_sleep', 'get_training', 'get_nutrition'],
+  training: ['get_training', 'get_exercise_history', 'search_library'],
+  nutrition: ['get_nutrition', 'search_library'],
+  recovery: ['get_sleep'],
+  symptoms: [],
+  mind: [],
+}

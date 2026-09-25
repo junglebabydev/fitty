@@ -207,10 +207,15 @@ async function handleAi(request: Request, env: Env, path: string, ctx?: Ctx): Pr
     const body = parseBody(await readTextCapped(request.body, request.headers.get('content-length')))
 
     if (path === '/chat') {
-      const { reply, up, durationMs } = await run(env, ctx, chat(parseChatRequest(body), env))
+      const req = parseChatRequest(body)
+      // Tool calling is OpenRouter only; refused before any budget is spent so the app retries without tools.
+      if ((req.tools || req.turns.some((t) => t.role === 'tool' || t.toolCalls)) && pickProvider(env) !== 'openrouter') {
+        throw new BridgeError('bad_request', 'Tools need the OpenRouter upstream.', 400)
+      }
+      const { reply, up, durationMs } = await run(env, ctx, chat(req, env))
       // Which tier served the call and how long it took, never the content (docs/PRD_COACH_CHAT.md §11.5).
       if (reply.tier) console.log(`chat tier=${reply.tier} ms=${durationMs}`)
-      return send(200, { ok: true, text: reply.text, meta: { durationMs, costUsd: null, model: reply.model ?? up.model, provider: up.provider, tier: reply.tier ?? null } })
+      return send(200, { ok: true, text: reply.text, ...(reply.toolCalls ? { toolCalls: reply.toolCalls } : {}), meta: { durationMs, costUsd: null, model: reply.model ?? up.model, provider: up.provider, tier: reply.tier ?? null } })
     }
 
     if (path === '/decide') {

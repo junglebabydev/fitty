@@ -6,7 +6,7 @@
 // not retain or train on prompts. This is a health app; override with COACH_OPENROUTER_DATA_COLLECTION=allow.
 import {
   BridgeError, CHAT_MAX_TOKENS, JSON_MAX_TOKENS, schemaInstruction,
-  type Attachment, type ChatRequest, type DecideRequest, type DecideResult, type JsonRequest, type ProviderReply,
+  type Attachment, type ChatRequest, type DecideRequest, type DecideResult, type JsonRequest, type ProviderReply, type ToolCall,
 } from './guard'
 
 export const DEFAULT_OPENROUTER_MODEL = 'google/gemini-3.8-flash'
@@ -52,7 +52,8 @@ type Part =
   | { type: 'image_url'; image_url: { url: string } }
   | { type: 'file'; file: { filename: string; file_data: string } }
 
-interface Message { role: 'system' | 'user' | 'assistant'; content: string | Part[] }
+interface OpenAIToolCall { id: string; type: 'function'; function: { name: string; arguments: string } }
+interface Message { role: 'system' | 'user' | 'assistant' | 'tool'; content: string | Part[] | null; tool_calls?: OpenAIToolCall[]; tool_call_id?: string }
 
 export interface OpenRouterRequest {
   model: string
@@ -61,6 +62,8 @@ export interface OpenRouterRequest {
   provider: { data_collection: 'allow' | 'deny' }
   /** OpenRouter service tier. Flex: half price, best effort, never falls back to standard on its own. */
   service_tier?: 'flex'
+  tools?: { type: 'function'; function: { name: string; description: string; parameters: Record<string, unknown> } }[]
+  tool_choice?: 'none'
   response_format?: { type: 'json_schema'; json_schema: { name: string; strict: boolean; schema: Record<string, unknown> } } | { type: 'json_object' }
 }
 
@@ -81,9 +84,16 @@ export function buildChatRequest(req: ChatRequest, model: string, policy: 'allow
   const messages: Message[] = [{ role: 'system', content: req.system }]
   req.turns.forEach((t, i) => {
     const last = i === req.turns.length - 1
-    messages.push({ role: t.role, content: last && t.role === 'user' ? userContent(t.content, req.attachments) : t.content })
+    if (t.role === 'tool') messages.push({ role: 'tool', tool_call_id: t.toolCallId, content: t.content })
+    else if (t.toolCalls?.length) {
+      messages.push({ role: 'assistant', content: t.content || null, tool_calls: t.toolCalls.map((c) => ({ id: c.id, type: 'function', function: { name: c.name, arguments: c.arguments } })) })
+    } else messages.push({ role: t.role, content: last && t.role === 'user' ? userContent(t.content, req.attachments) : t.content })
   })
-  return { model, messages, max_tokens: CHAT_MAX_TOKENS, provider: { data_collection: policy } }
+  const tools = req.tools?.map((t) => ({ type: 'function' as const, function: { name: t.name, description: t.description, parameters: t.parameters } }))
+  return {
+    model, messages, max_tokens: CHAT_MAX_TOKENS, provider: { data_collection: policy },
+    ...(tools?.length ? { tools, ...(req.toolChoice ? { tool_choice: req.toolChoice } : {}) } : {}),
+  }
 }
 
 /** `withSchema` false = plain JSON mode with the schema written into the prompt (fallback for models that reject json_schema). */
@@ -108,6 +118,19 @@ function contentText(content: unknown): string {
   return ''
 }
 
+/** OpenAI-style tool calls from a reply message; anything malformed is dropped. */
+function readToolCalls(raw: unknown): ToolCall[] {
+  if (!Array.isArray(raw)) return []
+  return raw.flatMap((c) => {
+    const call = asRecord(c)
+    const fn = asRecord(call?.function)
+    const id = typeof call?.id === 'string' ? call.id : ''
+    const name = typeof fn?.name === 'string' ? fn.name : ''
+    if (!id || !name) return []
+    return [{ id, name, arguments: typeof fn?.arguments === 'string' ? fn.arguments : '{}' }]
+  })
+}
+
 export function parseOpenRouterResponse(body: unknown, opts: { partialOk?: boolean } = {}): ProviderReply {
   const root = asRecord(body)
   // OpenRouter can answer HTTP 200 with an error object when the upstream provider failed mid-request.
@@ -119,6 +142,8 @@ export function parseOpenRouterResponse(body: unknown, opts: { partialOk?: boole
   const finish = typeof choice?.finish_reason === 'string' ? choice.finish_reason : ''
   const model = typeof root?.model === 'string' ? (root.model as string) : null
   if (finish === 'content_filter' || typeof message?.refusal === 'string') throw new BridgeError('refusal', 'The AI declined to answer this request.', 422)
+  const toolCalls = readToolCalls(message?.tool_calls)
+  if (toolCalls.length) return { text, model, toolCalls }
   if (finish === 'length' && !(opts.partialOk && text)) throw new BridgeError('failed', 'The AI reply was cut off before it finished. Try again with less input.', 502)
   if (finish === 'error') throw new BridgeError('failed', 'The AI provider failed part-way through. Try again.', 502)
   if (!text) throw new BridgeError('failed', 'The AI returned an empty reply. Try again.', 502)

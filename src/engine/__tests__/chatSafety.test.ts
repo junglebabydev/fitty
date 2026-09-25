@@ -123,6 +123,12 @@ describe('checkReply (L3)', () => {
     expect(checkReply('## Plan\n- **Protein first** 💪\n1. Walk after dinner', RECEIVED)).toEqual({ ok: true, text: 'Plan\nProtein first\nWalk after dinner' })
   })
 
+  it('a number from a tool result counts as received (PRD §12.2)', () => {
+    const tool = '{"averageOnLoggedDays":{"kcal":1840,"proteinG":118}}'
+    expect(checkReply('You averaged 1,840 kcal and 118 g protein on logged days.', RECEIVED).ok).toBe(false)
+    expect(checkReply('You averaged 1,840 kcal and 118 g protein on logged days.', [RECEIVED, tool].join('\n')).ok).toBe(true)
+  })
+
   it('keeps a PROPOSAL line intact after cleanup', () => {
     const r = checkReply('Reasoning here.\n**PROPOSAL:** Swap leg press for hip thrust.', RECEIVED)
     expect(r.ok && r.text.endsWith('PROPOSAL: Swap leg press for hip thrust.')).toBe(true)

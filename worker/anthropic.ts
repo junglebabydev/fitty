@@ -27,7 +27,7 @@ function fileBlocks(attachments: Attachment[]): Anthropic.ContentBlockParam[] {
  * `fallback` is the plain request for a model that rejects an optional parameter with a 400.
  */
 export function buildChatParams(req: ChatRequest, model: string): { preferred: Params; fallback: Params } {
-  const messages: Anthropic.MessageParam[] = req.turns.map((t) => ({ role: t.role, content: t.content }))
+  const messages: Anthropic.MessageParam[] = req.turns.map((t) => ({ role: t.role === 'assistant' ? 'assistant' : 'user', content: t.content }))
   if (req.attachments.length) {
     const last = req.turns[req.turns.length - 1]
     messages[messages.length - 1] = { role: 'user', content: [...fileBlocks(req.attachments), { type: 'text', text: last.content }] }

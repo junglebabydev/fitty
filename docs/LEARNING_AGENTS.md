@@ -82,6 +82,21 @@ waits minutes.
 **Try:** after deploying, run `npx wrangler tail` and send a few messages: you'll see `decide ms=`
 and `chat tier=flex` or `tier=standard` lines.
 
+### Phase 6: tool calling (built)
+**Teaches:** the ReAct loop by hand, read-only tools, RAG in its simplest form.
+**Read, in order:** the `coachChatWithTools` tests in `src/ai/__tests__/gateway.test.ts`, then
+`coachChatWithTools` in `src/ai/gateway.ts` (the loop), then `src/features/coach/tools.ts` (specs,
+summarisers, `runCoachTool`) and its tests, then `AGENT_TOOLS` in `src/engine/coachAgents.ts`, then
+the tool pass-through in `worker/guard.ts` (`parseTools`, `parseChatRequest`) and `worker/openrouter.ts`
+(`buildChatRequest`, `readToolCalls`).
+**The idea:** the model never touches your data. It asks ("get_sleep, days 14"), your code runs
+the query on the phone and returns numbers it computed, and the model writes the answer. The loop
+has a hard cap; on the last call the tools are still declared but `tool_choice: "none"` forces
+text. `search_library` is RAG without embeddings: keyword scoring over a small library, pasted
+back as a tool result. Vercel AI SDK's `maxSteps`, or LangChain's AgentExecutor, is this loop.
+**Try:** after deploying, ask "how did I sleep the last two weeks?" and open the Privacy Ledger:
+two coach calls, the second "with data the coach looked up".
+
 ## 1. Agents: tool calling, planning, reasoning, memory
 
 **The idea.** An agent is a loop: a model reads the conversation, then either answers or asks to
@@ -92,8 +107,8 @@ deciding which tool to call and when it has enough to answer.
 **In this app.**
 | Piece | Where | Status |
 |---|---|---|
-| Specialist agents: a system prompt plus a fact slice | PRD §11.1, `AgentSpec` | planned (Phase 4) |
-| Tool calling loop, max 3 steps, read-only tools | PRD §12, `src/features/coach/tools.ts` | planned (Phase 6) |
+| Specialist agents: a system prompt plus a fact slice | `src/engine/coachAgents.ts` | built (Phase 4) |
+| Tool calling loop, max 3 steps, read-only tools | `coachChatWithTools` in `src/ai/gateway.ts`, `src/features/coach/tools.ts` | built (Phase 6) |
 | Short-term memory: the last N messages | `src/screens/Coach.tsx` (`toTurns`, `MAX_TURNS`) | built |
 | Long-term memory: capped, user-approved | PRD §10 | planned (later) |
 
@@ -137,7 +152,7 @@ embeddings. Choose by how much data you have.
 **In this app.**
 | Piece | Where | Status |
 |---|---|---|
-| RAG-lite: keyword search over the exercise library and food packs | `search_library` tool, PRD §12.1 | planned (Phase 6) |
+| RAG-lite: keyword search over the exercise library and food packs | `searchLibrary` in `src/features/coach/tools.ts` | built (Phase 6) |
 | Structured "retrieval": today's facts from SQLite | `src/features/coach/facts.ts` | built |
 | A small knowledge graph: exercise → pattern → region → avoid tags → substitutes | `src/data`, `src/engine/symptomGate.ts` | built (as plain data) |
 

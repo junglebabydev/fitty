@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { AIError, aiDecide, coachChat, configureAI, getProvider, isOnline, recognizeMeal, AI_TIMEOUT_MS } from '../gateway'
+import { AIError, MAX_TOOL_STEPS, aiDecide, coachChat, coachChatWithTools, configureAI, getProvider, isOnline, recognizeMeal, AI_TIMEOUT_MS } from '../gateway'
 import { MOCK_CHAT_REPLY, MOCK_UNCERTAINTY } from '../mock'
 import type { LedgerInput } from '../gateway'
 
@@ -191,6 +191,55 @@ describe('ai gateway', () => {
       expect(url).toBe('/api/ai/decide')
       expect(JSON.parse(init.body as string)).toEqual(REQ)
       expect(ledger).toEqual([expect.objectContaining({ dataType: 'coach_message', status: 'sent', bytes: REQ.state.length })])
+    })
+  })
+
+  describe('coachChatWithTools', () => {
+    const TOOLS = [{ name: 'get_sleep', description: 'Sleep.', parameters: { type: 'object' } }]
+    const TURNS = [{ role: 'user' as const, content: 'how did I sleep?' }]
+    const toolCall = (id: string) => new Response(JSON.stringify({ ok: true, text: '', toolCalls: [{ id, name: 'get_sleep', arguments: '{"days":7}' }] }), { status: 200 })
+    const text = (t: string) => new Response(JSON.stringify({ ok: true, text: t }), { status: 200 })
+    const bodies = (f: ReturnType<typeof vi.fn>) => f.mock.calls.map((c) => JSON.parse((c as unknown as [string, RequestInit])[1].body as string))
+
+    it('runs tools locally and sends the results back, then returns the answer and the results', async () => {
+      const fetchMock = vi.fn().mockResolvedValueOnce(toolCall('c1')).mockResolvedValueOnce(text('You averaged 6h 40m.'))
+      vi.stubGlobal('fetch', fetchMock)
+      configureAI({ providerId: 'claude-code', bridgeHost: 'cloud', bridgeUpstream: 'openrouter', onLedger })
+      const runTool = vi.fn(() => '{"averageMinutes":400}')
+      const r = await coachChatWithTools('sys', TURNS, TOOLS, runTool)
+      expect(r).toEqual({ text: 'You averaged 6h 40m.', toolResults: ['{"averageMinutes":400}'] })
+      expect(runTool).toHaveBeenCalledWith('get_sleep', '{"days":7}')
+      const second = bodies(fetchMock)[1]
+      expect(second.turns.slice(1)).toEqual([
+        { role: 'assistant', content: '', toolCalls: [{ id: 'c1', name: 'get_sleep', arguments: '{"days":7}' }] },
+        { role: 'tool', toolCallId: 'c1', content: '{"averageMinutes":400}' },
+      ])
+      expect(ledger).toHaveLength(2)
+    })
+
+    it(`stops at ${MAX_TOOL_STEPS} calls: the last one sets toolChoice none, and a 4th tool request never happens`, async () => {
+      const fetchMock = vi.fn()
+        .mockResolvedValueOnce(toolCall('c1')).mockResolvedValueOnce(toolCall('c2')).mockResolvedValueOnce(text('Answer.'))
+      vi.stubGlobal('fetch', fetchMock)
+      configureAI({ providerId: 'claude-code', bridgeHost: 'cloud', bridgeUpstream: 'openrouter', onLedger })
+      const r = await coachChatWithTools('sys', TURNS, TOOLS, () => '{}')
+      expect(r.text).toBe('Answer.')
+      expect(fetchMock).toHaveBeenCalledTimes(MAX_TOOL_STEPS)
+      expect(bodies(fetchMock).map((b) => b.toolChoice ?? null)).toEqual([null, null, 'none'])
+    })
+
+    it('answers without tools when the server refuses them, and uses plain chat where tools are not supported', async () => {
+      const fetchMock = vi.fn()
+        .mockResolvedValueOnce(new Response(JSON.stringify({ ok: false, kind: 'bad_request', message: 'Tools need the OpenRouter upstream.' }), { status: 400 }))
+        .mockResolvedValueOnce(text('Plain answer.'))
+      vi.stubGlobal('fetch', fetchMock)
+      configureAI({ providerId: 'claude-code', bridgeHost: 'cloud', bridgeUpstream: 'gemini', onLedger })
+      expect(await coachChatWithTools('sys', TURNS, TOOLS, () => '{}')).toEqual({ text: 'Plain answer.', toolResults: [] })
+      expect(bodies(fetchMock)[1].tools).toBeUndefined()
+
+      configureAI({ providerId: 'mock', apiKey: '', model: '', onLedger })
+      const r = await coachChatWithTools('sys', TURNS, TOOLS, () => { throw new Error('never called') })
+      expect(r.toolResults).toEqual([])
     })
   })
 })

@@ -4,7 +4,7 @@
 //   'cloud' — the hosted Cloudflare Worker, which holds GEMINI_API_KEY or ANTHROPIC_API_KEY plus COACH_BRIDGE_PIN
 //             as Worker secrets and always needs the PIN
 import { MEAL_RECOGNITION_SCHEMA, MEAL_SYSTEM_PROMPT, parseMealRecognition, stripDataUrl } from './anthropic'
-import { AIError, type AIProvider, type ChatTurn, type DecideRequest, type DecideResult, type JsonRequest, type MealContext, type MealImage, type MealRecognition } from './types'
+import { AIError, type AIProvider, type AgentTurn, type ChatStep, type ChatTurn, type DecideRequest, type DecideResult, type JsonRequest, type ToolCall, type ToolSpec, type MealContext, type MealImage, type MealRecognition } from './types'
 
 export type BridgeHost = 'mac' | 'cloud'
 
@@ -100,6 +100,10 @@ export class BridgeProvider implements AIProvider {
         const reply = (await this.post('/decide', { state: req.state, instructions: req.instructions, options: req.options })) as BridgeReply & Partial<DecideResult>
         return { choice: String(reply.choice ?? ''), confidence: Number(reply.confidence) }
       }
+      this.coachChatStep = async (system, turns, tools, toolChoice) => {
+        const reply = (await this.post('/chat', { system, turns, tools, ...(toolChoice ? { toolChoice } : {}) })) as BridgeReply & { toolCalls?: ToolCall[] }
+        return { text: (reply.text ?? '').trim(), toolCalls: Array.isArray(reply.toolCalls) ? reply.toolCalls : [] }
+      }
     }
   }
 
@@ -107,6 +111,7 @@ export class BridgeProvider implements AIProvider {
 
   /** The Cloudflare Worker only: the Mac bridge has no decision model, so the app routes without one. */
   readonly decide?: (req: DecideRequest) => Promise<DecideResult>
+  readonly coachChatStep?: (system: string, turns: AgentTurn[], tools: ToolSpec[], toolChoice?: 'none') => Promise<ChatStep>
 
   private async post(path: string, body: Record<string, unknown>): Promise<BridgeReply> {
     // The model alias (sonnet | opus | haiku) is a Claude Code setting; the Worker picks its own model.

@@ -467,7 +467,7 @@ return numbers the engine computed, so the model still does no arithmetic (§4.5
 |---|---|---|---|
 | `get_sleep` | `days`: 7, 14 or 30 | Each night's duration, the average, the nights under 5 h 30 m | `coach`, `recovery` |
 | `get_training` | `days`: 7, 14 or 30 | Sessions with status; top set per main lift | `coach`, `training` |
-| `get_exercise_history` | `exercise`: a name from the library | Last 6 sessions of that exercise: top set, RIR, progression status | `training` |
+| `get_exercise_history` | `exercise`: a name from the library | Last 6 sessions of that exercise: top set (load, reps, RIR) and set count. *(Progression status left out while building: it needs the progression engine's full inputs.)* | `training` |
 | `get_nutrition` | `days`: 7, 14 or 30 | Daily kcal and protein against target; days logged | `coach`, `nutrition` |
 | `search_library` | `query`: text, max 80 chars | Up to 5 matches from the exercise library and the food packs (name, key facts) | `training`, `nutrition` |
 
@@ -491,7 +491,7 @@ turns ─▶ Worker /api/ai/chat { system, turns, tools }
             └─ toolCalls ─▶ run locally ─▶ append tool results to turns ─▶ call again
 ```
 
-- **At most 3 model calls per message.** On the 3rd, `tools` is not sent, so the model has to answer.
+- **At most 3 model calls per message.** On the 3rd, the tools stay declared (earlier turns reference them) but `tool_choice` is `none`, so the model has to answer. *(Changed while building: dropping `tools` entirely on the last call can make providers reject the tool turns in the history.)*
 - Tool calls and results live only for this message. They are not stored in `coach_messages`,
   and not sent again on the next message.
 - Each model call counts against the Worker's daily budget, so a tool-heavy message costs 2–3 calls.

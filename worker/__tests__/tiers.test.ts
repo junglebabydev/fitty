@@ -104,3 +104,28 @@ describe('/api/ai/decide route', () => {
     expect(upstream).not.toHaveBeenCalled()
   })
 })
+
+describe('/api/ai/chat with tools', () => {
+  const ORIGIN = 'https://fitty.example.workers.dev'
+  const PIN = 'a-long-enough-pin'
+  const assets = { fetch: vi.fn(async () => new Response('', { status: 200 })) }
+  const upstream = vi.fn<(url: string, init?: RequestInit) => Promise<Response>>()
+  const tool = { name: 'get_sleep', description: 'Sleep.', parameters: { type: 'object' } }
+  const post = (body: unknown) => new Request(`${ORIGIN}/api/ai/chat`, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: ORIGIN, 'x-coach-pin': PIN }, body: JSON.stringify(body) })
+
+  beforeEach(() => { upstream.mockReset(); vi.stubGlobal('fetch', upstream) })
+  afterEach(() => { vi.unstubAllGlobals() })
+
+  it('is refused on non-OpenRouter upstreams before any upstream call, and passes tool calls back on OpenRouter', async () => {
+    vi.resetModules()
+    const worker = (await import('../index')).default
+    const body = { system: 's', turns: [{ role: 'user', content: 'sleep?' }], tools: [tool] }
+    const refused = await worker.fetch(post(body), { ASSETS: assets, COACH_BRIDGE_PIN: PIN, GEMINI_API_KEY: 'g' })
+    expect(refused.status).toBe(400)
+    expect(upstream).not.toHaveBeenCalled()
+
+    upstream.mockResolvedValueOnce(new Response(JSON.stringify({ model: 'm/x', choices: [{ finish_reason: 'tool_calls', message: { content: null, tool_calls: [{ id: 'c1', type: 'function', function: { name: 'get_sleep', arguments: '{"days":7}' } }] } }] }), { status: 200 }))
+    const res = await worker.fetch(post(body), { ASSETS: assets, COACH_BRIDGE_PIN: PIN, OPENROUTER_API_KEY: 'sk-or-test' })
+    expect(await res.json()).toMatchObject({ ok: true, text: '', toolCalls: [{ id: 'c1', name: 'get_sleep', arguments: '{"days":7}' }] })
+  })
+})

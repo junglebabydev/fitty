@@ -19,10 +19,10 @@ import {
   getNutritionTarget, getPendingDecisions, getProfile, getSession, getSetting, getSleepRecords,
 } from '../db/repositories'
 import {
-  AGENT_QUESTION, ageAt, agentFromDecision, answerLocally, buildAgentPrompt, computeDailyPriority, checkReply, routeDeterministic, moodSummary, regionLabel, screenMessage, weeklyReview,
+  AGENT_QUESTION, AGENT_TOOLS, ageAt, agentFromDecision, answerLocally, buildAgentPrompt, computeDailyPriority, checkReply, routeDeterministic, moodSummary, regionLabel, screenMessage, weeklyReview,
   type CoachFacts, type CoachPriority, type CoachPromptExtras,
 } from '../engine'
-import { aiConnected, aiDecide, coachChat, isAIError } from '../ai'
+import { aiConnected, aiDecide, coachChatWithTools, isAIError } from '../ai'
 import { useAIStatus } from '../features/ai/config'
 import { COMPOSER_CLEARANCE, Composer } from '../features/composer'
 import { reportContextLines } from '../features/reports'
@@ -36,6 +36,7 @@ import {
   toModelTurns,
 } from '../features/coach/chat'
 import { SupportSheet } from '../features/mind/SupportSheet'
+import { TOOL_SPECS, runCoachTool } from '../features/coach/tools'
 
 const MAX_TURNS = 12
 /** A safety screen hit in this many recent messages keeps the prompt's safety note on. */
@@ -516,8 +517,11 @@ export default function CoachScreen() {
       }
       const system = buildAgentPrompt(agent, { facts: f, profileSummary: summaryRef.current, priority: computeDailyPriority(f), extras: promptExtras(recent) })
       const turns = toModelTurns(getMessages(MAX_TURNS + 1)).slice(-MAX_TURNS)
+      // Read-only tools let the agent look up more data (§12); tool results count as facts it was given.
+      const allowed = AGENT_TOOLS[agent]
+      const { text, toolResults } = await coachChatWithTools(system, turns, allowed.map((n) => TOOL_SPECS[n]), (name, args) => runCoachTool(name, args, f.today, allowed))
       // L3 reply check (docs/PRD_COACH_CHAT.md §7): a rejected reply is never shown and never becomes a proposal.
-      const checked = checkReply(await coachChat(system, turns), system)
+      const checked = checkReply(text, [system, ...toolResults].join('\n'))
       if (!checked.ok) { replyLocally('AI reply withheld. Answered from your data.'); return }
       const reply = checked.text
       const evidence = computeDailyPriority(f).evidence
