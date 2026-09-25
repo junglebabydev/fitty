@@ -33,6 +33,21 @@ deterministic, works offline and can't be talked out of its job. Frameworks offe
 text is replaced in history, so later model calls never see it.
 **Try:** add a phrase to `MUST_NOT_TRIGGER` that you think is a false positive, and see whether it passes.
 
+### Phase 3: reply check after the model (built)
+**Teaches:** output guardrails, and grounding numbers.
+**Read, in order:** the `checkReply (L3)` tests in `src/engine/__tests__/chatSafety.test.ts` (the
+must-pass and must-reject tables), then `checkReply` in `src/engine/chatSafety.ts`, then the
+lines after `coachChat` in `send()` in `src/screens/Coach.tsx`.
+**The idea:** don't trust the model's output. Clean up what's harmless (markdown, emoji), reject
+what's unsafe (doses, diagnoses, shaming), and check every calorie or protein number against what
+the model was actually given, so it can't make figures up. Rejected replies fall back to the
+deterministic answer. In frameworks this is an "output parser" or "output rail".
+**Also learned while building:** the Phase 2 safety note first said "do not push training or diet
+targets", and the model then refused ordinary questions. Prompt wording changes behaviour a lot,
+which is why Phase 7 (the eval) exists.
+**Try:** ask the coach "how many calories in 3 eggs?". If it answers with a number that isn't in
+your facts, you'll see "AI reply withheld".
+
 ## 1. Agents: tool calling, planning, reasoning, memory
 
 **The idea.** An agent is a loop: a model reads the conversation, then either answers or asks to

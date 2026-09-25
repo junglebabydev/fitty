@@ -213,9 +213,12 @@ After a hit:
 1. **History redaction.** In the history sent to any model, the triggering user message is
    replaced with `[The user raised a safety concern. The app showed support resources.]`.
    The raw text never leaves the device.
-2. **`safetyNote` section.** If an `_safety` reply is in the last 20 messages, the prompt gets:
-   "The user recently raised a <kind> concern. Be gentle. Do not push training or diet targets this
-   conversation. Offer the Support sheet again if it comes up."
+2. **`safetyNote` section.** If an `_safety` reply is in the last 10 messages, the prompt says the
+   user raised a <kind> concern earlier, to answer the current question normally and kindly, not to
+   bring it up again unless they do, plus one kind-specific line (e.g. disordered eating: never
+   suggest eating below target). *(Changed while building: the first wording, "do not push training
+   or diet targets", made the model refuse ordinary food and training questions for the whole
+   conversation.)*
 3. `answerLocally` is not called for the triggering message.
 
 ## 6. L2 — prompt content (new, Phase 4)
@@ -268,7 +271,7 @@ Runs in `send()` **before** `extractProposalLine`.
 | Markdown (`#`, `**`, list bullets, code fences) or emoji | **Clean up:** strip and continue |
 | Shaming words: its own narrow list (`lazy`, `pathetic`, `shameful`, `no excuse`, `you failed`). Not the test `GUILT` regex: that one matches "train to failure" and "no guilt about the coffee" | Reject |
 | Dose pattern: a number followed by mg, mcg, µg, IU or ml, next to a drug or supplement word | Reject |
-| Diagnosis phrases: "you have (a\|an)? <condition word>", "sounds like <condition word>", "diagnos" (a condition word is required: "sounds like a good plan" passes) | Reject |
+| Diagnosis phrases: "you (probably) have (a\|an)? <condition word>", "sounds like <condition word>", "classic <condition word>" (a condition word is required: "sounds like a good plan" passes). Bare "diagnos" was dropped while building: it rejected "I cannot diagnose that" | Reject |
 | Invented numbers: any `N kcal` or `N g protein` in the reply that isn't in the FACTS or PRIORITY text | Reject |
 | Empty after cleanup | Reject |
 

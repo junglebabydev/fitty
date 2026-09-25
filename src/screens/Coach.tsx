@@ -19,7 +19,7 @@ import {
   getNutritionTarget, getPendingDecisions, getProfile, getSession, getSetting, getSleepRecords,
 } from '../db/repositories'
 import {
-  ageAt, answerLocally, buildCoachSystemPrompt, computeDailyPriority, moodSummary, regionLabel, screenMessage, weeklyReview,
+  ageAt, answerLocally, buildCoachSystemPrompt, computeDailyPriority, checkReply, moodSummary, regionLabel, screenMessage, weeklyReview,
   type CoachFacts, type CoachPriority, type CoachPromptExtras,
 } from '../engine'
 import { aiConnected, coachChat, isAIError } from '../ai'
@@ -38,7 +38,7 @@ import { SupportSheet } from '../features/mind/SupportSheet'
 
 const MAX_TURNS = 12
 /** A safety screen hit in this many recent messages keeps the prompt's safety note on. */
-const SAFETY_LOOKBACK = 20
+const SAFETY_LOOKBACK = 10
 /** Messages shown on the root before "Earlier messages". */
 const RECENT_MESSAGES = 3
 /** At most four suggested prompts (DESIGN §10.1). */
@@ -508,9 +508,12 @@ export default function CoachScreen() {
       const recent = getMessages(SAFETY_LOOKBACK)
       const system = buildCoachSystemPrompt(f, summaryRef.current, promptExtras(recent))
       const turns = toModelTurns(getMessages(MAX_TURNS + 1)).slice(-MAX_TURNS)
-      const reply = (await coachChat(system, turns)).trim()
+      // L3 reply check (docs/PRD_COACH_CHAT.md §7): a rejected reply is never shown and never becomes a proposal.
+      const checked = checkReply(await coachChat(system, turns), system)
+      if (!checked.ok) { replyLocally('AI reply withheld. Answered from your data.'); return }
+      const reply = checked.text
       const evidence = computeDailyPriority(f).evidence
-      addMessage({ ts: nowIso(), role: 'coach', content: reply || 'No answer came back. Try again.', evidence: tagSource(evidence, 'ai') })
+      addMessage({ ts: nowIso(), role: 'coach', content: reply, evidence: tagSource(evidence, 'ai') })
       const proposal = extractProposalLine(reply)
       if (proposal) {
         // A suggestion only: it becomes a pending proposal the user can Accept or keep current.

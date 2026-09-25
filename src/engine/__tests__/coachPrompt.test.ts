@@ -66,7 +66,7 @@ describe('safety note section', () => {
     const base = { facts, profileSummary: 'p', priority: computeDailyPriority(facts) }
     expect(assembleCoachPrompt({ ...base, extras: {} })).not.toMatch(/SAFETY NOTE/)
     const s = assembleCoachPrompt({ ...base, extras: { safetyKind: 'medical_emergency' } })
-    expect(s).toMatch(/SAFETY NOTE: .*possible emergency symptoms/)
+    expect(s).toMatch(/SAFETY NOTE: .*possible emergency symptoms.*Answer their current question normally/)
     expect(s.indexOf('SAFETY NOTE')).toBeGreaterThan(s.indexOf('RULES'))
     expect(s.indexOf('SAFETY NOTE')).toBeLessThan(s.indexOf('PROFILE'))
   })
