@@ -87,3 +87,29 @@ export function routeDeterministic(text: string, previous: AgentId | null): Rout
 export function isAgentId(v: unknown): v is AgentId {
   return typeof v === 'string' && (AGENT_IDS as string[]).includes(v)
 }
+
+// --- decision-model classifier (§11.2 step 3, §11.6) ---------------------------------------------------------
+
+/**
+ * The Choice question for the decision model (Jev). Criteria are literal and positive: Jev reads them as written.
+ * `other` is there so the model can say none fit. Only the current message is ever sent with it.
+ */
+export const AGENT_QUESTION = {
+  instructions: 'Which coach should answer this message from a person using a fitness and health app?',
+  options: {
+    training: 'Workouts, exercises, sets, reps, weights lifted, training plans, skipping or moving sessions.',
+    nutrition: 'Food, meals, protein, calories, drinks, hunger, what to eat.',
+    recovery: 'Sleep, tiredness, rest days, readiness, ordinary muscle soreness after training.',
+    symptoms: 'Pain, injury, joints, a body part that hurts or feels wrong.',
+    mind: 'Stress, mood, worry, feeling low, breathing exercises, motivation to keep going.',
+    coach: 'The whole day or week, progress, weight trend, or several of the topics above together.',
+    other: 'Anything else.',
+  } satisfies Record<AgentId | 'other', string>,
+}
+
+/** Below this the answer is a guess, and the generalist coach answers instead. */
+export const DECISION_MIN_CONFIDENCE = 0.6
+
+export function agentFromDecision(d: { choice: string; confidence: number }): AgentId {
+  return isAgentId(d.choice) && d.confidence >= DECISION_MIN_CONFIDENCE ? d.choice : 'coach'
+}

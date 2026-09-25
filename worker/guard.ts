@@ -26,6 +26,10 @@ export interface CoachEnv {
   COACH_GEMINI_MODEL?: string
   ANTHROPIC_API_KEY?: string
   COACH_MODEL?: string
+  /** Decision model for /decide (OpenRouter only). Default typesafe/jev-1.13, pinned. */
+  COACH_MODEL_ROUTER?: string
+  /** 'flex' (default) tries OpenRouter's Flex tier for chat with a short timeout, then standard. 'standard' turns it off. */
+  COACH_SERVICE_TIER?: string
 }
 
 // --- limits ------------------------------------------------------------------------------------------
@@ -41,6 +45,9 @@ export const MAX_PROMPT_CHARS = 200_000
 export const MAX_TURNS = 60
 export const MAX_ATTACHMENTS = 4
 export const MAX_SCHEMA_CHARS = 50_000
+/** /decide gets one short message, never a conversation or facts. */
+export const MAX_DECIDE_STATE_CHARS = 2_000
+export const MAX_DECIDE_OPTIONS = 20
 /** The PIN is a bearer token, not a 4-digit PIN: its length is what stops guessing, the lockout below is only a brake. */
 export const MIN_PIN_LENGTH = 8
 export const CHAT_MAX_TOKENS = 2048
@@ -62,9 +69,12 @@ export interface Attachment { base64: string; mediaType: MediaType; name?: strin
 export interface ChatTurn { role: 'user' | 'assistant'; content: string }
 export interface ChatRequest { system: string; turns: ChatTurn[]; attachments: Attachment[] }
 export interface JsonRequest { system: string; prompt: string; schema: Record<string, unknown>; attachments: Attachment[] }
+/** One choice question for a decision model (docs/PRD_COACH_CHAT.md §11.6). */
+export interface DecideRequest { state: string; instructions: string; options: Record<string, string> }
+export interface DecideResult { choice: string; confidence: number }
 
 /** What a provider module returns for one call. */
-export interface ProviderReply { text: string; model: string | null }
+export interface ProviderReply { text: string; model: string | null; tier?: 'flex' | 'standard' }
 
 // --- PIN ---------------------------------------------------------------------------------------------
 
@@ -336,4 +346,23 @@ export function noKeyMessage(env: CoachEnv): string {
   if (want === 'gemini') return 'COACH_PROVIDER is "gemini" but the GEMINI_API_KEY secret is not set on the server.'
   if (want === 'anthropic') return 'COACH_PROVIDER is "anthropic" but the ANTHROPIC_API_KEY secret is not set on the server.'
   return 'No AI key is configured on the server. Add OPENROUTER_API_KEY, GEMINI_API_KEY or ANTHROPIC_API_KEY as a Worker secret.'
+}
+
+export function parseDecideRequest(body: Record<string, unknown>): DecideRequest {
+  const state = str(body.state).trim()
+  const instructions = str(body.instructions).trim()
+  const raw = body.options
+  if (!state || !instructions || !raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new BridgeError('bad_request', 'state, instructions and options are required.', 400)
+  }
+  if (state.length > MAX_DECIDE_STATE_CHARS) throw new BridgeError('bad_request', 'The message is too long to classify.', 400)
+  if (instructions.length > 500) throw new BridgeError('bad_request', 'instructions are too long.', 400)
+  const entries = Object.entries(raw as Record<string, unknown>)
+  if (entries.length < 2 || entries.length > MAX_DECIDE_OPTIONS) throw new BridgeError('bad_request', `Between 2 and ${MAX_DECIDE_OPTIONS} options.`, 400)
+  const options: Record<string, string> = {}
+  for (const [k, v] of entries) {
+    if (!/^[a-z_]{1,40}$/.test(k) || typeof v !== 'string' || !v.trim() || v.length > 300) throw new BridgeError('bad_request', 'Each option needs a snake_case name and a short description.', 400)
+    options[k] = v.trim()
+  }
+  return { state, instructions, options }
 }

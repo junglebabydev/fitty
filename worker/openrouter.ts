@@ -4,11 +4,20 @@
 //
 // Privacy: every request sets provider.data_collection = "deny", so OpenRouter only routes to providers that do
 // not retain or train on prompts. This is a health app; override with COACH_OPENROUTER_DATA_COLLECTION=allow.
-import { BridgeError, CHAT_MAX_TOKENS, JSON_MAX_TOKENS, schemaInstruction, type Attachment, type ChatRequest, type JsonRequest, type ProviderReply } from './guard'
+import {
+  BridgeError, CHAT_MAX_TOKENS, JSON_MAX_TOKENS, schemaInstruction,
+  type Attachment, type ChatRequest, type DecideRequest, type DecideResult, type JsonRequest, type ProviderReply,
+} from './guard'
 
 export const DEFAULT_OPENROUTER_MODEL = 'google/gemini-3.8-flash'
 export const OPENROUTER_BASE = 'https://openrouter.ai/api/v1'
 const TIMEOUT_MS = 120_000
+/** Flex requests can queue for minutes; after this long the chat retries once at the standard tier. */
+export const FLEX_TIMEOUT_MS = 8_000
+/** The decision model answers in ~100 ms; past this the app just uses the generalist coach. */
+export const DECIDE_TIMEOUT_MS = 2_500
+/** Pinned: a new Jev version is adopted only after replaying the routing set (docs/PRD_COACH_CHAT.md §11.6). */
+export const DEFAULT_ROUTER_MODEL = 'typesafe/jev-1.13'
 
 /** OpenRouter keys start with "sk-or-". Used to recognise one stored under another secret name. */
 export function isOpenRouterKey(key: string | undefined): boolean {
@@ -19,6 +28,17 @@ export function isOpenRouterKey(key: string | undefined): boolean {
 export function openRouterModel(configured: string | undefined): string {
   const m = (configured ?? '').trim()
   return /^[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._:-]*$/i.test(m) ? m : DEFAULT_OPENROUTER_MODEL
+}
+
+/** The decision model for /decide: a valid "vendor/model" id, else the pinned default. */
+export function routerModel(configured: string | undefined): string {
+  const m = (configured ?? '').trim()
+  return /^[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._:-]*$/i.test(m) ? m : DEFAULT_ROUTER_MODEL
+}
+
+/** Flex unless COACH_SERVICE_TIER is "standard". */
+export function serviceTier(configured: string | undefined): 'flex' | 'standard' {
+  return (configured ?? '').trim().toLowerCase() === 'standard' ? 'standard' : 'flex'
 }
 
 export function dataCollection(configured: string | undefined): 'allow' | 'deny' {
@@ -39,6 +59,8 @@ export interface OpenRouterRequest {
   messages: Message[]
   max_tokens: number
   provider: { data_collection: 'allow' | 'deny' }
+  /** OpenRouter service tier. Flex: half price, best effort, never falls back to standard on its own. */
+  service_tier?: 'flex'
   response_format?: { type: 'json_schema'; json_schema: { name: string; strict: boolean; schema: Record<string, unknown> } } | { type: 'json_object' }
 }
 
@@ -119,14 +141,14 @@ export function mapOpenRouterHttpError(status: number, _body: unknown): BridgeEr
 
 export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>
 
-async function send(path: string, apiKey: string, init: RequestInit, fetcher: FetchLike): Promise<{ status: number; ok: boolean; body: unknown }> {
+async function send(path: string, apiKey: string, init: RequestInit, fetcher: FetchLike, timeoutMs = TIMEOUT_MS): Promise<{ status: number; ok: boolean; body: unknown }> {
   let res: Response
   try {
     res = await fetcher(`${OPENROUTER_BASE}${path}`, {
       ...init,
       // The key travels only in this header. No HTTP-Referer / X-Title: the site address is not shared with OpenRouter.
       headers: { ...(init.headers as Record<string, string>), Authorization: `Bearer ${apiKey}` },
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      signal: AbortSignal.timeout(timeoutMs),
     })
   } catch (e) {
     const name = e instanceof Error ? e.name : ''
@@ -137,13 +159,48 @@ async function send(path: string, apiKey: string, init: RequestInit, fetcher: Fe
   return { status: res.status, ok: res.ok, body }
 }
 
-const post = (apiKey: string, request: OpenRouterRequest, fetcher: FetchLike) =>
-  send('/chat/completions', apiKey, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(request) }, fetcher)
+const post = (apiKey: string, request: OpenRouterRequest, fetcher: FetchLike, timeoutMs = TIMEOUT_MS) =>
+  send('/chat/completions', apiKey, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(request) }, fetcher, timeoutMs)
 
-export async function openRouterChat(apiKey: string, model: string, policy: 'allow' | 'deny', req: ChatRequest, fetcher: FetchLike = fetch): Promise<ProviderReply> {
-  const res = await post(apiKey, buildChatRequest(req, model, policy), fetcher)
+/**
+ * Chat. With tier "flex", the Flex tier is tried first with a short timeout; a timeout, a 429 or a 5xx (Flex
+ * capacity, preemption) is retried once at the standard tier (docs/PRD_COACH_CHAT.md §11.5). Other errors surface.
+ */
+export async function openRouterChat(
+  apiKey: string, model: string, policy: 'allow' | 'deny', req: ChatRequest, fetcher: FetchLike = fetch, tier: 'flex' | 'standard' = 'standard',
+): Promise<ProviderReply> {
+  const request = buildChatRequest(req, model, policy)
+  if (tier === 'flex') {
+    try {
+      const res = await post(apiKey, { ...request, service_tier: 'flex' }, fetcher, FLEX_TIMEOUT_MS)
+      if (res.ok) return { ...parseOpenRouterResponse(res.body, { partialOk: true }), tier: 'flex' }
+      if (res.status !== 429 && res.status < 500) throw mapOpenRouterHttpError(res.status, res.body)
+    } catch (e) {
+      // A timeout, or an HTTP 200 carrying an upstream error (preempted mid-request), falls through to standard.
+      if (!(e instanceof BridgeError) || (e.kind !== 'timeout' && e.kind !== 'failed' && e.kind !== 'busy')) throw e
+      if (e.kind === 'failed' && /did not accept|no provider/i.test(e.message)) throw e
+    }
+  }
+  const res = await post(apiKey, request, fetcher)
   if (!res.ok) throw mapOpenRouterHttpError(res.status, res.body)
-  return parseOpenRouterResponse(res.body, { partialOk: true })
+  return { ...parseOpenRouterResponse(res.body, { partialOk: true }), tier: 'standard' }
+}
+
+/** One choice question to a decision model (Jev) through OpenRouter's System One endpoint. Only the given text is sent. */
+export async function openRouterDecide(apiKey: string, model: string, req: DecideRequest, fetcher: FetchLike = fetch): Promise<DecideResult & { model: string | null }> {
+  const body = { model, state: req.state, questions: { pick: { type: 'choice', instructions: req.instructions, criteria: req.options } } }
+  const res = await send('/systemone', apiKey, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }, fetcher, DECIDE_TIMEOUT_MS)
+  if (!res.ok) throw mapOpenRouterHttpError(res.status, res.body)
+  return parseDecideResponse(res.body, req)
+}
+
+export function parseDecideResponse(body: unknown, req: DecideRequest): DecideResult & { model: string | null } {
+  const root = asRecord(body)
+  const pick = asRecord(asRecord(root?.answers)?.pick)
+  const choice = typeof pick?.choice === 'string' ? pick.choice : ''
+  const confidence = typeof pick?.confidence === 'number' ? pick.confidence : NaN
+  if (!(choice in req.options) || !(confidence >= 0 && confidence <= 1)) throw new BridgeError('failed', 'The decision model returned an unexpected answer.', 502)
+  return { choice, confidence, model: typeof root?.model === 'string' ? root.model : null }
 }
 
 /** Schema-constrained output first; a 400 gets one retry in plain JSON mode with the schema in the prompt. */

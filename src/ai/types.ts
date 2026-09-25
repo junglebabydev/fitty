@@ -57,6 +57,16 @@ export interface JsonRequest {
   attachments?: AIAttachment[]
 }
 
+/** One choice question for a decision model (docs/PRD_COACH_CHAT.md §11.6): only `state` is user text. */
+export interface DecideRequest {
+  state: string
+  instructions: string
+  /** option name (snake_case) → one-line description */
+  options: Record<string, string>
+}
+
+export interface DecideResult { choice: string; confidence: number }
+
 export interface AIProvider {
   id: AIProviderId
   name: string
@@ -65,6 +75,8 @@ export interface AIProvider {
   coachChat(system: string, turns: ChatTurn[]): Promise<string>
   /** Returns the parsed JSON object. Throws AIError('not_configured') on providers that cannot do it (mock). */
   completeJson(req: JsonRequest): Promise<unknown>
+  /** Only providers with a decision model (the Cloudflare Worker on OpenRouter). Absent elsewhere. */
+  decide?(req: DecideRequest): Promise<DecideResult>
 }
 
 // --- errors -----------------------------------------------------------------

@@ -54,6 +54,8 @@ Optional plain settings go in `wrangler.jsonc` → `vars` (dashboard-only text v
 | `COACH_PROVIDER` | unset | `gemini` or `anthropic`. Unset = Gemini if its key exists, else Anthropic. |
 | `COACH_GEMINI_MODEL` | `gemini-3.8-flash` | Gemini model code. |
 | `COACH_MODEL` | `claude-opus-5` | Claude model id. Opus is the most expensive tier; `claude-sonnet-5` or `claude-haiku-4-5` cost a fraction of it per call. Only matters when the Worker uses the Anthropic key. |
+| `COACH_SERVICE_TIER` | `flex` | OpenRouter only. `flex` tries the half-price Flex tier for coach chat with an 8 s timeout, then retries once at standard. `standard` turns Flex off. |
+| `COACH_MODEL_ROUTER` | `typesafe/jev-1.13` | OpenRouter only. The decision model behind `/api/ai/decide`, which picks the coach agent for a message. Pinned: change it only after replaying the routing set. |
 
 Then open the site → **Settings → AI**, enter the same PIN once per device. The status line should read connected, with the provider name.
 

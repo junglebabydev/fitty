@@ -3,7 +3,7 @@ import { AnthropicProvider } from './anthropic'
 import { BridgeProvider } from './bridge'
 import { GeminiProvider } from './gemini'
 import { MockProvider } from './mock'
-import { AIError, type AIProvider, type AIProviderId, type ChatTurn, type JsonRequest, type MealContext, type MealImage, type MealRecognition } from './types'
+import { AIError, type AIProvider, type AIProviderId, type ChatTurn, type DecideRequest, type DecideResult, type JsonRequest, type MealContext, type MealImage, type MealRecognition } from './types'
 
 export { AIError }
 export type { AIErrorKind } from './types'
@@ -137,5 +137,22 @@ export function aiJson<T>(req: JsonRequest, meta: { dataType: string; purpose: s
     { provider: ledgerProvider, dataType: meta.dataType, purpose: meta.purpose, bytes },
     meta.purpose,
     (p) => p.completeJson(req) as Promise<T>,
+  )
+}
+
+/** A decision should answer in ~100 ms; past this the caller uses its fallback. */
+export const DECIDE_TIMEOUT_MS = 3_000
+
+/**
+ * One choice question to the decision model (docs/PRD_COACH_CHAT.md §11.6). Throws AIError('not_configured')
+ * without a ledger row when the provider has none (Mac bridge, direct keys, mock), so callers fall back quietly.
+ */
+export function aiDecide(req: DecideRequest, meta: { dataType: string; purpose: string }): Promise<DecideResult> {
+  const decide = provider.decide
+  if (!decide) return Promise.reject(new AIError('not_configured'))
+  return guarded(
+    { provider: ledgerProvider, dataType: meta.dataType, purpose: meta.purpose, bytes: req.state.length },
+    meta.purpose,
+    (p) => withTimeout(decide.call(p, req), DECIDE_TIMEOUT_MS, meta.purpose),
   )
 }

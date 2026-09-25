@@ -7,6 +7,7 @@
 //                         (without the right PIN: 403 and the same generic "PIN required" body whether or not a key exists)
 //   POST /api/ai/chat   { system, turns, attachments? }          → { ok, text, meta }
 //   POST /api/ai/json   { system, prompt, schema, attachments? } → { ok, data, meta }
+//   POST /api/ai/decide { state, instructions, options }           → { ok, choice, confidence, meta } (OpenRouter only)
 //   errors              → { ok: false, kind, message }
 //   GET  /api/ai/owner  → { ok, owner }: the owner profile from the OWNER_PROFILE secret (JSON), so a fresh phone can
 //                         skip onboarding without the profile ever being in the repo or the static bundle. Same guards
@@ -20,16 +21,17 @@
 //
 // Secrets:  OPENROUTER_API_KEY, GEMINI_API_KEY and/or ANTHROPIC_API_KEY, plus COACH_BRIDGE_PIN. Optional: OWNER_PROFILE.
 // Vars:     COACH_PROVIDER ('openrouter' | 'gemini' | 'anthropic'), COACH_OPENROUTER_MODEL, COACH_OPENROUTER_DATA_COLLECTION,
+//           COACH_MODEL_ROUTER (decision model, default typesafe/jev-1.13), COACH_SERVICE_TIER ('flex' default | 'standard'),
 //           COACH_GEMINI_MODEL, COACH_MODEL.
 // Bindings: AI_LIMITER (Workers Rate Limiting, per client address), DAILY_BUDGET (Durable Object, calls per day).
 
 import { anthropicChat, anthropicCheck, anthropicJson, anthropicModel } from './anthropic'
 import { geminiChat, geminiCheck, geminiJson, geminiModel } from './gemini'
-import { dataCollection, openRouterChat, openRouterCheck, openRouterJson, openRouterModel } from './openrouter'
+import { dataCollection, openRouterChat, openRouterCheck, openRouterDecide, openRouterJson, openRouterModel, routerModel, serviceTier } from './openrouter'
 import {
   BridgeError, DAILY_CALL_LIMIT, LEASE_MS, MAX_CONCURRENT, PIN_FAIL_LIMIT, RATE_LIMIT, SlidingWindow, checkPin, extractJson, isSameOrigin,
-  isSecureRequest, noKeyMessage, parseBody, parseChatRequest, parseJsonRequest, pickProvider, pinFailKey, pinMessage, readTextCapped,
-  type ChatRequest, type CoachEnv, type JsonRequest, type ProviderId, type ProviderReply, openRouterKeyOf,
+  isSecureRequest, noKeyMessage, parseBody, parseChatRequest, parseDecideRequest, parseJsonRequest, pickProvider, pinFailKey, pinMessage, readTextCapped,
+  type ChatRequest, type CoachEnv, type DecideRequest, type JsonRequest, type ProviderId, type ProviderReply, openRouterKeyOf,
 } from './guard'
 
 export interface Env extends CoachEnv {
@@ -115,7 +117,7 @@ export class DailyBudget {
   }
 }
 
-async function run(env: Env, ctx: Ctx | undefined, call: (up: Upstream) => Promise<ProviderReply>): Promise<{ reply: ProviderReply; up: Upstream; durationMs: number }> {
+async function run<R extends { model: string | null }>(env: Env, ctx: Ctx | undefined, call: (up: Upstream) => Promise<R>): Promise<{ reply: R; up: Upstream; durationMs: number }> {
   const up = upstream(env)
   if (!up) throw new BridgeError('auth', noKeyMessage(env), 503)
   const started = Date.now()
@@ -143,8 +145,14 @@ async function run(env: Env, ctx: Ctx | undefined, call: (up: Upstream) => Promi
   }
 }
 
-const chat = (req: ChatRequest) => (up: Upstream) =>
-  up.provider === 'openrouter' ? openRouterChat(up.apiKey, up.model, up.policy, req) : up.provider === 'gemini' ? geminiChat(up.apiKey, up.model, req) : anthropicChat(up.apiKey, up.model, req)
+const chat = (req: ChatRequest, env: Env) => (up: Upstream) =>
+  up.provider === 'openrouter' ? openRouterChat(up.apiKey, up.model, up.policy, req, fetch, serviceTier(env.COACH_SERVICE_TIER)) : up.provider === 'gemini' ? geminiChat(up.apiKey, up.model, req) : anthropicChat(up.apiKey, up.model, req)
+
+/** Decisions are OpenRouter only: other upstreams answer bad_request and the app uses its generalist coach. */
+const decide = (req: DecideRequest, env: Env) => (up: Upstream) => {
+  if (up.provider !== 'openrouter') throw new BridgeError('bad_request', 'Decisions need the OpenRouter upstream.', 400)
+  return openRouterDecide(up.apiKey, routerModel(env.COACH_MODEL_ROUTER), req)
+}
 
 const json = (req: JsonRequest) => (up: Upstream) =>
   up.provider === 'openrouter' ? openRouterJson(up.apiKey, up.model, up.policy, req) : up.provider === 'gemini' ? geminiJson(up.apiKey, up.model, req) : anthropicJson(up.apiKey, up.model, req)
@@ -195,12 +203,20 @@ async function handleAi(request: Request, env: Env, path: string, ctx?: Ctx): Pr
     if (isHealth) return send(200, await health(env))
     if (isOwner) return owner(env)
 
-    if (path !== '/chat' && path !== '/json') throw new BridgeError('bad_request', 'Unknown endpoint.', 404)
+    if (path !== '/chat' && path !== '/json' && path !== '/decide') throw new BridgeError('bad_request', 'Unknown endpoint.', 404)
     const body = parseBody(await readTextCapped(request.body, request.headers.get('content-length')))
 
     if (path === '/chat') {
-      const { reply, up, durationMs } = await run(env, ctx, chat(parseChatRequest(body)))
-      return send(200, { ok: true, text: reply.text, meta: { durationMs, costUsd: null, model: reply.model ?? up.model, provider: up.provider } })
+      const { reply, up, durationMs } = await run(env, ctx, chat(parseChatRequest(body), env))
+      // Which tier served the call and how long it took, never the content (docs/PRD_COACH_CHAT.md §11.5).
+      if (reply.tier) console.log(`chat tier=${reply.tier} ms=${durationMs}`)
+      return send(200, { ok: true, text: reply.text, meta: { durationMs, costUsd: null, model: reply.model ?? up.model, provider: up.provider, tier: reply.tier ?? null } })
+    }
+
+    if (path === '/decide') {
+      const { reply, durationMs } = await run(env, ctx, decide(parseDecideRequest(body), env))
+      console.log(`decide ms=${durationMs}`)
+      return send(200, { ok: true, choice: reply.choice, confidence: reply.confidence, meta: { durationMs, model: reply.model } })
     }
 
     const { reply, up, durationMs } = await run(env, ctx, json(parseJsonRequest(body)))

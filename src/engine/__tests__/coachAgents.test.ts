@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { buildCoachSystemPrompt, computeDailyPriority } from '../coach'
-import { AGENT_IDS, buildAgentPrompt, routeDeterministic, type AgentId } from '../coachAgents'
+import { AGENT_IDS, AGENT_QUESTION, agentFromDecision, buildAgentPrompt, routeDeterministic, type AgentId } from '../coachAgents'
 import { seedFacts } from './fixtures'
 
 describe('routeDeterministic', () => {
@@ -69,5 +69,22 @@ describe('agent prompts', () => {
     expect(training).toMatch(/- Stalls: /)
     expect(training).not.toMatch(/- Intake today: /)
     expect(training).toMatch(/FOCUS: This message is about training/)
+  })
+})
+
+describe('agentFromDecision', () => {
+  it('trusts a confident answer, and uses coach for low confidence, "other" or anything unknown', () => {
+    expect(agentFromDecision({ choice: 'nutrition', confidence: 0.9 })).toBe('nutrition')
+    expect(agentFromDecision({ choice: 'nutrition', confidence: 0.59 })).toBe('coach')
+    expect(agentFromDecision({ choice: 'other', confidence: 0.99 })).toBe('coach')
+    expect(agentFromDecision({ choice: 'reports', confidence: 0.99 })).toBe('coach')
+  })
+
+  it('offers every agent plus other, with snake_case names the Worker accepts', () => {
+    expect(Object.keys(AGENT_QUESTION.options).sort()).toEqual([...AGENT_IDS, 'other'].sort())
+    for (const [k, v] of Object.entries(AGENT_QUESTION.options)) {
+      expect(k).toMatch(/^[a-z_]{1,40}$/)
+      expect(v.length).toBeLessThanOrEqual(300)
+    }
   })
 })

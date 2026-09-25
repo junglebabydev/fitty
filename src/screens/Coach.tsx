@@ -19,10 +19,10 @@ import {
   getNutritionTarget, getPendingDecisions, getProfile, getSession, getSetting, getSleepRecords,
 } from '../db/repositories'
 import {
-  ageAt, answerLocally, buildAgentPrompt, computeDailyPriority, checkReply, routeDeterministic, moodSummary, regionLabel, screenMessage, weeklyReview,
+  AGENT_QUESTION, ageAt, agentFromDecision, answerLocally, buildAgentPrompt, computeDailyPriority, checkReply, routeDeterministic, moodSummary, regionLabel, screenMessage, weeklyReview,
   type CoachFacts, type CoachPriority, type CoachPromptExtras,
 } from '../engine'
-import { aiConnected, coachChat, isAIError } from '../ai'
+import { aiConnected, aiDecide, coachChat, isAIError } from '../ai'
 import { useAIStatus } from '../features/ai/config'
 import { COMPOSER_CLEARANCE, Composer } from '../features/composer'
 import { reportContextLines } from '../features/reports'
@@ -507,8 +507,13 @@ export default function CoachScreen() {
     setThinking(true)
     try {
       const recent = getMessages(SAFETY_LOOKBACK)
-      // Pick the specialist (docs/PRD_COACH_CHAT.md §11.2). Undecided goes to the generalist coach.
-      const agent = routeDeterministic(q, latestAgent(recent)).agent ?? 'coach'
+      // Pick the specialist (docs/PRD_COACH_CHAT.md §11.2): rules first, then the decision model on this message
+      // only (never history or facts). Any failure, or no decision model on this setup, means the generalist coach.
+      let agent = routeDeterministic(q, latestAgent(recent)).agent
+      if (!agent) {
+        agent = await aiDecide({ state: q, ...AGENT_QUESTION }, { dataType: 'coach_message', purpose: 'Pick which coach answers (this message only)' })
+          .then(agentFromDecision, () => 'coach' as const)
+      }
       const system = buildAgentPrompt(agent, { facts: f, profileSummary: summaryRef.current, priority: computeDailyPriority(f), extras: promptExtras(recent) })
       const turns = toModelTurns(getMessages(MAX_TURNS + 1)).slice(-MAX_TURNS)
       // L3 reply check (docs/PRD_COACH_CHAT.md §7): a rejected reply is never shown and never becomes a proposal.

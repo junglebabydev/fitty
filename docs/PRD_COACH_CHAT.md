@@ -383,6 +383,8 @@ every agent.
 
 ### 11.3 Composer questions
 
+*(Not built, 2026-09-25: with Jev at about $0.00004 and ~100 ms per message, a second classification is cheaper than threading an agent field through the Composer router. Revisit only if routing cost shows up.)*
+
 The Composer's router already has a `question` intent. It gains an optional `agent` field, passed
 through `coachRoute` as `/coach?q=…&agent=…`, so a Composer question makes one classifier call, not two.
 
@@ -393,6 +395,7 @@ L3's invented-numbers check (§7) compares against the facts **that agent receiv
 ### 11.5 Models: Worker tiers
 
 - Two tiers: `router` (Jev, its own route, §11.6) and `chat` (Gemini, every agent). The client never sends a model id.
+- *(Built 2026-09-25: `chat` keeps using `COACH_OPENROUTER_MODEL`, so there is no `COACH_MODEL_CHAT`; the router is `COACH_MODEL_ROUTER`. The "retry a tier model's 404 on the default" step was dropped with it: there's only one chat model. Flex is `COACH_SERVICE_TIER`, default `flex`. Worker logs `chat tier=… ms=…` and `decide ms=…`, never content, visible only in `wrangler tail` since observability is off.)*
 - The Worker maps tiers to plain variables: `COACH_MODEL_ROUTER` and `COACH_MODEL_CHAT`. Each goes through the existing format check (`openRouterModel`), and a
   missing one falls back to `COACH_OPENROUTER_MODEL`.
 - A tier model that fails with 404 (no provider under `data_collection: "deny"`) or a region

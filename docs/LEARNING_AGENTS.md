@@ -69,6 +69,19 @@ the request body (DevTools → Network → `/api/ai/chat`).
 motivational interviewing (M4, M5), implementation intentions (M1: an action tied to a time or
 cue), habits (M6). The golden diff is the review: you see every word the model will now read.
 
+### Phase 5: decision-model classifier and Flex tier (built)
+**Teaches:** a classifier as a separate, cheap model; minimising what leaves the device; cost tiers with graceful fallback.
+**Read, in order:** `worker/__tests__/tiers.test.ts`, then `openRouterChat` (Flex then standard)
+and `openRouterDecide` in `worker/openrouter.ts`, then the `/decide` branch in `worker/index.ts`,
+then `aiDecide` in `src/ai/gateway.ts`, then `AGENT_QUESTION` and `agentFromDecision` in
+`src/engine/coachAgents.ts`, then the routing lines in `send()` in `src/screens/Coach.tsx`.
+**The idea:** routing doesn't need a chat model. A decision model answers a typed question with a
+calibrated probability, so "under 0.6 → generalist" is a meaningful rule. It only sees the single
+message. For cost, try the cheap tier with a short timeout and fall back once, so the user never
+waits minutes.
+**Try:** after deploying, run `npx wrangler tail` and send a few messages: you'll see `decide ms=`
+and `chat tier=flex` or `tier=standard` lines.
+
 ## 1. Agents: tool calling, planning, reasoning, memory
 
 **The idea.** An agent is a loop: a model reads the conversation, then either answers or asks to

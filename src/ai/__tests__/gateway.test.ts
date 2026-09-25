@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { AIError, coachChat, configureAI, getProvider, isOnline, recognizeMeal, AI_TIMEOUT_MS } from '../gateway'
+import { AIError, aiDecide, coachChat, configureAI, getProvider, isOnline, recognizeMeal, AI_TIMEOUT_MS } from '../gateway'
 import { MOCK_CHAT_REPLY, MOCK_UNCERTAINTY } from '../mock'
 import type { LedgerInput } from '../gateway'
 
@@ -169,4 +169,29 @@ describe('ai gateway', () => {
       }
     })
   })
+
+  describe('aiDecide', () => {
+    const REQ = { state: 'should I eat before I train?', instructions: 'Which coach?', options: { training: 'a', nutrition: 'b' } }
+    const META = { dataType: 'coach_message', purpose: 'Pick which coach answers' }
+
+    it('is not available on the mock or the Mac bridge, and writes no ledger row', async () => {
+      for (const opts of [{ providerId: 'mock' as const }, { providerId: 'claude-code' as const, bridgeHost: 'mac' as const }]) {
+        configureAI({ apiKey: '', model: '', onLedger, ...opts })
+        await expect(aiDecide(REQ, META)).rejects.toMatchObject({ kind: 'not_configured' })
+      }
+      expect(ledger).toEqual([])
+    })
+
+    it('posts only the message and question to the Worker and records the call', async () => {
+      const fetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: true, choice: 'nutrition', confidence: 0.8 }), { status: 200 }))
+      vi.stubGlobal('fetch', fetchMock)
+      configureAI({ providerId: 'claude-code', bridgeHost: 'cloud', bridgeUpstream: 'openrouter', onLedger })
+      expect(await aiDecide(REQ, META)).toEqual({ choice: 'nutrition', confidence: 0.8 })
+      const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+      expect(url).toBe('/api/ai/decide')
+      expect(JSON.parse(init.body as string)).toEqual(REQ)
+      expect(ledger).toEqual([expect.objectContaining({ dataType: 'coach_message', status: 'sent', bytes: REQ.state.length })])
+    })
+  })
 })
+
