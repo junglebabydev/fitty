@@ -57,6 +57,11 @@ describe('coach prompt sections', () => {
     expect(s.indexOf('RULES')).toBeLessThan(s.indexOf('FACTS'))
     expect(s.indexOf('Never diagnose')).toBeLessThan(2_000)
     expect(s.lastIndexOf('HEALTH REPORTS')).toBeGreaterThan(s.indexOf('PROPOSAL:'))
+    // PRD §9 phase 4: every rule, the coaching section and the proposal contract sit in the first 6 000 characters.
+    const guardrailsEnd = s.indexOf('PROPOSAL:') + 200
+    expect(s.indexOf('Never discourage professional help')).toBeLessThan(6_000)
+    expect(s.indexOf('Consistency beats intensity')).toBeLessThan(6_000)
+    expect(guardrailsEnd).toBeLessThan(6_000)
   })
 })
 

@@ -144,6 +144,10 @@ Phase 1 keeps today's text and today's order, so the output is byte-identical. S
 follow the existing blocks: RULES, PROFILE, FACTS, PRIORITY, the proposal line, BASELINE, REPORTS.
 The reordering in §4.3 (proposal contract moved up, mind split out of facts) happens in Phase 4,
 when the golden file is updated on purpose.
+*(Built 2026-09-25: Phase 4 keeps one RULES block (existing rules plus S1–S9) rather than
+separate `safety`, `numbers` and `style` sections, and the mind line stays inside FACTS. The order
+is identity, RULES, COACHING, proposal contract, safety note, profile, facts, priority, baseline,
+reports.)*
 
 ### 4.5 Contracts that must survive every phase
 

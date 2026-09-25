@@ -61,6 +61,14 @@ function is a conditional edge, and each agent is a node.
 **Try:** type "back squat or leg press?" and then "my back hurts". Watch the FOCUS line change in
 the request body (DevTools → Network → `/api/ai/chat`).
 
+### Phase 4b: the coaching prompt (built)
+**Teaches:** turning behaviour-change research into prompt rules, and changing a golden file on purpose.
+**Read:** `identitySection`, `rulesSection` (S1–S9 at the end) and `coachingSection` in
+`src/engine/coachPrompt.ts`, then `git show` on this commit's `__golden__/` diff.
+**The idea:** each rule traces back to evidence (docs/research/COACH_CHAT_REFERENCES.md §2):
+motivational interviewing (M4, M5), implementation intentions (M1: an action tied to a time or
+cue), habits (M6). The golden diff is the review: you see every word the model will now read.
+
 ## 1. Agents: tool calling, planning, reasoning, memory
 
 **The idea.** An agent is a loop: a model reads the conversation, then either answers or asks to

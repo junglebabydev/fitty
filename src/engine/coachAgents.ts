@@ -3,7 +3,7 @@
 // session, the computed priority), then its own facts. The generalist `coach` is the full prompt and the fallback,
 // so a wrong route only ever costs focus, never safety.
 import {
-  SECTION_ORDER, assembleCoachPrompt, baselineSection, factsSectionFor, identitySection, prioritySection, profileSection,
+  SECTION_ORDER, assembleCoachPrompt, baselineSection, coachingSection, factsSectionFor, identitySection, prioritySection, profileSection,
   proposalContractSection, rulesSection, safetyNoteSection, type FactKey, type PromptContext, type PromptSection,
 } from './coachPrompt'
 import { parseRegion } from './voice'
@@ -37,12 +37,13 @@ export function agentSections(agent: AgentId): PromptSection[] {
   return [
     identitySection,
     rulesSection,
+    coachingSection,
+    proposalContractSection,
     safetyNoteSection,
     focusSection(spec.focus),
     profileSection,
     factsSectionFor([...ALWAYS_ON, ...spec.facts]),
     prioritySection,
-    proposalContractSection,
     baselineSection,
   ]
 }
