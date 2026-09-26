@@ -26,6 +26,10 @@ export interface CoachEnv {
   COACH_GEMINI_MODEL?: string
   ANTHROPIC_API_KEY?: string
   COACH_MODEL?: string
+  /** Decision model for /decide (OpenRouter only). Default typesafe/jev-1.13, pinned. */
+  COACH_MODEL_ROUTER?: string
+  /** 'flex' (default) tries OpenRouter's Flex tier for chat with a short timeout, then standard. 'standard' turns it off. */
+  COACH_SERVICE_TIER?: string
 }
 
 // --- limits ------------------------------------------------------------------------------------------
@@ -41,6 +45,12 @@ export const MAX_PROMPT_CHARS = 200_000
 export const MAX_TURNS = 60
 export const MAX_ATTACHMENTS = 4
 export const MAX_SCHEMA_CHARS = 50_000
+/** /decide gets one short message, never a conversation or facts. */
+export const MAX_DECIDE_STATE_CHARS = 2_000
+export const MAX_DECIDE_OPTIONS = 20
+export const MAX_TOOLS = 8
+export const MAX_TOOL_SCHEMA_CHARS = 2_000
+const TOOL_NAME = /^[a-z_]{1,40}$/
 /** The PIN is a bearer token, not a 4-digit PIN: its length is what stops guessing, the lockout below is only a brake. */
 export const MIN_PIN_LENGTH = 8
 export const CHAT_MAX_TOKENS = 2048
@@ -59,12 +69,24 @@ export const ALLOWED_MEDIA_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'im
 export type MediaType = (typeof ALLOWED_MEDIA_TYPES)[number]
 
 export interface Attachment { base64: string; mediaType: MediaType; name?: string }
-export interface ChatTurn { role: 'user' | 'assistant'; content: string }
-export interface ChatRequest { system: string; turns: ChatTurn[]; attachments: Attachment[] }
+/** A tool the model may call (docs/PRD_COACH_CHAT.md §12). `parameters` is a JSON Schema object. */
+export interface ToolSpec { name: string; description: string; parameters: Record<string, unknown> }
+/** `arguments` is the JSON text the model wrote, passed through untouched. */
+export interface ToolCall { id: string; name: string; arguments: string }
+/**
+ * A conversation turn. An assistant turn may carry tool calls (and empty content); a 'tool' turn answers one of
+ * them. Tool turns only ever reach the OpenRouter upstream: the others refuse requests with tools.
+ */
+export interface ChatTurn { role: 'user' | 'assistant' | 'tool'; content: string; toolCalls?: ToolCall[]; toolCallId?: string }
+/** `toolChoice: 'none'` keeps the tools declared (earlier turns reference them) but makes the model answer in text. */
+export interface ChatRequest { system: string; turns: ChatTurn[]; attachments: Attachment[]; tools?: ToolSpec[]; toolChoice?: 'none' }
 export interface JsonRequest { system: string; prompt: string; schema: Record<string, unknown>; attachments: Attachment[] }
+/** One choice question for a decision model (docs/PRD_COACH_CHAT.md §11.6). */
+export interface DecideRequest { state: string; instructions: string; options: Record<string, string> }
+export interface DecideResult { choice: string; confidence: number }
 
 /** What a provider module returns for one call. */
-export interface ProviderReply { text: string; model: string | null }
+export interface ProviderReply { text: string; model: string | null; tier?: 'flex' | 'standard'; toolCalls?: ToolCall[] }
 
 // --- PIN ---------------------------------------------------------------------------------------------
 
@@ -251,23 +273,64 @@ function parseSystem(raw: unknown): string {
   return str(raw).slice(0, MAX_SYSTEM_CHARS)
 }
 
+function parseToolCalls(raw: unknown): ToolCall[] | undefined {
+  if (raw == null) return undefined
+  if (!Array.isArray(raw) || raw.length > 5) throw new BridgeError('bad_request', 'toolCalls must be an array of at most 5.', 400)
+  return raw.map((item) => {
+    const c = (item && typeof item === 'object' ? item : {}) as Record<string, unknown>
+    const id = str(c.id)
+    const name = str(c.name)
+    const args = str(c.arguments)
+    if (!id || id.length > 100 || !TOOL_NAME.test(name) || args.length > 2_000) throw new BridgeError('bad_request', 'A tool call is malformed.', 400)
+    return { id, name, arguments: args }
+  })
+}
+
+export function parseTools(raw: unknown): ToolSpec[] | undefined {
+  if (raw == null) return undefined
+  if (!Array.isArray(raw) || raw.length > MAX_TOOLS) throw new BridgeError('bad_request', `tools must be an array of at most ${MAX_TOOLS}.`, 400)
+  return raw.map((item) => {
+    const t = (item && typeof item === 'object' ? item : {}) as Record<string, unknown>
+    const name = str(t.name)
+    const description = str(t.description)
+    const parameters = t.parameters
+    if (!TOOL_NAME.test(name) || !description || description.length > 500 || !parameters || typeof parameters !== 'object' || Array.isArray(parameters)) {
+      throw new BridgeError('bad_request', 'A tool is malformed.', 400)
+    }
+    if (JSON.stringify(parameters).length > MAX_TOOL_SCHEMA_CHARS) throw new BridgeError('bad_request', 'A tool schema is too large.', 400)
+    return { name, description, parameters: parameters as Record<string, unknown> }
+  })
+}
+
 export function parseChatRequest(body: Record<string, unknown>): ChatRequest {
   if (!Array.isArray(body.turns)) throw new BridgeError('bad_request', 'turns[] is required.', 400)
   const turns: ChatTurn[] = []
   for (const item of body.turns.slice(-MAX_TURNS)) {
     const t = (item && typeof item === 'object' ? item : {}) as Record<string, unknown>
     const content = str(t.content).trim()
-    if (!content) continue
-    turns.push({ role: t.role === 'assistant' ? 'assistant' : 'user', content })
+    if (t.role === 'tool') {
+      const toolCallId = str(t.toolCallId)
+      if (!toolCallId || toolCallId.length > 100) throw new BridgeError('bad_request', 'A tool turn needs its toolCallId.', 400)
+      turns.push({ role: 'tool', content, toolCallId })
+      continue
+    }
+    const toolCalls = t.role === 'assistant' ? parseToolCalls(t.toolCalls) : undefined
+    if (!content && !toolCalls?.length) continue
+    turns.push({ role: t.role === 'assistant' ? 'assistant' : 'user', content, ...(toolCalls?.length ? { toolCalls } : {}) })
   }
   // Both upstream APIs want the conversation to open with the user.
   const firstUser = turns.findIndex((t) => t.role === 'user')
   const usable = firstUser >= 0 ? turns.slice(firstUser) : []
   if (!usable.length) throw new BridgeError('bad_request', 'turns[] is required.', 400)
-  if (usable[usable.length - 1].role !== 'user') throw new BridgeError('bad_request', 'The last turn must be from the user.', 400)
+  const last = usable[usable.length - 1].role
+  if (last !== 'user' && last !== 'tool') throw new BridgeError('bad_request', 'The last turn must be from the user or a tool.', 400)
   const chars = usable.reduce((n, t) => n + t.content.length, 0)
   if (chars > MAX_PROMPT_CHARS) throw new BridgeError('bad_request', 'The conversation is too long to send.', 400)
-  return { system: parseSystem(body.system), turns: usable, attachments: parseAttachments(body.attachments) }
+  const tools = parseTools(body.tools)
+  return {
+    system: parseSystem(body.system), turns: usable, attachments: parseAttachments(body.attachments),
+    ...(tools?.length ? { tools, ...(body.toolChoice === 'none' ? { toolChoice: 'none' as const } : {}) } : {}),
+  }
 }
 
 export function parseJsonRequest(body: Record<string, unknown>): JsonRequest {
@@ -336,4 +399,23 @@ export function noKeyMessage(env: CoachEnv): string {
   if (want === 'gemini') return 'COACH_PROVIDER is "gemini" but the GEMINI_API_KEY secret is not set on the server.'
   if (want === 'anthropic') return 'COACH_PROVIDER is "anthropic" but the ANTHROPIC_API_KEY secret is not set on the server.'
   return 'No AI key is configured on the server. Add OPENROUTER_API_KEY, GEMINI_API_KEY or ANTHROPIC_API_KEY as a Worker secret.'
+}
+
+export function parseDecideRequest(body: Record<string, unknown>): DecideRequest {
+  const state = str(body.state).trim()
+  const instructions = str(body.instructions).trim()
+  const raw = body.options
+  if (!state || !instructions || !raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new BridgeError('bad_request', 'state, instructions and options are required.', 400)
+  }
+  if (state.length > MAX_DECIDE_STATE_CHARS) throw new BridgeError('bad_request', 'The message is too long to classify.', 400)
+  if (instructions.length > 500) throw new BridgeError('bad_request', 'instructions are too long.', 400)
+  const entries = Object.entries(raw as Record<string, unknown>)
+  if (entries.length < 2 || entries.length > MAX_DECIDE_OPTIONS) throw new BridgeError('bad_request', `Between 2 and ${MAX_DECIDE_OPTIONS} options.`, 400)
+  const options: Record<string, string> = {}
+  for (const [k, v] of entries) {
+    if (!/^[a-z_]{1,40}$/.test(k) || typeof v !== 'string' || !v.trim() || v.length > 300) throw new BridgeError('bad_request', 'Each option needs a snake_case name and a short description.', 400)
+    options[k] = v.trim()
+  }
+  return { state, instructions, options }
 }

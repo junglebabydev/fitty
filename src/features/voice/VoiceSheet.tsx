@@ -9,7 +9,8 @@ import { Button, Chip, IconButton, NumberInput, ReadinessBadge, Segmented, Sheet
 import { useQuery, useToast } from '../../hooks'
 import { getMeals, getSavedMeals, getSetting, pruneVoiceCommands } from '../../db/repositories'
 import { EXERCISE_BY_ID } from '../../data'
-import { RED_FLAG_LABELS, parseVoiceCommand, regionLabel, type ParsedCommand, type ParsedMealItem, type VoiceIntent } from '../../engine'
+import { RED_FLAG_LABELS, parseVoiceCommand, regionLabel, screenMessage, type ParsedCommand, type ParsedMealItem, type VoiceIntent } from '../../engine'
+import { coachRoute } from '../composer/router'
 import { isSpeechAvailable, startListening, type ListenHandle, type SpeechErrorCode } from '../../native'
 import { KEYBOARD_DICTATION_HINT } from '../../native/speech'
 import {
@@ -350,6 +351,8 @@ export function VoiceSheet({ open, onClose, initialTranscript, initialCommand, a
       stopListening()
       const transcript = raw.trim()
       if (!transcript) { setPhase({ kind: 'typing' }); return }
+      // L1 safety screen first (docs/PRD_COACH_CHAT.md §5): the Coach screen gives the fixed reply and the Support sheet.
+      if (screenMessage(transcript)) { onClose(); navigate(coachRoute(transcript)); return }
       const cmd = parseVoiceCommand(transcript, buildVoiceContext())
       // Navigation-only intents change nothing, so they never need a confirmation tap.
       const writes = cmd.intent !== 'coach_query' && !(cmd.intent === 'start_workout' && cmd.payload.action !== 'finish')
@@ -359,7 +362,7 @@ export function VoiceSheet({ open, onClose, initialTranscript, initialCommand, a
       }
       showPreview(transcript, cmd)
     },
-    [alwaysPreview, apply, showPreview, stopListening],
+    [alwaysPreview, apply, navigate, onClose, showPreview, stopListening],
   )
 
   const listen = useCallback(() => {

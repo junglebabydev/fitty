@@ -57,6 +57,24 @@ export interface JsonRequest {
   attachments?: AIAttachment[]
 }
 
+/** A read-only tool the coach model may call (docs/PRD_COACH_CHAT.md §12). `parameters` is a JSON Schema object. */
+export interface ToolSpec { name: string; description: string; parameters: Record<string, unknown> }
+/** `arguments` is the JSON text the model wrote. */
+export interface ToolCall { id: string; name: string; arguments: string }
+/** A turn inside one tool loop: the chat turns, plus the model's tool calls and the results sent back. */
+export type AgentTurn = ChatTurn | { role: 'assistant'; content: string; toolCalls: ToolCall[] } | { role: 'tool'; toolCallId: string; content: string }
+export interface ChatStep { text: string; toolCalls: ToolCall[] }
+
+/** One choice question for a decision model (docs/PRD_COACH_CHAT.md §11.6): only `state` is user text. */
+export interface DecideRequest {
+  state: string
+  instructions: string
+  /** option name (snake_case) → one-line description */
+  options: Record<string, string>
+}
+
+export interface DecideResult { choice: string; confidence: number }
+
 export interface AIProvider {
   id: AIProviderId
   name: string
@@ -65,6 +83,10 @@ export interface AIProvider {
   coachChat(system: string, turns: ChatTurn[]): Promise<string>
   /** Returns the parsed JSON object. Throws AIError('not_configured') on providers that cannot do it (mock). */
   completeJson(req: JsonRequest): Promise<unknown>
+  /** Only providers with a decision model (the Cloudflare Worker on OpenRouter). Absent elsewhere. */
+  decide?(req: DecideRequest): Promise<DecideResult>
+  /** One model call that may return tool calls instead of text. The Cloudflare Worker on OpenRouter only. */
+  coachChatStep?(system: string, turns: AgentTurn[], tools: ToolSpec[], toolChoice?: 'none'): Promise<ChatStep>
 }
 
 // --- errors -----------------------------------------------------------------
