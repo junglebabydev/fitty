@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { buildCoachSystemPrompt, computeDailyPriority } from '../coach'
-import { type PromptContext, assembleCoachPrompt, baselineSection, factsSection, reportsSection } from '../coachPrompt'
-import { evaluateSymptomGate } from '../symptomGate'
-import { seedFacts, sym } from './fixtures'
+import { computeDailyPriority, type CoachFacts } from '../../src/engine/coach'
+import { evaluateSymptomGate } from '../../src/engine/symptomGate'
+import { seedFacts, sym } from '../../src/engine/__tests__/fixtures'
+import { REPORTS_CONTEXT_RULE, type CoachPromptExtras, type PromptContext, assembleCoachPrompt, baselineSection, factsSection, reportsSection } from '../prompt'
+
+/** What the app's old buildCoachSystemPrompt did: the generalist prompt for these facts. */
+const buildCoachSystemPrompt = (f: CoachFacts, profileSummary: string, extras?: CoachPromptExtras) =>
+  assembleCoachPrompt({ facts: f, profileSummary, priority: computeDailyPriority(f), extras: extras ?? {} })
 
 // Golden files: the full system prompt for fixed scenarios. Phase 1 of docs/PRD_COACH_CHAT.md is a pure refactor,
 // so these must not change. A deliberate prompt change updates them with `npx vitest run -u` and a reviewed diff.
@@ -44,7 +48,7 @@ describe('coach prompt sections', () => {
     expect(baselineSection(ctx({ extras: { baseline: '   ' } }))).toBeNull()
     expect(reportsSection(ctx())).toBeNull()
     expect(reportsSection(ctx({ extras: { reports: ['', '  '] } }))).toBeNull()
-    expect(factsSection(ctx())!.some((l) => l.startsWith('- Mind today'))).toBe(false)
+    expect(factsSection(ctx())!.some((l: string) => l.startsWith('- Mind today'))).toBe(false)
   })
 
   it('the assembler drops null sections and joins the rest with one blank line', () => {
@@ -74,5 +78,52 @@ describe('safety note section', () => {
     expect(s).toMatch(/SAFETY NOTE: .*possible emergency symptoms.*Answer their current question normally/)
     expect(s.indexOf('SAFETY NOTE')).toBeGreaterThan(s.indexOf('RULES'))
     expect(s.indexOf('SAFETY NOTE')).toBeLessThan(s.indexOf('PROFILE'))
+  })
+})
+
+// Moved from the app's engine and reports tests when the coach became its own Worker.
+describe('prompt content', () => {
+  it('is safety-bounded, evidence-linked and forbids calorie math', () => {
+    const s = buildCoachSystemPrompt(seedFacts(), 'Alex Tan, 37, 179 cm, 84 kg, cutting to 74 kg')
+    expect(s).toMatch(/Do NOT do calorie or macro arithmetic/)
+    expect(s).toMatch(/Never diagnose/)
+    expect(s).toMatch(/Do the upper-body session today\./)
+    expect(s).toMatch(/Readiness: AMBER/)
+    expect(s).toMatch(/PROPOSAL:/)
+    expect(s).toMatch(/Alex Tan/)
+  })
+
+  it('keeps replies plain and routes new symptoms to the symptom gate', () => {
+    const s = buildCoachSystemPrompt(seedFacts(), 'profile')
+    expect(s).toMatch(/No emoji\./)
+    expect(s).toMatch(/no markdown/)
+    expect(s).toMatch(/never clinical terms/)
+    expect(s).toMatch(/tell them to log it in the app/)
+    expect(s).toMatch(/skip the movements that provoke it, not the whole session/)
+  })
+
+  it('carries mood and stress context and the no-diagnosis rule, never journal text', () => {
+    const s = buildCoachSystemPrompt(seedFacts({ mind: { stressToday: 8, valenceToday: -2, mindfulMinToday: 3, support: true } }), 'Alex Tan')
+    expect(s).toMatch(/never name a condition/)
+    expect(s).toMatch(/breathing session in Mind or talking to someone/)
+    expect(s).toMatch(/Never cancel or block training on mood alone/)
+    expect(s).toMatch(/Mind today: stress 8\/10; mood Unpleasant \(-2 on a -3\.\.3 scale\); mindful minutes 3/)
+    expect(s).toMatch(/talking to someone can help/)
+    expect(buildCoachSystemPrompt(seedFacts(), 'Alex Tan')).not.toMatch(/Mind today:/)
+  })
+
+  it('is unchanged without extras', () => {
+    const f = seedFacts()
+    expect(buildCoachSystemPrompt(f, 'V')).toBe(buildCoachSystemPrompt(f, 'V', {}))
+    expect(buildCoachSystemPrompt(f, 'V', { reports: [], baseline: '  ' })).toBe(buildCoachSystemPrompt(f, 'V'))
+    expect(buildCoachSystemPrompt(f, 'V')).not.toMatch(/HEALTH REPORTS|STARTING POINT/)
+  })
+
+  it('appends the baseline and the report lines with the clinician rule', () => {
+    const s = buildCoachSystemPrompt(seedFacts(), 'V', { baseline: 'Returning lifter, left knee history.', reports: ['Blood test "Lipid panel" (2026-08-02): LDL 3.9 mmol/L [High, printed range ≤ 3.4]'] })
+    expect(s).toMatch(/STARTING POINT[^\n]*\nReturning lifter, left knee history\./)
+    expect(s).toMatch(/HEALTH REPORTS[^\n]*\n- Blood test "Lipid panel"/)
+    expect(s.endsWith(REPORTS_CONTEXT_RULE)).toBe(true)
+    expect(REPORTS_CONTEXT_RULE).toMatch(/never diagnose, never contradict the user's clinician/)
   })
 })

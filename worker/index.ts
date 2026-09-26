@@ -8,6 +8,7 @@
 //   POST /api/ai/chat   { system, turns, attachments? }          → { ok, text, meta }
 //   POST /api/ai/json   { system, prompt, schema, attachments? } → { ok, data, meta }
 //   POST /api/ai/decide { state, instructions, options }           → { ok, choice, confidence, meta } (OpenRouter only)
+//   POST /api/ai/coach/turn  (coach contract v1, coach/contract.ts) → forwarded to the coach Worker (COACH binding)
 //   errors              → { ok: false, kind, message }
 //   GET  /api/ai/owner  → { ok, owner }: the owner profile from the OWNER_PROFILE secret (JSON), so a fresh phone can
 //                         skip onboarding without the profile ever being in the repo or the static bundle. Same guards
@@ -42,6 +43,8 @@ export interface Env extends CoachEnv {
   AI_LIMITER?: { limit(options: { key: string }): Promise<{ success: boolean }> }
   /** Durable Object namespace of DailyBudget (wrangler.jsonc → durable_objects). */
   DAILY_BUDGET?: { idFromName(name: string): unknown; get(id: unknown): { fetch(url: string): Promise<Response> } }
+  /** Service binding to the coach Worker, `fitty-coach` (wrangler.coach.jsonc, docs/PRD_COACH_CHAT.md §13). */
+  COACH?: { fetch(request: Request): Promise<Response> }
 }
 
 /** The part of ExecutionContext this Worker uses. */
@@ -117,9 +120,8 @@ export class DailyBudget {
   }
 }
 
-async function run<R extends { model: string | null }>(env: Env, ctx: Ctx | undefined, call: (up: Upstream) => Promise<R>): Promise<{ reply: R; up: Upstream; durationMs: number }> {
-  const up = upstream(env)
-  if (!up) throw new BridgeError('auth', noKeyMessage(env), 503)
+/** Concurrency, the per-isolate brake and the daily budget around one upstream call (or one coach turn). */
+async function withLimits<T>(env: Env, ctx: Ctx | undefined, call: () => Promise<T>): Promise<T> {
   const started = Date.now()
   for (let i = inflight.length - 1; i >= 0; i--) if (started - inflight[i] > LEASE_MS) inflight.splice(i, 1)
   if (inflight.length >= MAX_CONCURRENT) throw new BridgeError('busy', 'The AI endpoint is busy. Try again in a moment.', 429)
@@ -130,19 +132,45 @@ async function run<R extends { model: string | null }>(env: Env, ctx: Ctx | unde
       const budget = await env.DAILY_BUDGET.get(env.DAILY_BUDGET.idFromName('calls')).fetch('https://daily-budget/take')
       if (budget.status === 429) throw new BridgeError('busy', "Today's AI budget on this server is used up. It resets at midnight UTC.", 429)
     }
-    const pending = call(up)
+    const pending = call()
     // Extra measure: a short client disconnect no longer cancels the call before `finally` (waitUntil adds up to 30 s).
     ctx?.waitUntil(pending.catch(() => undefined))
-    const reply = await pending
+    return await pending
+  } finally {
+    const i = inflight.indexOf(started)
+    if (i >= 0) inflight.splice(i, 1)
+  }
+}
+
+async function run<R extends { model: string | null }>(env: Env, ctx: Ctx | undefined, call: (up: Upstream) => Promise<R>): Promise<{ reply: R; up: Upstream; durationMs: number }> {
+  const up = upstream(env)
+  if (!up) throw new BridgeError('auth', noKeyMessage(env), 503)
+  const started = Date.now()
+  try {
+    const reply = await withLimits(env, ctx, () => call(up))
     checked = { key: `${up.provider}:${up.model}`, auth: 'ok', message: `Connected to ${providerName(up.provider)} through this site's server.`, at: Date.now() }
     return { reply, up, durationMs: Date.now() - started }
   } catch (e) {
     if (e instanceof BridgeError && e.kind === 'auth') checked = { key: `${up.provider}:${up.model}`, auth: 'signed_out', message: e.message, at: Date.now() }
     throw e
-  } finally {
-    const i = inflight.indexOf(started)
-    if (i >= 0) inflight.splice(i, 1)
   }
+}
+
+/**
+ * Forwards a coach turn to the coach Worker after this Worker's checks (HTTPS, origin, PIN, rate limit, budget).
+ * One turn counts once against the budget; on step 1 the coach may make two upstream calls (decide, then chat).
+ */
+async function forwardCoachTurn(request: Request, env: Env, ctx: Ctx | undefined): Promise<Response> {
+  const coach = env.COACH
+  if (!coach) throw new BridgeError('failed', 'The coach service is not connected to this server.', 503)
+  const body = await readTextCapped(request.body, request.headers.get('content-length'))
+  const started = Date.now()
+  const res = await withLimits(env, ctx, () => coach.fetch(new Request('https://fitty-coach/turn', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body })))
+  console.log(`coach turn status=${res.status} ms=${Date.now() - started}`)
+  return new Response(await res.text(), {
+    status: res.status,
+    headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' },
+  })
 }
 
 const chat = (req: ChatRequest, env: Env) => (up: Upstream) =>
@@ -203,6 +231,7 @@ async function handleAi(request: Request, env: Env, path: string, ctx?: Ctx): Pr
     if (isHealth) return send(200, await health(env))
     if (isOwner) return owner(env)
 
+    if (path === '/coach/turn') return await forwardCoachTurn(request, env, ctx)
     if (path !== '/chat' && path !== '/json' && path !== '/decide') throw new BridgeError('bad_request', 'Unknown endpoint.', 404)
     const body = parseBody(await readTextCapped(request.body, request.headers.get('content-length')))
 

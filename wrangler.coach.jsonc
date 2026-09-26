@@ -1,0 +1,17 @@
+// The coach Worker (coach/worker.ts, docs/PRD_COACH_CHAT.md §13): prompts, agents, routing, reply check, model calls.
+// Deployed on its own with `npm run deploy:coach`, so a coach update never rebuilds or redeploys the app.
+// No build step and no assets on purpose: this deploy must never run `npm run build` or touch dist/.
+// No public URL: the only way in is the COACH service binding on the fitty Worker (wrangler.jsonc).
+// Secrets (set with --config wrangler.coach.jsonc): OPENROUTER_API_KEY.
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "fitty-coach",
+  "main": "coach/worker.ts",
+  "compatibility_date": "2026-09-17",
+  "workers_dev": false,
+  "preview_urls": false,
+  "observability": { "enabled": false },
+  // COACH_OPENROUTER_MODEL (chat, default google/gemini-3.8-flash), COACH_OPENROUTER_DATA_COLLECTION (default deny),
+  // COACH_MODEL_ROUTER (decision model, default typesafe/jev-1.13), COACH_SERVICE_TIER ('flex' default | 'standard').
+  "vars": {}
+}
