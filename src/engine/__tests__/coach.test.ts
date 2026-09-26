@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { addDays } from '../../lib/util'
-import { answerLocally, buildCoachSystemPrompt, computeDailyPriority, generateProposals, weeklyReview, type CoachFacts } from '../coach'
+import { answerLocally, computeDailyPriority, generateProposals, weeklyReview, type CoachFacts } from '../coach'
 import { evaluateNutritionTrend } from '../nutrition'
 import { computeReadiness } from '../readiness'
 import { evaluateSymptomGate } from '../symptomGate'
@@ -163,26 +163,7 @@ describe('weeklyReview', () => {
   })
 })
 
-describe('buildCoachSystemPrompt / answerLocally', () => {
-  it('system prompt is safety-bounded, evidence-linked and forbids calorie math', () => {
-    const s = buildCoachSystemPrompt(seedFacts(), 'Alex Tan, 37, 179 cm, 84 kg, cutting to 74 kg')
-    expect(s).toMatch(/Do NOT do calorie or macro arithmetic/)
-    expect(s).toMatch(/Never diagnose/)
-    expect(s).toMatch(/Do the upper-body session today\./)
-    expect(s).toMatch(/Readiness: AMBER/)
-    expect(s).toMatch(/PROPOSAL:/)
-    expect(s).toMatch(/Alex Tan/)
-  })
-
-  it('system prompt keeps replies plain and routes new symptoms to the symptom gate', () => {
-    const s = buildCoachSystemPrompt(seedFacts(), 'profile')
-    expect(s).toMatch(/No emoji\./)
-    expect(s).toMatch(/no markdown/)
-    expect(s).toMatch(/never clinical terms/)
-    expect(s).toMatch(/tell them to log it in the app/)
-    expect(s).toMatch(/skip the movements that provoke it, not the whole session/)
-  })
-
+describe('answerLocally', () => {
   it('answers common questions deterministically with evidence', () => {
     const f = seedFacts()
     expect(answerLocally('How am I doing this week?', f).content).toMatch(/sessions done this week/)

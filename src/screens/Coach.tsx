@@ -19,10 +19,11 @@ import {
   getNutritionTarget, getPendingDecisions, getProfile, getSession, getSetting, getSleepRecords,
 } from '../db/repositories'
 import {
-  AGENT_QUESTION, AGENT_TOOLS, ageAt, agentFromDecision, answerLocally, buildAgentPrompt, computeDailyPriority, checkReply, routeDeterministic, moodSummary, regionLabel, screenMessage, weeklyReview,
-  type CoachFacts, type CoachPriority, type CoachPromptExtras,
+  ageAt, answerLocally, computeDailyPriority, moodSummary, regionLabel, screenMessage, weeklyReview,
+  type CoachFacts, type CoachPriority,
 } from '../engine'
-import { aiConnected, aiDecide, coachChatWithTools, isAIError } from '../ai'
+import type { CoachPromptExtras } from '../../coach/contract'
+import { aiConnected, coachConversation, isAIError } from '../ai'
 import { useAIStatus } from '../features/ai/config'
 import { COMPOSER_CLEARANCE, Composer } from '../features/composer'
 import { reportContextLines } from '../features/reports'
@@ -36,7 +37,7 @@ import {
   toModelTurns,
 } from '../features/coach/chat'
 import { SupportSheet } from '../features/mind/SupportSheet'
-import { TOOL_SPECS, runCoachTool } from '../features/coach/tools'
+import { runCoachTool } from '../features/coach/tools'
 
 const MAX_TURNS = 12
 /** A safety screen hit in this many recent messages keeps the prompt's safety note on. */
@@ -508,22 +509,23 @@ export default function CoachScreen() {
     setThinking(true)
     try {
       const recent = getMessages(SAFETY_LOOKBACK)
-      // Pick the specialist (docs/PRD_COACH_CHAT.md §11.2): rules first, then the decision model on this message
-      // only (never history or facts). Any failure, or no decision model on this setup, means the generalist coach.
-      let agent = routeDeterministic(q, latestAgent(recent)).agent
-      if (!agent) {
-        agent = await aiDecide({ state: q, ...AGENT_QUESTION }, { dataType: 'coach_message', purpose: 'Pick which coach answers (this message only)' })
-          .then(agentFromDecision, () => 'coach' as const)
-      }
-      const system = buildAgentPrompt(agent, { facts: f, profileSummary: summaryRef.current, priority: computeDailyPriority(f), extras: promptExtras(recent) })
-      const turns = toModelTurns(getMessages(MAX_TURNS + 1)).slice(-MAX_TURNS)
-      // Read-only tools let the agent look up more data (§12); tool results count as facts it was given.
-      const allowed = AGENT_TOOLS[agent]
-      const { text, toolResults } = await coachChatWithTools(system, turns, allowed.map((n) => TOOL_SPECS[n]), (name, args) => runCoachTool(name, args, f.today, allowed))
-      // L3 reply check (docs/PRD_COACH_CHAT.md §7): a rejected reply is never shown and never becomes a proposal.
-      const checked = checkReply(text, [system, ...toolResults].join('\n'))
-      if (!checked.ok) { replyLocally('AI reply withheld. Answered from your data.'); return }
-      const reply = checked.text
+      // The coach service (docs/PRD_COACH_CHAT.md §13) routes to a specialist, builds its prompt, calls the model and
+      // checks the reply. The app sends redacted turns and today's facts, and runs any tools it asks for on the device.
+      const outcome = await coachConversation(
+        {
+          turns: toModelTurns(getMessages(MAX_TURNS + 1)).slice(-MAX_TURNS),
+          facts: f,
+          priority: computeDailyPriority(f),
+          profileSummary: summaryRef.current,
+          extras: promptExtras(recent),
+          previousAgent: latestAgent(recent),
+        },
+        (name, args) => runCoachTool(name, args, f.today),
+      )
+      // A reply the coach's check rejected is never shown and never becomes a proposal.
+      if (outcome.kind === 'withheld') { replyLocally('AI reply withheld. Answered from your data.'); return }
+      const reply = outcome.text
+      const agent = outcome.agent
       const evidence = computeDailyPriority(f).evidence
       addMessage({ ts: nowIso(), role: 'coach', content: reply, evidence: tagSource(tagAgent(evidence, agent), 'ai') })
       const proposal = extractProposalLine(reply)
@@ -544,7 +546,11 @@ export default function CoachScreen() {
       }
     } catch (e) {
       const kind = isAIError(e) ? e.kind : 'unknown'
-      replyLocally(kind === 'offline' ? 'Offline. Answered from your data.' : 'AI did not answer. Answered from your data.')
+      replyLocally(
+        kind === 'offline' ? 'Offline. Answered from your data.'
+          : kind === 'not_configured' ? 'Coach chat needs the AI server. Answered from your data.'
+            : 'AI did not answer. Answered from your data.',
+      )
     } finally {
       busyRef.current = false
       setThinking(false)

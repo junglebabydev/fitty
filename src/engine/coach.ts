@@ -1,5 +1,6 @@
-// Coach logic (PRD §13): one daily priority, discrete proposals, weekly review, LLM system prompt,
-// and deterministic local answers. Demanding on adherence, conservative on symptoms, never guilt.
+// Coach logic (PRD §13): one daily priority, discrete proposals, weekly review and deterministic local answers.
+// Demanding on adherence, conservative on symptoms, never guilt. The LLM system prompt lives in the coach Worker
+// (coach/, docs/PRD_COACH_CHAT.md §13).
 import type { CoachDecision, Evidence, Macros, NutritionTarget, WorkoutSession } from '../domain/types'
 import { addDays, dayName, fmtDuration, startOfWeek } from '../lib/util'
 import { HIGH_STRESS, LOW_VALENCE, VALENCE_WORDS, breathingTechnique, suggestTechnique } from './mind'
@@ -8,7 +9,6 @@ import { STRENGTH_MINIMUM } from './planner'
 import type { ReadinessResult } from './readiness'
 import { type GateResult, regionLabel, capitalize } from './symptomGate'
 import { projectDate } from './trends'
-import { assembleCoachPrompt, type CoachPromptExtras } from './coachPrompt'
 
 export interface CoachFacts {
   today: string
@@ -349,13 +349,6 @@ export function weeklyReview(f: WeeklyReviewInput): WeeklyReview {
 
   const summary = `Training ${training}%, nutrition ${nutrition}%, sleep ${sleep}%. ${highlights[0] ? highlights[0] + '. ' : ''}${concerns[0] ? `Biggest fix: ${concerns[0].toLowerCase()}.` : 'Nothing to fix — repeat the week.'}`
   return { training, nutrition, sleep, highlights, concerns, summary }
-}
-
-export type { CoachPromptExtras } from './coachPrompt'
-
-/** The coach system prompt, assembled from ordered sections (see coachPrompt.ts). */
-export function buildCoachSystemPrompt(f: CoachFacts, profileSummary: string, extras?: CoachPromptExtras): string {
-  return assembleCoachPrompt({ facts: f, profileSummary, priority: computeDailyPriority(f), extras: extras ?? {} })
 }
 
 export function answerLocally(question: string, f: CoachFacts): { content: string; evidence: Evidence[] } {

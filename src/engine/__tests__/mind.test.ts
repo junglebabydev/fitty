@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { MindSession, MoodLog, SleepRecord } from '../../domain/types'
 import { addDays, isoAt } from '../../lib/util'
-import { buildCoachSystemPrompt, computeDailyPriority, answerLocally, type CoachFacts } from '../coach'
+import { computeDailyPriority, answerLocally, type CoachFacts } from '../coach'
 import {
   BREATHING_TECHNIQUES, INSIGHT_CAVEAT, JOURNAL_KIND_LABELS, JOURNAL_PROMPTS, MOOD_CONTEXTS, MOOD_LABELS, VALENCE_WORDS,
   breathingTechnique, cycleSeconds, labelsForValence, mindInsights, moodSummary, promptForDate, suggestContexts,
@@ -260,16 +260,6 @@ describe('coach: mind context', () => {
     const redSymptoms = [sym('knee_left', 7)]
     const red = facts(mind, { gate: evaluateSymptomGate(redSymptoms), readiness: computeReadiness({ sleepLastNightMin: 430, sleepAvg7Min: 430, symptoms: redSymptoms, checkIn: null, sessionsLast7: 2 }) })
     expect(breathing(computeDailyPriority(red))).toHaveLength(1)
-  })
-
-  it('system prompt carries mood / stress context and the no-diagnosis rule, never journal text', () => {
-    const s = buildCoachSystemPrompt(facts({ stressToday: 8, valenceToday: -2, mindfulMinToday: 3, support: true }), 'Alex Tan')
-    expect(s).toMatch(/never name a condition/)
-    expect(s).toMatch(/breathing session in Mind or talking to someone/)
-    expect(s).toMatch(/Never cancel or block training on mood alone/)
-    expect(s).toMatch(/Mind today: stress 8\/10; mood Unpleasant \(-2 on a -3\.\.3 scale\); mindful minutes 3/)
-    expect(s).toMatch(/talking to someone can help/)
-    expect(buildCoachSystemPrompt(facts(), 'Alex Tan')).not.toMatch(/Mind today:/)
   })
 
   it('answers a stress question locally with a technique and an option, keeping the priority', () => {

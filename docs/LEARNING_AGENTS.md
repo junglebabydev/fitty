@@ -97,6 +97,21 @@ back as a tool result. Vercel AI SDK's `maxSteps`, or LangChain's AgentExecutor,
 **Try:** after deploying, ask "how did I sleep the last two weeks?" and open the Privacy Ledger:
 two coach calls, the second "with data the coach looked up".
 
+### Phase 8: the coach as its own service (built)
+**Teaches:** separating "the agent" from "the app": a versioned contract, a stateless service, dependency injection
+for model calls, and deploying one without the other.
+**Read, in order:** `coach/contract.ts` (the whole interface between app and coach), then
+`coach/__tests__/turn.test.ts` (the contract fixture test first), then `coach/turn.ts` (`coachTurn(req, deps)`),
+then `coach/worker.ts` (deps wired to OpenRouter), then `forwardCoachTurn` in `worker/index.ts`, then the
+`/coach/turn` branch in `server/aiBridge.ts` (the same core, wired to Claude Code), then `coachConversation` in
+`src/ai/gateway.ts`.
+**The idea:** the app owns the data and the safety screen; the coach owns how to talk. Because the coach core takes
+its model calls as arguments (`deps`), the same code runs in production (OpenRouter), in local dev (Claude Code) and
+in tests (stubs). A committed request fixture is the promise to the deployed app: if it breaks, you need a new
+contract version. Real platforms call this an "agent service" behind an API gateway; here the gateway is the
+fitty Worker and the service binding.
+**Try:** change a word in `coachingSection`, run `npm run coach:dry`, and notice the app build never ran.
+
 ## 1. Agents: tool calling, planning, reasoning, memory
 
 **The idea.** An agent is a loop: a model reads the conversation, then either answers or asks to

@@ -1,46 +1,18 @@
 // Read-only tools the coach model may call (docs/PRD_COACH_CHAT.md §12). Every number a tool returns is computed
 // here, so the model quotes figures and never does its own arithmetic. No tool writes anything: changes still go
 // through the PROPOSAL line and Accept/Reject. The summarisers are pure; `runCoachTool` reads the local database.
-import type { ToolSpec } from '../../ai'
 import { EXERCISES, FOODS } from '../../data'
 import type { FoodRecord } from '../../data/foods'
 import type { Exercise, NutritionTarget, SleepRecord, WorkoutSession } from '../../domain/types'
-import type { ToolName } from '../../engine'
 import {
   dailyTotalsRange, exerciseHistory, getNutritionTarget, getSessions, getSetsForSession, getSleepRecords,
   type DailyTotal, type ExerciseHistoryEntry,
 } from '../../db/repositories'
 import { addDays, dateOf, fmtDuration } from '../../lib/util'
 
-const DAYS = { type: 'integer', enum: [7, 14, 30], description: 'How many days back, today included.' }
-
-export const TOOL_SPECS: Record<ToolName, ToolSpec> = {
-  get_sleep: {
-    name: 'get_sleep',
-    description: 'Sleep for the last 7, 14 or 30 days: each night, the average, and nights under 5 h 30 m.',
-    parameters: { type: 'object', properties: { days: DAYS }, required: ['days'], additionalProperties: false },
-  },
-  get_training: {
-    name: 'get_training',
-    description: 'Training sessions in the last 7, 14 or 30 days with their status, and the heaviest set of each exercise.',
-    parameters: { type: 'object', properties: { days: DAYS }, required: ['days'], additionalProperties: false },
-  },
-  get_exercise_history: {
-    name: 'get_exercise_history',
-    description: 'The last 6 sessions of one exercise: the top set (load, reps, reps in reserve) of each.',
-    parameters: { type: 'object', properties: { exercise: { type: 'string', description: 'Exercise name, e.g. "leg press".' } }, required: ['exercise'], additionalProperties: false },
-  },
-  get_nutrition: {
-    name: 'get_nutrition',
-    description: 'Daily calories and protein against target for the last 7, 14 or 30 days, and how many days were logged.',
-    parameters: { type: 'object', properties: { days: DAYS }, required: ['days'], additionalProperties: false },
-  },
-  search_library: {
-    name: 'search_library',
-    description: "Search the app's exercise library and food list by keyword. Up to 5 matches with key facts.",
-    parameters: { type: 'object', properties: { query: { type: 'string', description: 'A few keywords, e.g. "hip hinge dumbbell" or "chicken rice".' } }, required: ['query'], additionalProperties: false },
-  },
-}
+/** The tools this app can run. The coach Worker decides which ones each agent is offered (coach/agents.ts). */
+export const APP_TOOLS = ['get_sleep', 'get_training', 'get_exercise_history', 'get_nutrition', 'search_library'] as const
+type ToolName = (typeof APP_TOOLS)[number]
 
 // --- pure summarisers ----------------------------------------------------------------------------------------
 
@@ -146,12 +118,13 @@ function parseArgs(raw: string): Record<string, unknown> | null {
 const daysArg = (a: Record<string, unknown>): number | null => (a.days === 7 || a.days === 14 || a.days === 30 ? a.days : null)
 
 /**
- * Runs one tool call against the local database and returns its JSON result. Bad names or arguments return
- * `{ "error": ... }` for the model to read; nothing throws, and a tool not in `allowed` is refused.
+ * Runs one tool call against the local database and returns its JSON result. Unknown names (a newer coach asking
+ * for a tool this app version doesn't have) and bad arguments return `{ "error": ... }` for the model to read;
+ * nothing throws.
  */
-export function runCoachTool(name: string, rawArgs: string, today: string, allowed: readonly ToolName[]): string {
+export function runCoachTool(name: string, rawArgs: string, today: string): string {
   const out = (v: unknown) => JSON.stringify(v)
-  if (!(allowed as readonly string[]).includes(name)) return out({ error: `Unknown tool "${name}".` })
+  if (!(APP_TOOLS as readonly string[]).includes(name)) return out({ error: `Unknown tool "${name}".` })
   const args = parseArgs(rawArgs)
   if (!args) return out({ error: 'Arguments must be a JSON object.' })
   try {

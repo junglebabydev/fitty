@@ -1,6 +1,6 @@
 # Deploy to Cloudflare (Worker + static assets)
 
-The app deploys as **one Cloudflare Worker named `fitty`**: the built PWA (`./dist`) is served as static assets, and the Worker script (`worker/index.ts`) answers only `/api/ai/*`, the hosted AI endpoint. Everything is described in `wrangler.jsonc`; the GitHub repo `junglebabydev/fitty` is connected through **Workers Builds**, so every push to the production branch deploys.
+The app deploys as **one Cloudflare Worker named `fitty`**: the built PWA (`./dist`) is served as static assets, and the Worker script (`worker/index.ts`) answers only `/api/ai/*`, the hosted AI endpoint. The **coach** (prompts, agents, routing, reply check, model calls) is a **second Worker, `fitty-coach`**, deployed on its own (section 1b), so a coach update never touches the app. Everything is described in `wrangler.jsonc`; the GitHub repo `junglebabydev/fitty` is connected through **Workers Builds**, so every push to the production branch deploys.
 
 Checked against the Cloudflare and Google docs on 2026-09-18 (links at the end).
 
@@ -20,6 +20,36 @@ Notes:
 3. From your own machine: `npm run deploy` (build + `wrangler deploy`, needs `npx wrangler login` once) and `npm run cf:dry` (bundles the Worker into `.wrangler/dry` without logging in or uploading).
 4. **No preview deploys.** Every preview build is one more public `*-fitty.<subdomain>.workers.dev` origin with the production `GEMINI_API_KEY`, `ANTHROPIC_API_KEY` and `COACH_BRIDGE_PIN` bound and its own set of in-memory limiters, and any branch pushed to the repo would run its Worker code with those secrets. `wrangler.jsonc` therefore sets `"preview_urls": false`, and the non-production deploy command stays empty. If you really need previews, set `preview_urls` to `true`, use `npx wrangler versions upload` there, and make sure the Access policy in section 4 covers previews.
 5. The first `wrangler deploy` also creates the `DailyBudget` Durable Object (the `migrations` entry in `wrangler.jsonc`). SQLite-backed Durable Objects are available on the Workers Free plan, and nothing has to be created by hand. Both bindings are optional in the code: if a first deploy is refused because of the `ratelimits` or the `durable_objects` + `migrations` entries, remove that entry and the Worker runs without that one limit.
+
+## 1b. The coach Worker (`fitty-coach`)
+
+`fitty` forwards `POST /api/ai/coach/turn` to `fitty-coach` through a **service binding** (`COACH` in `wrangler.jsonc`), after its own HTTPS, origin, PIN, rate-limit and daily-budget checks. `fitty-coach` has no public URL (`workers_dev: false`, no routes), no build step and no assets (`wrangler.coach.jsonc`), so deploying it never runs `npm run build` and never changes what phones load.
+
+**First time (before the PR that adds the binding merges).** Cloudflare refuses to deploy a Worker whose service binding points at a Worker that does not exist yet, so `fitty-coach` goes first, from your Mac:
+
+```bash
+export CLOUDFLARE_ACCOUNT_ID=<the jungle.baby account id>
+npx wrangler secret put OPENROUTER_API_KEY --config wrangler.coach.jsonc
+npm run deploy:coach
+```
+
+Then merge: Workers Builds deploys `fitty` with the binding.
+
+**Updating the coach.** Change files under `coach/`, run `npm test` and `npm run typecheck:coach`, merge, then `npm run deploy:coach` from `main`. The app is not rebuilt. `npm run coach:dry` bundles it into `.wrangler/coach-dry` without uploading. The contract test (`coach/__tests__/turn.test.ts`, fixture `turn-request-v1.json`) fails if a coach change would stop understanding what the deployed app sends. Optionally, connect a second Workers Builds project to the same repo with Worker name `fitty-coach`, deploy command `npx wrangler deploy --config wrangler.coach.jsonc`, and build watch paths `coach/*` and `worker/*`, so coach changes deploy on merge like the app does.
+
+**Coach settings** (vars in `wrangler.coach.jsonc`, secret with `--config wrangler.coach.jsonc`):
+
+| Name | Kind | Default | Meaning |
+|---|---|---|---|
+| `OPENROUTER_API_KEY` | Secret | none | Required. The coach calls OpenRouter only. |
+| `COACH_OPENROUTER_MODEL` | Var | `google/gemini-3.8-flash` | Chat model for every agent. |
+| `COACH_OPENROUTER_DATA_COLLECTION` | Var | `deny` | Same meaning as on `fitty`. |
+| `COACH_SERVICE_TIER` | Var | `flex` | Flex first with an 8 s timeout, then standard. `standard` turns Flex off. |
+| `COACH_MODEL_ROUTER` | Var | `typesafe/jev-1.13` | Decision model that picks the agent for an undecided message. Pinned. |
+
+**Budget.** One coach turn counts once against `fitty`'s daily budget and rate limit, but step 1 can make two OpenRouter calls (Jev, then chat). A message with tools is 2–3 turns.
+
+**Without the coach Worker** (binding missing, or its key unset) coach chat answers from local data; every other AI feature is unaffected. Coach chat also needs the hosted Worker or the Mac bridge: with a Gemini or Anthropic key entered directly in the app, it answers from local data.
 
 ## 2. Secrets (required for hosted AI)
 
@@ -54,8 +84,8 @@ Optional plain settings go in `wrangler.jsonc` → `vars` (dashboard-only text v
 | `COACH_PROVIDER` | unset | `gemini` or `anthropic`. Unset = Gemini if its key exists, else Anthropic. |
 | `COACH_GEMINI_MODEL` | `gemini-3.8-flash` | Gemini model code. |
 | `COACH_MODEL` | `claude-opus-5` | Claude model id. Opus is the most expensive tier; `claude-sonnet-5` or `claude-haiku-4-5` cost a fraction of it per call. Only matters when the Worker uses the Anthropic key. |
-| `COACH_SERVICE_TIER` | `flex` | OpenRouter only. `flex` tries the half-price Flex tier for coach chat with an 8 s timeout, then retries once at standard. `standard` turns Flex off. |
-| `COACH_MODEL_ROUTER` | `typesafe/jev-1.13` | OpenRouter only. The decision model behind `/api/ai/decide`, which picks the coach agent for a message. Pinned: change it only after replaying the routing set. |
+| `COACH_SERVICE_TIER` | `flex` | OpenRouter only, `/api/ai/chat` on `fitty`. The coach Worker has its own copy (section 1b); this one only matters for app versions from before the coach Worker. |
+| `COACH_MODEL_ROUTER` | `typesafe/jev-1.13` | OpenRouter only, `/api/ai/decide` on `fitty`, kept for app versions from before the coach Worker. The coach Worker has its own copy (section 1b). |
 
 Then open the site → **Settings → AI**, enter the same PIN once per device. The status line should read connected, with the provider name.
 

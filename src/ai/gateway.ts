@@ -3,7 +3,8 @@ import { AnthropicProvider } from './anthropic'
 import { BridgeProvider } from './bridge'
 import { GeminiProvider } from './gemini'
 import { MockProvider } from './mock'
-import { AIError, type AIProvider, type AIProviderId, type AgentTurn, type ChatTurn, type DecideRequest, type DecideResult, type ToolSpec, type JsonRequest, type MealContext, type MealImage, type MealRecognition } from './types'
+import { COACH_CONTRACT_VERSION, MAX_COACH_STEPS, type CoachTurnRequest, type CoachTurnResponse, type CoachTurnTurn } from '../../coach/contract'
+import { AIError, type AIProvider, type AIProviderId, type ChatTurn, type JsonRequest, type MealContext, type MealImage, type MealRecognition } from './types'
 
 export { AIError }
 export type { AIErrorKind } from './types'
@@ -140,65 +141,33 @@ export function aiJson<T>(req: JsonRequest, meta: { dataType: string; purpose: s
   )
 }
 
-/** A decision should answer in ~100 ms; past this the caller uses its fallback. */
-export const DECIDE_TIMEOUT_MS = 3_000
+/** Everything a coach turn needs apart from the loop state (agent, step, this message's tool turns). */
+export type CoachTurnBase = Omit<CoachTurnRequest, 'v' | 'agent' | 'step' | 'turns'> & { turns: ChatTurn[] }
+export type CoachOutcome = Exclude<CoachTurnResponse, { kind: 'tool_calls' }>
 
 /**
- * One choice question to the decision model (docs/PRD_COACH_CHAT.md §11.6). Throws AIError('not_configured')
- * without a ledger row when the provider has none (Mac bridge, direct keys, mock), so callers fall back quietly.
+ * A coach turn on the coach service (docs/PRD_COACH_CHAT.md §13). The coach routes, prompts, calls the model and
+ * checks the reply; this loop runs the tools it asks for on the device and sends the results back, at most
+ * MAX_COACH_STEPS calls. Throws AIError('not_configured') without a ledger row where there is no coach service.
  */
-export function aiDecide(req: DecideRequest, meta: { dataType: string; purpose: string }): Promise<DecideResult> {
-  const decide = provider.decide
-  if (!decide) return Promise.reject(new AIError('not_configured'))
-  return guarded(
-    { provider: ledgerProvider, dataType: meta.dataType, purpose: meta.purpose, bytes: req.state.length },
-    meta.purpose,
-    (p) => withTimeout(decide.call(p, req), DECIDE_TIMEOUT_MS, meta.purpose),
-  )
-}
-
-/** Model calls per coach message when tools are on: at most two rounds of tool calls, then a forced text answer. */
-export const MAX_TOOL_STEPS = 3
-
-/**
- * Coach chat with read-only tools (docs/PRD_COACH_CHAT.md §12.2): the model may ask for data, `runTool` answers
- * locally (the data is on this device), and the loop repeats up to MAX_TOOL_STEPS calls; the last call declares the
- * tools with tool_choice "none" so the model has to answer. Returns the reply and the tool results, which the
- * caller's reply check treats as facts the model was given. Without tool support (Mac bridge, direct keys, mock),
- * or when the first call with tools is refused, it is one plain coachChat call.
- */
-export async function coachChatWithTools(
-  system: string, turns: ChatTurn[], tools: ToolSpec[], runTool: (name: string, args: string) => string,
-): Promise<{ text: string; toolResults: string[] }> {
-  const step = provider.coachChatStep
-  if (!step || !tools.length) return { text: await coachChat(system, turns), toolResults: [] }
-  const convo: AgentTurn[] = [...turns]
-  const toolResults: string[] = []
-  for (let i = 1; i <= MAX_TOOL_STEPS; i++) {
-    const last = i === MAX_TOOL_STEPS
-    const bytes = JSON.stringify({ system, convo }).length
-    let reply
-    try {
-      reply = await guarded(
-        { provider: ledgerProvider, dataType: 'coach_context', purpose: i === 1 ? "Coach chat (profile summary, today's facts, conversation)" : 'Coach chat, with data the coach looked up', bytes },
-        'Coach chat',
-        (p) => p.coachChatStep!(system, convo, tools, last ? 'none' : undefined),
-      )
-    } catch (e) {
-      // A server without tool support refuses the request as a bad request; answer without tools instead.
-      if (i === 1 && e instanceof AIError && e.kind === 'unknown') return { text: await coachChat(system, turns), toolResults: [] }
-      throw e
-    }
-    if (last || !reply.toolCalls.length) {
-      if (!reply.text) throw new AIError('unknown', 'The AI returned an empty reply.')
-      return { text: reply.text, toolResults }
-    }
-    convo.push({ role: 'assistant', content: reply.text, toolCalls: reply.toolCalls })
-    for (const call of reply.toolCalls) {
-      const out = runTool(call.name, call.arguments)
-      toolResults.push(out)
-      convo.push({ role: 'tool', toolCallId: call.id, content: out })
-    }
+export async function coachConversation(base: CoachTurnBase, runTool: (name: string, args: string) => string): Promise<CoachOutcome> {
+  if (!provider.coachTurn) throw new AIError('not_configured', 'Coach chat needs the AI server.')
+  const turns: CoachTurnTurn[] = [...base.turns]
+  let agent: CoachTurnRequest['agent']
+  for (let step = 1 as CoachTurnRequest['step']; step <= MAX_COACH_STEPS; step++) {
+    const req: CoachTurnRequest = { v: COACH_CONTRACT_VERSION, ...base, turns: [...turns], step, ...(agent ? { agent } : {}) }
+    const res = await guarded(
+      {
+        provider: ledgerProvider, dataType: 'coach_context', bytes: JSON.stringify(req).length,
+        purpose: step === 1 ? "Coach chat (profile summary, today's facts, conversation)" : 'Coach chat, with data the coach looked up',
+      },
+      'Coach chat',
+      (p) => p.coachTurn!(req),
+    )
+    if (res.kind !== 'tool_calls') return res
+    agent = res.agent
+    turns.push({ role: 'assistant', content: '', toolCalls: res.toolCalls })
+    for (const call of res.toolCalls) turns.push({ role: 'tool', toolCallId: call.id, content: runTool(call.name, call.arguments) })
   }
-  throw new AIError('unknown')
+  throw new AIError('unknown', 'The coach did not answer.')
 }

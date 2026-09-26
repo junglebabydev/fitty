@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { buildCoachSystemPrompt, computeDailyPriority } from '../coach'
-import { AGENT_IDS, AGENT_QUESTION, agentFromDecision, buildAgentPrompt, routeDeterministic, type AgentId } from '../coachAgents'
-import { seedFacts } from './fixtures'
+import { computeDailyPriority } from '../../src/engine/coach'
+import { seedFacts } from '../../src/engine/__tests__/fixtures'
+import { AGENT_IDS, AGENT_QUESTION, agentFromDecision, buildAgentPrompt, routeDeterministic, type AgentId } from '../agents'
+import { assembleCoachPrompt } from '../prompt'
 
 describe('routeDeterministic', () => {
   const CASES: [string, AgentId | null][] = [
@@ -44,7 +45,7 @@ describe('agent prompts', () => {
   const ctx = { facts, profileSummary: 'profile', priority: computeDailyPriority(facts), extras: { reports: ['LDL 3.9 mmol/L'] } }
 
   it('coach is exactly the generalist prompt', () => {
-    expect(buildAgentPrompt('coach', ctx)).toBe(buildCoachSystemPrompt(facts, 'profile', ctx.extras))
+    expect(buildAgentPrompt('coach', ctx)).toBe(assembleCoachPrompt(ctx))
   })
 
   for (const agent of AGENT_IDS) {
@@ -82,7 +83,7 @@ describe('agentFromDecision', () => {
 
   it('offers every agent plus other, with snake_case names the Worker accepts', () => {
     expect(Object.keys(AGENT_QUESTION.options).sort()).toEqual([...AGENT_IDS, 'other'].sort())
-    for (const [k, v] of Object.entries(AGENT_QUESTION.options)) {
+    for (const [k, v] of Object.entries(AGENT_QUESTION.options) as [string, string][]) {
       expect(k).toMatch(/^[a-z_]{1,40}$/)
       expect(v.length).toBeLessThanOrEqual(300)
     }
