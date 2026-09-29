@@ -19,10 +19,10 @@ import {
   getNutritionTarget, getPendingDecisions, getProfile, getSession, getSetting, getSleepRecords,
 } from '../db/repositories'
 import {
-  ageAt, answerLocally, buildCoachSystemPrompt, computeDailyPriority, moodSummary, regionLabel, weeklyReview,
-  type CoachFacts, type CoachPriority,
+  AGENT_QUESTION, AGENT_TOOLS, ageAt, agentFromDecision, answerLocally, buildAgentPrompt, computeDailyPriority, checkReply, routeDeterministic, moodSummary, regionLabel, screenMessage, weeklyReview,
+  type CoachFacts, type CoachPriority, type CoachPromptExtras,
 } from '../engine'
-import { aiConnected, coachChat, isAIError, type ChatTurn } from '../ai'
+import { aiConnected, aiDecide, coachChatWithTools, isAIError } from '../ai'
 import { useAIStatus } from '../features/ai/config'
 import { COMPOSER_CLEARANCE, Composer } from '../features/composer'
 import { reportContextLines } from '../features/reports'
@@ -31,9 +31,16 @@ import { buildCoachFacts } from '../features/coach/facts'
 import {
   acceptDecision, decisionKindLabel, extractProposalLine, isReversible, numberOr, rejectDecision, revertDecision, syncProposals,
 } from '../features/coach/apply'
-import { baselineContext, firstSentence, isLongReply, proposalsLabel, readSource, tagSource } from '../features/coach/chat'
+import {
+  baselineContext, firstSentence, isLongReply, latestAgent, latestSafetyKind, proposalsLabel, readSafety, readSource, tagAgent, tagSafety, tagSource,
+  toModelTurns,
+} from '../features/coach/chat'
+import { SupportSheet } from '../features/mind/SupportSheet'
+import { TOOL_SPECS, runCoachTool } from '../features/coach/tools'
 
 const MAX_TURNS = 12
+/** A safety screen hit in this many recent messages keeps the prompt's safety note on. */
+const SAFETY_LOOKBACK = 10
 /** Messages shown on the root before "Earlier messages". */
 const RECENT_MESSAGES = 3
 /** At most four suggested prompts (DESIGN §10.1). */
@@ -77,9 +84,14 @@ function profileSummary(): string {
   ].join('; ') + '.'
 }
 
-/** Extra prompt context: the onboarding baseline, plus report summaries only when the user allowed it. Never journal text. */
-function promptExtras(): { baseline?: string; reports?: string[] } {
-  const extras: { baseline?: string; reports?: string[] } = {}
+/**
+ * Extra prompt context: the onboarding baseline, report summaries only when the user allowed it, and the kind of a
+ * recent safety screen hit (never its text). Never journal text.
+ */
+function promptExtras(recent: CoachMessage[]): CoachPromptExtras {
+  const extras: CoachPromptExtras = {}
+  const safetyKind = latestSafetyKind(recent)
+  if (safetyKind) extras.safetyKind = safetyKind
   const baseline = baselineContext(getSetting<unknown>('profile.baseline', null))
   if (baseline) extras.baseline = baseline
   try {
@@ -90,10 +102,6 @@ function promptExtras(): { baseline?: string; reports?: string[] } {
     console.warn('reportContextLines failed', e)
   }
   return extras
-}
-
-function toTurns(messages: CoachMessage[]): ChatTurn[] {
-  return messages.map((m) => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.content }))
 }
 
 function weekInputs(today: string) {
@@ -270,16 +278,19 @@ function UserBubble({ m }: { m: CoachMessage }) {
 }
 
 /** Coach reply in the serif voice: at most three evidence chips, long replies clamp, and a tag says who wrote it. */
-function CoachReply({ m }: { m: CoachMessage }) {
+function CoachReply({ m, onSupport }: { m: CoachMessage; onSupport: () => void }) {
   const [open, setOpen] = useState(false)
   const { source, evidence } = readSource(m.evidence)
+  const safety = readSafety(m.evidence) !== null
   const long = isLongReply(m.content)
   return (
     <div className="max-w-[94%]">
       <CoachQuote
         compact
         evidence={evidence.length > 0 && (!long || open) ? evidence : undefined}
-        actions={long ? (
+        actions={safety ? (
+          <Button variant="secondary" onClick={onSupport}>Open support</Button>
+        ) : long ? (
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
@@ -406,6 +417,7 @@ export default function CoachScreen() {
   const [thinking, setThinking] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
   const [confirmClear, setConfirmClear] = useState(false)
+  const [supportOpen, setSupportOpen] = useState(false)
 
   const factsRef = useRef(facts)
   const summaryRef = useRef(summary)
@@ -468,6 +480,14 @@ export default function CoachScreen() {
     setNotice(null)
     addMessage({ ts: nowIso(), role: 'user', content: q, evidence: [] })
 
+    // L1 safety screen (docs/PRD_COACH_CHAT.md §5): before anything else, offline too. No model sees this message.
+    const hit = screenMessage(q)
+    if (hit) {
+      addMessage({ ts: nowIso(), role: 'coach', content: hit.reply, evidence: tagSafety(hit.kind) })
+      setSupportOpen(true)
+      return
+    }
+
     const f = factsRef.current
     if (!f) {
       addMessage({ ts: nowIso(), role: 'coach', content: 'I need your profile and a nutrition target before I can answer from your data. Finish setup first.', evidence: tagSource([], 'local') })
@@ -487,11 +507,25 @@ export default function CoachScreen() {
     busyRef.current = true
     setThinking(true)
     try {
-      const system = buildCoachSystemPrompt(f, summaryRef.current, promptExtras())
-      const turns = toTurns(getMessages(MAX_TURNS + 1)).slice(-MAX_TURNS)
-      const reply = (await coachChat(system, turns)).trim()
+      const recent = getMessages(SAFETY_LOOKBACK)
+      // Pick the specialist (docs/PRD_COACH_CHAT.md §11.2): rules first, then the decision model on this message
+      // only (never history or facts). Any failure, or no decision model on this setup, means the generalist coach.
+      let agent = routeDeterministic(q, latestAgent(recent)).agent
+      if (!agent) {
+        agent = await aiDecide({ state: q, ...AGENT_QUESTION }, { dataType: 'coach_message', purpose: 'Pick which coach answers (this message only)' })
+          .then(agentFromDecision, () => 'coach' as const)
+      }
+      const system = buildAgentPrompt(agent, { facts: f, profileSummary: summaryRef.current, priority: computeDailyPriority(f), extras: promptExtras(recent) })
+      const turns = toModelTurns(getMessages(MAX_TURNS + 1)).slice(-MAX_TURNS)
+      // Read-only tools let the agent look up more data (§12); tool results count as facts it was given.
+      const allowed = AGENT_TOOLS[agent]
+      const { text, toolResults } = await coachChatWithTools(system, turns, allowed.map((n) => TOOL_SPECS[n]), (name, args) => runCoachTool(name, args, f.today, allowed))
+      // L3 reply check (docs/PRD_COACH_CHAT.md §7): a rejected reply is never shown and never becomes a proposal.
+      const checked = checkReply(text, [system, ...toolResults].join('\n'))
+      if (!checked.ok) { replyLocally('AI reply withheld. Answered from your data.'); return }
+      const reply = checked.text
       const evidence = computeDailyPriority(f).evidence
-      addMessage({ ts: nowIso(), role: 'coach', content: reply || 'No answer came back. Try again.', evidence: tagSource(evidence, 'ai') })
+      addMessage({ ts: nowIso(), role: 'coach', content: reply, evidence: tagSource(tagAgent(evidence, agent), 'ai') })
       const proposal = extractProposalLine(reply)
       if (proposal) {
         // A suggestion only: it becomes a pending proposal the user can Accept or keep current.
@@ -626,7 +660,7 @@ export default function CoachScreen() {
                 <p className="m-0 text-[15px]">Ask about training, food, sleep or symptoms.</p>
               </div>
             )}
-            {visible.map((m) => (m.role === 'user' ? <UserBubble key={m.id} m={m} /> : <CoachReply key={m.id} m={m} />))}
+            {visible.map((m) => (m.role === 'user' ? <UserBubble key={m.id} m={m} /> : <CoachReply key={m.id} m={m} onSupport={() => setSupportOpen(true)} />))}
             {thinking && <TypingSkeleton />}
             {notice && (
               <p className="m-0 flex items-center gap-2 text-sm text-muted" role="status">
@@ -668,6 +702,8 @@ export default function CoachScreen() {
           onRevert={onRevert}
         />
       )}
+
+      <SupportSheet open={supportOpen} onClose={() => setSupportOpen(false)} />
 
       <Sheet open={proposalsOpen} onClose={() => setProposalsOpen(false)} title={proposals ? proposals.count : 'Proposals'}>
         <div className="pb-2">

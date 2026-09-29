@@ -8,7 +8,7 @@ import { aiConnected, isAIError } from '../../ai'
 import { Button, Sheet, TAB_BAR_HEIGHT, useToast } from '../../components'
 import { FEATURES } from '../../config/features'
 import { addMoodLog } from '../../db/repositories'
-import { VALENCE_WORDS, parseVoiceCommand, type ParsedCommand } from '../../engine'
+import { VALENCE_WORDS, parseVoiceCommand, screenMessage, type ParsedCommand } from '../../engine'
 import { cx, nowIso } from '../../lib/util'
 import { usePhotoPicker } from '../../native/PhotoInput'
 import { KEYBOARD_DICTATION_HINT, isSpeechAvailable, startListening, type ListenHandle, type SpeechErrorCode } from '../../native/speech'
@@ -18,7 +18,7 @@ import { captureMealFromFile, REVIEW_PATH } from '../meal/captureMeal'
 import { itemFromFoodItem, newDraft, saveDraft } from '../meal/draft'
 import { VoiceSheet } from '../voice/VoiceSheet'
 import { buildVoiceContext } from '../voice/applyCommand'
-import { actionFromRouter, decideRoute, routeWithAI, type ComposerAction } from './router'
+import { actionFromRouter, coachRoute, decideRoute, routeWithAI, type ComposerAction } from './router'
 
 export type ComposerContext = 'today' | 'eat' | 'coach' | 'train' | 'mind'
 
@@ -183,6 +183,10 @@ export function Composer({ context, placeholder = 'Ask or log anything…' }: Co
     stopListening()
     setNote(null)
     fieldRef.current?.blur()
+
+    // L1 safety screen first (docs/PRD_COACH_CHAT.md §5): nothing is parsed, logged or sent to the AI router.
+    // The Coach screen gives the fixed reply and the Support sheet.
+    if (screenMessage(t)) { setText(''); navigate(coachRoute(t)); return }
 
     let cmd: ParsedCommand
     try {
