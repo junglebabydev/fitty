@@ -49,8 +49,8 @@ Watch in Developer Mode, is a chore nobody keeps up during a training block. Hen
 
 - AA1 Step 1: the Home Screen app opens standalone, works in airplane mode, keeps the screen awake in
   Focus Mode, and still has its data a week later.
-- AA2 Import restores an export byte-for-byte (the round-trip test: export → wipe → import → export,
-  then diff).
+- AA2 Import restores an export exactly: export → wipe → import → export gives content-equal output
+  (the same rows in every table; timestamps in the export header may differ).
 - AA3 Step 2: the shell installs from Xcode on the owner's iPhone, restores the PWA export, and
   reaches the AI Worker with the PIN.
 - AA4 No path in this workstream submits anything to App Store review.
@@ -120,19 +120,25 @@ of what to do.
 ```
 ├──────── dark panel ─────────────────────┤
 │ ┌──────── WORK (hero) ────────────────┐ │
-│ │ 10–12 reps · 16 kg        SET 2 / 3 │ │  reps ≥ 72 px, set ≥ 44 px
+│ │ 10–12  reps · 16 kg       SET 2 / 3 │ │  "10–12" ≥ 72 px; "reps · 16 kg" 20 px; set ≥ 44 px
 │ └─────────────────────────────────────┘ │
-│ ┌──── TIME ─────────┐ ┌──── HEART ────┐ │
-│ │ 12:40    ~18 min  │ │ ♥ 132 bpm     │ │  numerals ≥ 44 px
-│ │ elapsed  left     │ │ ● Watch       │ │  labels ≥ 14 px
-│ └───────────────────┘ └───────────────┘ │
+│ ┌──────────── TIME ───────────────────┐ │
+│ │ 12:40              ~18 min          │ │  both numerals ≥ 44 px, full width
+│ │ elapsed            left             │ │  labels ≥ 14 px
+│ └─────────────────────────────────────┘ │
+│ ┌──────────── HEART (native only) ────┐ │
+│ │ ♥ 132 bpm                 ● Watch   │ │  numeral ≥ 44 px
+│ └─────────────────────────────────────┘ │
 │ ━━━━━━━━━━━━●━━━━━━━━━━━━━━━  (4 px)    │  one session bar, no per-exercise segments
 │ [        ✓  Done set          ]         │  full width, ≥ 64 px
 └─────────────────────────────────────────┘
 ```
 
-- **Work** is the hero and the only thing at 72 px or more.
-- **Time** and **Heart** share one row. Each has a single number at 44 px or more with a 14 px label.
+- **Work** is the hero. Only the reps value (or the countdown) is 72 px or larger. Load and unit sit
+  beside it at 20 px.
+- **Time** gets a full-width row, because two 44 px clock values don't fit in a half-width tile at
+  375 px. **Heart** is its own row, shown only in the native build. On the web the panel is one row
+  shorter, and the stage gets the space.
 - No tile ever means two different things. A rest or timed-set countdown **replaces the Work
   hero** (it's "what to do now"). It never replaces the session "left" clock (§3.3).
 
@@ -150,7 +156,7 @@ of what to do.
 
 | Condition | Tile shows |
 |---|---|
-| Web / PWA (no native bridge) | **Hidden.** Time takes the full row. No "connect" nag on a platform that can't connect. |
+| Web / PWA (no native bridge) | **Hidden.** The row is removed, not left empty. No "connect" nag on a platform that can't connect. |
 | Native, Watch app not running a workout | `—` plus "Start on Watch" (tapping it opens the Watch workout, §3.4) |
 | Native, streaming | bpm, updated at least every 5 s, and a solid dot |
 | Native, last sample > 15 s old | last bpm greyed out, with "Watch lost". The workout carries on. |
@@ -162,7 +168,7 @@ This PRD makes it a goal, but only once Workstream A reaches its native phase. *
 the Watch.** Safari has no HealthKit, no WatchConnectivity and no Web Bluetooth, and the Watch
 doesn't broadcast standard BLE heart rate anyway. See the research doc.
 
-Required pieces (A-phase 3):
+Required pieces (phase 4 in §6, which builds on the Capacitor shell from phase 3):
 1. A small **watchOS app** that runs an `HKWorkoutSession` with `HKLiveWorkoutBuilder` (strength
    training activity type), started from the phone.
 2. **Workout mirroring** (iOS 17+), or WatchConnectivity messages, to stream HR samples to the
@@ -186,8 +192,9 @@ Using HR for rest length or effort is a later decision.
 
 ### 3.6 Acceptance
 
-- AB1 At 390 × 844, every numeral in the panel is ≥ 44 px, the Work hero is ≥ 72 px and every label
-  is ≥ 14 px. Checked with computed styles, not by eye.
+- AB1 At 375 × 812 and at 390 × 844: the Work hero value is ≥ 72 px; the set counter and the Time and
+  Heart numerals are ≥ 44 px; the load and unit text is ≥ 20 px; every label is ≥ 14 px; nothing
+  wraps or clips. Checked with computed styles, not by eye.
 - AB2 The panel shows at most **three** tiles plus the session bar and one button, in every
   state of §3.3.
 - AB3 On the web build, no Heart tile and no "connect" prompt appear.
@@ -206,7 +213,7 @@ means it causes wrong actions or unreadable data, **M** hurts clarity, **L** is 
 | # | Finding | Sev | Evidence | Proposed fix |
 |---|---|---|---|---|
 | C1 | Secondary readouts are too small for the phone's distance (20 px numerals, 12 px labels) | H | §2 table | Workstream B |
-| C2 | During rest, the eyebrow says **"Up next"** above the *current* exercise's name, while the panel says "Next: Hip Thrust". The two contradict each other. | H | Rest screenshot | During rest, the stage keeps "Exercise 1 of 6". Only the Work hero says what's next (set 2 / 3, or the next exercise when the last set is done). |
+| C2 | During rest, the eyebrow says **"Up next"** above the *current* exercise's name, while the panel says "Next: Hip Thrust". The two contradict each other. | M | Rest screenshot | During rest, the stage keeps "Exercise 1 of 6". Only the Work hero says what's next (set 2 / 3, or the next exercise when the last set is done). |
 | C3 | The target shows `10` where the plan says `10–12`, and no load on a first session | M | Set-1 screenshot vs plan list | Show the range. When load is unknown, show "choose load" and tap to adjust. |
 | C4 | The **Next ›** chevron sits 12 px from *Done set*. With sweaty hands, a near-miss skips the exercise without logging. | H | Code: `FocusMode.tsx` Prev · primary · Next row | Move Prev/Next to the top bar as small buttons. The primary spans the full width. |
 | C5 | The gate toast ("Gate clear — run the plan as written") covers the top bar and the station badge for several seconds | M | First screenshot | Show that toast on the list/preview screen, or push the stage down instead of overlaying it |
