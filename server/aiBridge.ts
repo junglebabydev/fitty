@@ -30,6 +30,9 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Plugin } from 'vite'
+import type { CoachTurnRequest, CoachTurnTurn } from '../coach/contract'
+import { coachTurn, parseCoachTurnRequest } from '../coach/turn'
+import { parseChatRequest } from '../worker/guard'
 
 const BIN = process.env.COACH_CLAUDE_BIN || 'claude'
 const DEFAULT_MODEL = process.env.COACH_CLAUDE_MODEL || 'sonnet'
@@ -368,6 +371,13 @@ function guard(req: IncomingMessage): void {
 
 const str = (v: unknown): string => (typeof v === 'string' ? v : '')
 
+/** The conversation as one prompt for `claude -p`, which takes a single message. */
+function transcriptPrompt(turns: { role: string; content: string }[]): string {
+  const last = turns[turns.length - 1]
+  const history = turns.slice(0, -1).map((t) => `${t.role === 'assistant' ? 'Coach' : 'User'}: ${t.content}`).join('\n\n')
+  return history ? `Conversation so far:\n${history}\n\nUser: ${last.content}\n\nReply as the coach to the last user message only.` : last.content
+}
+
 async function handle(req: IncomingMessage, res: ServerResponse, path: string): Promise<void> {
   try {
     guard(req)
@@ -385,13 +395,31 @@ async function handle(req: IncomingMessage, res: ServerResponse, path: string): 
     if (path === '/chat') {
       const turns = Array.isArray(body.turns) ? (body.turns as { role: string; content: string }[]) : []
       if (!turns.length) throw new BridgeError('bad_request', 'turns[] is required.', 400)
-      const last = turns[turns.length - 1]
-      const history = turns.slice(0, -1).map((t) => `${t.role === 'assistant' ? 'Coach' : 'User'}: ${t.content}`).join('\n\n')
-      const prompt = history ? `Conversation so far:\n${history}\n\nUser: ${last.content}\n\nReply as the coach to the last user message only.` : last.content
-      const r = await ask({ system, prompt, attachments, model })
+      const r = await ask({ system, prompt: transcriptPrompt(turns), attachments, model })
       if (!r.text.trim()) throw new BridgeError('failed', 'Claude returned an empty reply. Try again.', 502)
       markHealthy()
       send(res, 200, { ok: true, text: r.text, meta: { durationMs: r.durationMs, costUsd: r.costUsd, model: r.model } })
+      return
+    }
+
+    // The coach runs here in dev, like the coach Worker in production (docs/PRD_COACH_CHAT.md §13), but with Claude
+    // Code for chat: no decision model (undecided messages go to the generalist coach) and no tools.
+    if (path === '/coach/turn') {
+      let turnReq: CoachTurnRequest
+      try {
+        turnReq = parseCoachTurnRequest(body, parseChatRequest({ turns: body.turns }).turns as CoachTurnTurn[])
+      } catch (e) {
+        throw new BridgeError('bad_request', e instanceof Error ? e.message : 'Bad coach request.', 400)
+      }
+      const out = await coachTurn(turnReq, {
+        chat: async (coachSystem, turns) => {
+          const talk = turns.filter((t): t is { role: 'user' | 'assistant'; content: string } => t.role !== 'tool' && !('toolCalls' in t))
+          const r = await ask({ system: coachSystem, prompt: transcriptPrompt(talk), model })
+          return { text: r.text, toolCalls: [] }
+        },
+      })
+      markHealthy()
+      send(res, 200, { ok: true, ...out })
       return
     }
 

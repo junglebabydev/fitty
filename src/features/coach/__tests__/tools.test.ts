@@ -4,14 +4,15 @@ import { EXERCISES } from '../../../data'
 import { db } from '../../../db/database'
 import { getSleepRecords, tableCounts } from '../../../db/repositories'
 import { seedIfEmpty } from '../../../db/seed'
-import { AGENT_TOOLS, type ToolName } from '../../../engine'
+import { AGENT_TOOLS } from '../../../../coach/agents'
+import { TOOL_SPECS } from '../../../../coach/tools'
 import { fmtDuration, todayStr } from '../../../lib/util'
-import { TOOL_SPECS, findExercise, runCoachTool, searchLibrary, summarizeSleep } from '../tools'
+import { APP_TOOLS, findExercise, runCoachTool, searchLibrary, summarizeSleep } from '../tools'
 
 const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 const TODAY = todayStr()
-const ALL: ToolName[] = ['get_sleep', 'get_training', 'get_exercise_history', 'get_nutrition', 'search_library']
-const run = (name: string, args: unknown) => JSON.parse(runCoachTool(name, typeof args === 'string' ? args : JSON.stringify(args), TODAY, ALL))
+const ALL = APP_TOOLS
+const run = (name: string, args: unknown) => JSON.parse(runCoachTool(name, typeof args === 'string' ? args : JSON.stringify(args), TODAY))
 
 beforeAll(async () => {
   await db.init()
@@ -59,19 +60,20 @@ describe('coach tools on the seeded database', () => {
     expect(JSON.stringify(tableCounts())).toBe(before)
   })
 
-  it('bad names, bad arguments and tools the agent was not given return an error, never throw', () => {
+  it('bad names (including tools a newer coach knows but this app does not) and bad arguments return an error, never throw', () => {
     expect(run('drop_tables', {}).error).toMatch(/Unknown tool/)
     expect(run('get_sleep', { days: 9 }).error).toMatch(/7, 14 or 30/)
     expect(run('get_sleep', 'not json').error).toMatch(/JSON object/)
     expect(run('search_library', { query: '' }).error).toMatch(/required/)
-    expect(JSON.parse(runCoachTool('get_sleep', '{"days":7}', TODAY, AGENT_TOOLS.symptoms)).error).toMatch(/Unknown tool/)
+    expect(run('get_heart_rate', { days: 7 }).error).toMatch(/Unknown tool/)
   })
 })
 
 describe('tool specs and summaries', () => {
-  it('every agent tool has a spec whose name matches, in the shape the Worker accepts', () => {
-    for (const tools of Object.values(AGENT_TOOLS)) {
-      for (const n of tools) {
+  it('every tool the coach offers has a spec, and this app can run it', () => {
+    for (const tools of Object.values(AGENT_TOOLS) as (readonly string[])[]) {
+      for (const n of tools as (keyof typeof TOOL_SPECS)[]) {
+        expect((APP_TOOLS as readonly string[]).includes(n)).toBe(true)
         expect(TOOL_SPECS[n].name).toBe(n)
         expect(TOOL_SPECS[n].name).toMatch(/^[a-z_]{1,40}$/)
         expect(JSON.stringify(TOOL_SPECS[n].parameters).length).toBeLessThan(2_000)

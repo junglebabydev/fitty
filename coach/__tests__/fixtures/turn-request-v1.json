@@ -1,0 +1,200 @@
+{
+  "v": 1,
+  "turns": [
+    {
+      "role": "user",
+      "content": "How is my week going?"
+    }
+  ],
+  "facts": {
+    "today": "2026-09-10",
+    "hourNow": 12,
+    "readiness": {
+      "state": "AMBER",
+      "reasons": [
+        "6h 10m sleep, below 7-day average",
+        "Mild left knee soreness (2/10)"
+      ],
+      "modifiers": {
+        "reduceVolume": true,
+        "lowImpactOnly": true,
+        "avoidRegions": [],
+        "suggestRest": false
+      }
+    },
+    "gate": {
+      "regions": [
+        {
+          "region": "knee_left",
+          "level": "OK",
+          "reasons": [
+            "Mild left knee soreness (2/10) — monitor"
+          ],
+          "painScore": 2,
+          "redFlags": []
+        }
+      ],
+      "avoidTags": [],
+      "overall": "OK",
+      "advice": [
+        "Left knee: proceed while monitoring — reduce range or load if it climbs."
+      ]
+    },
+    "plannedToday": {
+      "id": 100,
+      "templateKey": "upper_a",
+      "name": "Upper Body Strength",
+      "type": "strength",
+      "tier": "minimum",
+      "scheduledDate": "2026-09-10",
+      "status": "planned",
+      "startedAt": null,
+      "completedAt": null,
+      "durationMin": null,
+      "readiness": null,
+      "sessionRpe": null,
+      "notes": "",
+      "exercises": []
+    },
+    "sessionsThisWeek": [
+      {
+        "id": 101,
+        "templateKey": "upper_a",
+        "name": "Upper Body Strength",
+        "type": "strength",
+        "tier": "minimum",
+        "scheduledDate": "2026-09-07",
+        "status": "completed",
+        "startedAt": null,
+        "completedAt": "2026-09-07T19:00:00",
+        "durationMin": 42,
+        "readiness": null,
+        "sessionRpe": null,
+        "notes": "",
+        "exercises": []
+      },
+      {
+        "id": 100,
+        "templateKey": "upper_a",
+        "name": "Upper Body Strength",
+        "type": "strength",
+        "tier": "minimum",
+        "scheduledDate": "2026-09-10",
+        "status": "planned",
+        "startedAt": null,
+        "completedAt": null,
+        "durationMin": null,
+        "readiness": null,
+        "sessionRpe": null,
+        "notes": "",
+        "exercises": []
+      },
+      {
+        "id": 102,
+        "templateKey": "full_b",
+        "name": "Full Body Strength",
+        "type": "strength",
+        "tier": "minimum",
+        "scheduledDate": "2026-09-11",
+        "status": "planned",
+        "startedAt": null,
+        "completedAt": null,
+        "durationMin": null,
+        "readiness": null,
+        "sessionRpe": null,
+        "notes": "",
+        "exercises": []
+      },
+      {
+        "id": 103,
+        "templateKey": "conditioning_bike",
+        "name": "Bike Conditioning (low impact)",
+        "type": "conditioning",
+        "tier": "target",
+        "scheduledDate": "2026-09-12",
+        "status": "planned",
+        "startedAt": null,
+        "completedAt": null,
+        "durationMin": null,
+        "readiness": null,
+        "sessionRpe": null,
+        "notes": "",
+        "exercises": []
+      }
+    ],
+    "weekTier": "target",
+    "intakeToday": {
+      "kcal": 5,
+      "proteinG": 0,
+      "carbsG": 1,
+      "fatG": 0
+    },
+    "target": {
+      "id": 1,
+      "startDate": "2026-08-01",
+      "endDate": null,
+      "kcal": 2050,
+      "proteinG": 150,
+      "carbsG": 190,
+      "fatG": 65,
+      "rationale": "seed"
+    },
+    "proteinPaceExpected": 45,
+    "savedMealNames": [
+      "Chicken rice, no skin, extra cucumber",
+      "Fish soup with rice",
+      "Greek yogurt, whey & berries"
+    ],
+    "recentHighProteinFoods": [
+      "Chicken breast",
+      "Greek yogurt"
+    ],
+    "weight": {
+      "latest": 84,
+      "avg7": 84.2,
+      "prevAvg7": 84.6,
+      "goal": 74
+    },
+    "sleepLastNightMin": 370,
+    "sleepAvg7Min": 425,
+    "missedThisWeek": 0,
+    "nutritionTrend": null,
+    "stalls": [],
+    "loggedMealDaysLast7": 5
+  },
+  "priority": {
+    "headline": "Do the upper-body session today.",
+    "directives": [
+      "Keep the habit, trim the dose: one set fewer per exercise, same loads.",
+      "Keep conditioning low impact.",
+      "Get a high-protein lunch — Chicken rice, no skin, extra cucumber or Fish soup with rice. 150 g still to go."
+    ],
+    "evidence": [
+      {
+        "label": "Sleep",
+        "value": "6h 10m last night, 7-day avg 7h 05m"
+      },
+      {
+        "label": "Left knee",
+        "value": "pain 2/10, no red flags (OK)"
+      },
+      {
+        "label": "Protein",
+        "value": "0 / 150 g so far"
+      },
+      {
+        "label": "Calories",
+        "value": "5 / 2,050 kcal so far"
+      },
+      {
+        "label": "Weight",
+        "value": "84.0 kg, 7-day avg 84.2 kg, target 74 kg"
+      }
+    ],
+    "tone": "steady"
+  },
+  "profileSummary": "Alex Tan, 37, 179 cm, 84 kg, cutting to 74 kg",
+  "extras": {},
+  "previousAgent": null,
+  "step": 1
+}

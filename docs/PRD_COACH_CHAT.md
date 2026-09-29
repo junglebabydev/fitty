@@ -5,6 +5,7 @@ Background research: [research/COACH_CHAT_REFERENCES.md](research/COACH_CHAT_REF
 Study guide (what each phase teaches): [LEARNING_AGENTS.md](LEARNING_AGENTS.md).
 Extends [PRD.md](PRD.md) §13 (AI Coach). Where the two conflict, this document wins for the Coach chat only.
 Nothing here changes the rules engine or the proposal flow. The Worker gains model tiers (§11.5), decided 2026-09-25.
+The coach runs as its own Worker, deployed separately from the app (§13), decided 2026-09-26.
 
 ---
 
@@ -311,6 +312,7 @@ Each phase is one PR, merged one at a time (Cloudflare deploys can land out of o
 | 5 | Jev classifier (§11.6) and Worker model tiers (§11.5). | Classifier tests with a stubbed `/api/ai/decide`: timeout, error and confidence under 0.6 all route to `coach`; only the current message is sent; a pain phrase always routes to `symptoms`. Worker tests: an unknown tier and a tier-model 404 both fall back to the default model; a flex timeout or 429 retries once at standard tier; `COACH_SERVICE_TIER=standard` sends no `service_tier`. |
 | 6 | Tool calling (§12): five read-only tools, the client-side loop, Worker pass-through of `tools` and tool turns. | Tool tests against a seeded in-memory database: each tool returns engine-computed values and never writes. Loop tests with a stubbed `coachChat`: a 4th tool request is refused and the model is asked to answer; an unknown tool name or bad arguments return an error result, not a crash. Worker tests: `tools` and tool turns validate and map to OpenRouter's format; tool calls come back as `toolCalls`. L3 test: a number from a tool result passes the invented-numbers check. |
 | 7 | Chat eval: `scripts/chat-eval/`, following `scripts/plan-eval/`. The real prompt goes to several OpenRouter models on ~30 scripted cases. Every reply is scored with `checkReply` plus per-case expectations (e.g. "mentions 995", "contains no PROPOSAL", "names the 3 sessions done", "one question at most"). Cases are grouped by Google's SHARP categories: Safety, Helpfulness, Accuracy, Relevance, Personalization. No LLM judge. Includes cases that need a tool ("how did I sleep the last two weeks?"), scored on whether the right tool was called. Also a labelled routing set (~60 messages → expected agent), scored exactly and replayed whenever the pinned Jev version changes, including symptom questions worded as food or training questions. Compares Gemini 3.8 Flash at Flex and standard tier (quality, p95 latency, fallback rate). Never part of `npm test`. | A per-model pass-rate table in the README. Pick the production model from it. |
+| 8 | The coach as its own Worker (§13): `coach/` with its own deploy, `fitty` forwards over a service binding, the Vite bridge runs the same core. | §13.4. |
 
 ## 10. Later (not in this PRD)
 
@@ -511,3 +513,54 @@ turns ─▶ Worker /api/ai/chat { system, turns, tools }
   `{ text: '', toolCalls }` instead of throwing "empty reply".
 - The direct `gemini` and `anthropic` upstreams reject `tools` with `bad_request`. The client
   then retries without tools.
+
+## 13. The coach as its own Worker (Phase 8, decided 2026-09-26)
+
+**Goal:** update the coach (prompt wording, rules, agents, routing, reply check, models) without rebuilding or
+redeploying the app.
+
+### 13.1 What lives where
+
+| The coach Worker `fitty-coach` (`coach/`) | The app (`src/`) |
+|---|---|
+| Prompt sections and golden files (`coach/prompt.ts`) | L1 safety screen (`screenMessage`), and the redacted turns sent out |
+| Agents, keyword routing, the Jev question, per-agent tools (`coach/agents.ts`) | Facts and the computed priority (rules engine), sent with each turn |
+| Tool specs offered to the model (`coach/tools.ts`) | Tool implementations, run on the device (`src/features/coach/tools.ts`) |
+| Reply check L3 and the safety-note wording (`coach/replyCheck.ts`) | `answerLocally`, the offline and fallback answer |
+| Model and tier choice, OpenRouter calls (`coach/worker.ts`, sharing `worker/` transport) | PROPOSAL extraction, evidence tags, the tool loop (`coachConversation`) |
+
+The app imports `coach/contract.ts` as **types only**. No coach logic ships in the app bundle: `npm run build`
+then grepping `dist/` for coach prompt text finds nothing.
+
+### 13.2 Contract v1 (`coach/contract.ts`)
+
+`POST /api/ai/coach/turn` is stateless and sent once per step:
+`{ v: 1, turns, facts, priority, profileSummary, extras, previousAgent, agent?, step }` →
+`{ v: 1, kind: 'reply' | 'tool_calls' | 'withheld', agent, text? | toolCalls? | reason? }`.
+Step 1 routes; steps 2–3 send back step 1's agent. The app treats agent ids as opaque strings, and the coach
+ignores ones it doesn't know. A tool name the app doesn't know gets an error result, so a newer coach can offer a
+new tool before the app has it.
+
+**Compatibility rule:** `coach/__tests__/turn.test.ts` replays `fixtures/turn-request-v1.json` (a request exactly
+as the app sends it) and must produce the golden prompt. A coach change that breaks it needs a v2 accepted
+alongside v1 until phones have updated.
+
+### 13.3 Hosting
+
+- **Production:** `fitty` does its HTTPS, origin, PIN, rate-limit and budget checks, then forwards to `fitty-coach`
+  over the `COACH` service binding. `fitty-coach` has no public URL. Without the binding, `fitty` answers 503 and
+  the app answers locally.
+- **Local dev:** the Vite bridge serves the same route with the same core (`coachTurn(req, deps)`), with chat wired
+  to Claude Code on the Mac: no Jev (undecided → generalist) and no tools.
+- **Direct-key and mock providers** have no coach service: coach chat answers from local data. Other AI features
+  are unaffected.
+- `fitty`'s `/api/ai/chat`, `/decide` and tool pass-through stay, for app versions cached before this change.
+
+### 13.4 Proof (built 2026-09-26)
+
+Golden files moved as pure renames (R100) and pass unchanged. The v1 fixture produces the golden prompt, both
+through `coachTurn` and through the coach Worker with a stubbed OpenRouter. Route tests on `fitty`: PIN required,
+budget counted, body forwarded unchanged, 503 without the binding. `wrangler deploy --dry-run` of the coach
+bundles 52 KB without running the app build and with no sql.js, DOM or React. The app build has no coach prompt
+text. In the browser through the Mac bridge: coach chat works over `/api/ai/coach/turn`, and a safety hit makes no
+network call.

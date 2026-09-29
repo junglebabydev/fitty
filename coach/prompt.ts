@@ -2,17 +2,15 @@
 // context that returns its lines, or null to leave itself out. The assembler joins sections with one blank line.
 // Order is a contract: guardrails first, variable-length context (reports) last, because the Worker cuts the
 // prompt from the end (MAX_SYSTEM_CHARS).
-import { safetyNoteLine, type SafetyKind } from './chatSafety'
-import type { CoachFacts, CoachPriority } from './coach'
-import { VALENCE_WORDS } from './mind'
-import { regionLabel } from './symptomGate'
-import { dayName, fmtDuration } from '../lib/util'
+// Lives in the coach Worker (docs/PRD_COACH_CHAT.md §13), not the app bundle: imports only pure files from src/.
+import type { SafetyKind } from '../src/engine/chatSafety'
+import type { CoachFacts, CoachPriority } from '../src/engine/coach'
+import { VALENCE_WORDS } from '../src/engine/mind'
+import { regionLabel } from '../src/engine/symptomGate'
+import { dayName, fmtDuration } from '../src/lib/util'
+import type { CoachPromptExtras } from './contract'
 
-/**
- * Optional extra context: the onboarding baseline, one line per shared health report (only when the user opted in),
- * and the kind of a recent safety screen hit (never its text).
- */
-export interface CoachPromptExtras { baseline?: string; reports?: string[]; safetyKind?: SafetyKind }
+export type { CoachPromptExtras }
 
 export interface PromptContext {
   facts: CoachFacts
@@ -76,6 +74,27 @@ export const coachingSection: PromptSection = () => [
   '- When there is a real choice, offer two options and let them pick. Their goal, their call; be honest about what the facts say.',
   '- Consistency beats intensity: prefer the minimum that keeps the week on track over an ambitious plan that gets skipped.',
 ]
+
+const SAFETY_WORDS: Record<SafetyKind, string> = {
+  self_harm: 'self-harm or feeling unsafe',
+  medical_emergency: 'possible emergency symptoms',
+  disordered_eating: 'unsafe eating',
+}
+
+/** Kind-specific care, added to the note. */
+const SAFETY_CARE: Record<SafetyKind, string> = {
+  self_harm: 'Keep the tone gentle and low-pressure.',
+  medical_emergency: 'If they ask about training, suggest they get checked by a doctor before hard exercise.',
+  disordered_eating: 'Never suggest eating below the target, skipping meals, fasting or making up for food with exercise.',
+}
+
+/**
+ * Prompt note while a recent message was screened (PRD §5.4). It keeps the coach careful without stopping it from
+ * coaching: an earlier draft ("do not push training or diet targets") made the model refuse ordinary questions.
+ */
+export function safetyNoteLine(kind: SafetyKind): string {
+  return `SAFETY NOTE: Earlier in this conversation the user raised a concern about ${SAFETY_WORDS[kind]}, and the app showed support resources. Answer their current question normally and kindly. Do not bring the concern up again unless they do; if they do, point them to the Support sheet and, if they are in danger, 995. ${SAFETY_CARE[kind]}`
+}
 
 /** Present only while a recent message was screened by L1 (docs/PRD_COACH_CHAT.md §5.4). */
 export const safetyNoteSection: PromptSection = ({ extras }) => (extras.safetyKind ? [safetyNoteLine(extras.safetyKind)] : null)

@@ -29,6 +29,8 @@
   "ratelimits": [{ "name": "AI_LIMITER", "namespace_id": "1001", "simple": { "limit": 30, "period": 60 } }],
   "durable_objects": { "bindings": [{ "name": "DAILY_BUDGET", "class_name": "DailyBudget" }] },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["DailyBudget"] }],
+  // The coach Worker (wrangler.coach.jsonc). Deploy it first: /api/ai/coach/turn is forwarded to it.
+  "services": [{ "binding": "COACH", "service": "fitty-coach" }],
   // Workers Paid only: more CPU time for large uploads. See docs/DEPLOY.md §8.
   // "limits": { "cpu_ms": 300 },
   // Plain settings only. Secrets (GEMINI_API_KEY or ANTHROPIC_API_KEY, COACH_BRIDGE_PIN) are added in the

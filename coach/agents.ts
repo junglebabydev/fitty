@@ -5,8 +5,8 @@
 import {
   SECTION_ORDER, assembleCoachPrompt, baselineSection, coachingSection, factsSectionFor, identitySection, prioritySection, profileSection,
   proposalContractSection, rulesSection, safetyNoteSection, type FactKey, type PromptContext, type PromptSection,
-} from './coachPrompt'
-import { parseRegion } from './voice'
+} from './prompt'
+import { parseRegion } from '../src/engine/voice'
 
 export type AgentId = 'coach' | 'training' | 'nutrition' | 'recovery' | 'symptoms' | 'mind'
 
