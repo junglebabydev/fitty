@@ -540,7 +540,7 @@ export default function WorkoutScreen() {
 
       <Sheet open={moreOpen} onClose={() => setMoreOpen(false)} title="Session options">
         <div className="flex flex-col -mx-4">
-          {session.exercises.length > 0 && (
+          {!focusOn && session.exercises.length > 0 && (
             <ListRow
               icon={<Maximize2 size={18} />}
               title="Focus mode"
