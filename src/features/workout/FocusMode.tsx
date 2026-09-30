@@ -194,7 +194,7 @@ export function FocusMode(p: FocusModeProps) {
             type="button"
             onClick={resting ? p.timer.skip : primary}
             disabled={!resting && !canLog && timedEndAt == null}
-            className="press mt-2 flex h-14 w-full items-center justify-center gap-2 rounded-full bg-pillar text-[17px] font-semibold text-media disabled:opacity-40"
+            className="press mt-2 flex h-14 w-full items-center justify-center gap-2 rounded-full bg-pillar text-[17px] font-semibold text-accent-fg disabled:opacity-40"
           >
             {!resting && (timed && timedEndAt == null ? <Play size={20} aria-hidden /> : <Check size={20} aria-hidden />)}
             {primaryLabel}
