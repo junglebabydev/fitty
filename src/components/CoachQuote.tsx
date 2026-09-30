@@ -10,7 +10,7 @@ export interface CoachQuoteProps {
   compact?: boolean
 }
 
-/** The coach's voice: serif italic beside a thin bone rule, with its evidence underneath. */
+/** The coach's voice: a semibold statement beside a thin rule, with its evidence underneath. */
 export function CoachQuote({ children, evidence, actions, compact = false }: CoachQuoteProps) {
   return (
     <figure className={cx('m-0 border-l border-accent/60', compact ? 'pl-3.5' : 'pl-4')}>

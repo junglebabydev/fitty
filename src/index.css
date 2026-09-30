@@ -126,7 +126,7 @@
 
   --color-pillar: var(--pillar);
   --color-pillar-soft: color-mix(in oklab, var(--pillar) 14%, transparent);
-  --color-pillar-line: color-mix(in oklab, var(--pillar) 32%, transparent);
+  --color-pillar-line: color-mix(in oklab, var(--pillar) 20%, transparent);
 
   --color-train: var(--c-train);
   --color-eat: var(--c-eat);

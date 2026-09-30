@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
-  ArrowLeftRight, Check, ChevronLeft, ChevronRight, CircleAlert, Clock3, Dumbbell, Ellipsis, Layers, Maximize2, Play, Scissors, ShieldAlert, ShieldCheck,
-  SkipForward, TriangleAlert, Trophy, Weight,
+  ArrowLeftRight, Check, ChevronLeft, ChevronRight, CircleAlert, Ellipsis, Maximize2, Play, Scissors, ShieldAlert, ShieldCheck,
+  SkipForward, TriangleAlert,
 } from 'lucide-react'
 import type { Exercise, ExerciseSet, PlannedExercise, Readiness, Region, WorkoutSession } from '../domain/types'
 import {
-  Button, Card, Celebrate, EmptyState, ExerciseVisual, IconButton, ListRow, ReadinessBadge, Screen, Sheet, StatTile, useToast,
+  Button, Card, Celebrate, EmptyState, ExerciseVisual, IconButton, ListRow, ReadinessBadge, Screen, Sheet, useToast,
 } from '../components'
 import { useNow, useQuery } from '../hooks'
 import { getSession, getSetsForSession, getSymptomChecks, lastSetsForExercise, previousSetsForExercise, updateSession, updateSet } from '../db/repositories'
@@ -296,20 +296,16 @@ export default function WorkoutScreen() {
         <div className="flex flex-col gap-3 pb-10">
           <Card pillar="train" className="anim-rise">
             <MuscleSummary exerciseIds={session.exercises.map((e) => e.exerciseId)} byId={byId}>
-              <div className="eyebrow text-pillar">{future ? `Scheduled for ${dayName(session.scheduledDate, false)}` : 'Ready when you are'}</div>
-              <div className="mt-2 flex items-baseline gap-1.5">
+              <div className="flex items-baseline gap-1.5 whitespace-nowrap">
                 <span className="num text-6xl text-app">~{estimateSessionMinutes(session.exercises)}</span>
                 <span className="text-sm font-medium text-muted">min</span>
               </div>
-              <div className="mt-1 text-sm text-muted"><span className="num text-2xl text-app">{session.exercises.length}</span> moves · <span className="num text-2xl text-app">{plannedTotal}</span> sets</div>
+              <div className="mt-2 text-[15px] text-muted tnum">{session.exercises.length} {session.exercises.length === 1 ? 'move' : 'moves'} · {plannedTotal} sets</div>
             </MuscleSummary>
             <Button variant="primary" size="lg" full className="mt-4" icon={<Play size={20} />} onClick={() => setGateHidden(false)}>
               {future ? 'Start early' : 'Start'}
             </Button>
-            <p className="mt-2.5 flex items-center gap-1.5 text-[13px] text-muted leading-snug">
-              <ShieldCheck size={15} className="shrink-0 text-ok" aria-hidden />
-              <span>A quick symptom check comes first.</span>
-            </p>
+            <p className="mt-2.5 text-center text-[13px] text-muted leading-snug">A quick symptom check comes first.</p>
           </Card>
           <PlannedPreview session={session} byId={byId} />
         </div>
@@ -594,7 +590,7 @@ function PlannedPreview({ session, byId }: { session: WorkoutSession; byId: Map<
   }), [session.id, session.exercises, byId])
   if (!rows.length) return null
   return (
-    <Card flush eyebrow="The plan" className="anim-rise">
+    <Card flush className="anim-rise">
       <ul className="divide-y divide-line">
         {rows.map((r, i) => (
           <li key={r.key} className="flex items-center">
@@ -607,12 +603,14 @@ function PlannedPreview({ session, byId }: { session: WorkoutSession; byId: Map<
               {r.ex ? <ExerciseVisual exercise={r.ex} size="thumb" /> : <span className="num text-xl text-pillar w-5 text-center shrink-0" aria-hidden>{i + 1}</span>}
               <span className="min-w-0 flex-1">
                 <span className="block font-medium text-[15px] leading-tight truncate">{r.name}</span>
-                <span className="block text-[13px] text-muted tnum truncate mt-0.5">
-                  {r.last.length ? `Last: ${summarizeSets(r.last, r.timed)}${rirSummary(r.last) ? ` · ${rirSummary(r.last)}` : ''}` : 'No history yet'}
-                </span>
+                {r.last.length > 0 && (
+                  <span className="block text-[13px] text-muted tnum truncate mt-0.5">
+                    Last: {summarizeSets(r.last, r.timed)}{rirSummary(r.last) ? ` · ${rirSummary(r.last)}` : ''}
+                  </span>
+                )}
               </span>
               <span className="text-right shrink-0">
-                <span className="block num text-xl text-app">{r.sets} × {r.repMin}–{r.repMax}{r.timed ? ' s' : ''}</span>
+                <span className="block num text-xl text-app whitespace-nowrap">{r.sets} × {r.repMin}–{r.repMax}{r.timed ? ' s' : ''}</span>
                 <span className="block text-xs text-muted tnum">
                   {r.target != null ? fmtLoad(r.target) : ''}{r.target != null && r.action && r.last.length ? ' · ' : ''}{r.action && r.last.length ? ACTION_WORD[r.action] : ''}
                 </span>
@@ -715,8 +713,14 @@ function CompletedView({ session, sets, library, today }: { session: WorkoutSess
   for (const p of session.exercises) { rows.push({ id: p.exerciseId, planned: p, sets: grouped.get(p.exerciseId) ?? [] }); seen.add(p.exerciseId) }
   for (const [exId, list] of grouped) if (!seen.has(exId)) rows.push({ id: exId, planned: null, sets: list })
 
-  const painCount = sets.filter((s) => s.painFlag).length
   const volume = sessionVolumeKg(sets)
+  // One line of numbers, like the Finish sheet. Zero and missing values are left out.
+  const stats: { value: string | number; unit: string; label: string }[] = [
+    ...(session.durationMin != null ? [{ value: session.durationMin, unit: 'min', label: 'Time' }] : []),
+    { value: sets.length, unit: sets.length === 1 ? 'set' : 'sets', label: 'Sets' },
+    ...(volume > 0 ? [{ value: fmtVolume(volume), unit: 'kg', label: 'Volume' }] : []),
+    ...(prs.length > 0 ? [{ value: prs.length, unit: prs.length === 1 ? 'best' : 'bests', label: 'Personal bests' }] : []),
+  ]
 
   return (
     <Screen
@@ -727,28 +731,28 @@ function CompletedView({ session, sets, library, today }: { session: WorkoutSess
       eyebrow={`${status.label} · ${dayName(session.scheduledDate)} ${fmtDate(session.scheduledDate)}${session.completedAt ? ` · ${fmtTime(session.completedAt)}` : ''}`}
     >
       <div className="flex flex-col gap-3 pb-10">
-        <div className="grid grid-cols-2 gap-3 anim-rise">
-          <StatTile label="Volume" value={volume > 0 ? fmtVolume(volume) : '—'} unit={volume > 0 ? 'kg' : undefined} icon={Weight} pillar="train" />
-          <StatTile label="Duration" value={session.durationMin != null ? session.durationMin : '—'} unit={session.durationMin != null ? 'min' : undefined} icon={Clock3} />
-          <StatTile label="Sets" value={sets.length} icon={Layers} />
-          <StatTile label="Personal bests" value={prs.length} icon={Trophy} />
+        <div className="anim-rise px-1 pt-1 pb-2">
+          <dl className="flex flex-wrap items-end gap-x-6 gap-y-2">
+            {stats.map((s) => (
+              <div key={s.label} className="min-w-0">
+                <dt className="sr-only">{s.label}</dt>
+                <dd className="flex items-baseline gap-1 whitespace-nowrap">
+                  <span className={cx('num text-3xl', s.label === 'Personal bests' ? 'text-pillar' : 'text-app')}>{s.value}</span>
+                  <span className="text-sm text-muted">{s.unit}</span>
+                </dd>
+              </div>
+            ))}
+          </dl>
+          {(session.sessionRpe != null || session.readiness) && (
+            <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-muted">
+              {session.sessionRpe != null && <span className="tnum">Effort {session.sessionRpe} / 10</span>}
+              {session.readiness && <ReadinessBadge state={session.readiness} compact />}
+            </div>
+          )}
         </div>
 
-        <Card className="anim-rise">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <div className="eyebrow text-muted">Session effort</div>
-              <div className="mt-1.5 flex items-baseline gap-1"><span className="num text-4xl text-app">{session.sessionRpe ?? '—'}</span>{session.sessionRpe != null && <span className="text-sm font-medium text-muted">/ 10 RPE</span>}</div>
-            </div>
-            <div className="text-right">
-              <div className="eyebrow text-muted mb-1.5">Readiness that day</div>
-              {session.readiness ? <ReadinessBadge state={session.readiness} compact /> : <span className="text-sm text-muted">Not recorded</span>}
-            </div>
-          </div>
-        </Card>
-
         {prs.length > 0 && (
-          <Card pillar="train" eyebrow="Personal bests" action={<Trophy size={18} className="text-pillar" aria-hidden />} className="anim-rise">
+          <Card pillar="train" eyebrow="Personal bests" className="anim-rise">
             <ul className="flex flex-col gap-2 text-[15px]">
               {prs.map((p) => (
                 <li key={p.exerciseId} className="flex items-baseline justify-between gap-2">
@@ -765,7 +769,7 @@ function CompletedView({ session, sets, library, today }: { session: WorkoutSess
           </Card>
         )}
 
-        <Card flush eyebrow="Exercises" subtitle={painCount ? `${painCount} set${painCount === 1 ? '' : 's'} flagged for pain` : undefined} className="anim-rise">
+        <Card flush className="anim-rise">
           <ul className="divide-y divide-line">
             {rows.map((r) => {
               const ex = byId.get(r.id)
@@ -813,7 +817,7 @@ function CompletedView({ session, sets, library, today }: { session: WorkoutSess
           <Card eyebrow="Notes"><p className="text-[15px] whitespace-pre-wrap leading-snug">{session.notes}</p></Card>
         )}
 
-        <Button variant="secondary" full icon={<Dumbbell size={16} />} onClick={() => navigate('/train')} className="mt-2">Back to Train</Button>
+        <Button variant="secondary" full onClick={() => navigate('/train')} className="mt-2">Back to Train</Button>
       </div>
     </Screen>
   )

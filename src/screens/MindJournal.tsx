@@ -1,4 +1,5 @@
-// One-prompt journal. Entries live in the local database only: nothing here is read by the
+// One-prompt journal: prompt, text box, Save; entries below as one grouped list.
+// Entries live in the local database only: nothing here is read by the
 // coach facts or the AI gateway (see src/db/repositories/mind.ts).
 import { useEffect, useId, useRef, useState } from 'react'
 import { Lock, Pencil, Plus, Shuffle, Trash2 } from 'lucide-react'
@@ -94,14 +95,14 @@ export default function MindJournalScreen() {
   return (
     <Screen pillar="mind" back="/mind" backLabel="Mind" title="Journal">
       <div className="flex flex-col gap-6 pb-16">
-        <section aria-label={editing ? 'Edit entry' : 'Write'} className="anim-rise flex flex-col gap-4 rounded-[1.25rem] border border-line bg-surface p-4">
+        <section aria-label={editing ? 'Edit entry' : 'Write'} className="anim-rise flex flex-col gap-4">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="eyebrow m-0 text-pillar">
+              <p className="eyebrow m-0 text-muted">
                 {editing ? `Editing · ${fmtDate(dateOf(editing.ts))}` : shownKind ? JOURNAL_KIND_LABELS[shownKind] : 'Prompt'}
                 {editing && shownKind ? ` · ${JOURNAL_KIND_LABELS[shownKind]}` : ''}
               </p>
-              {shownPrompt && <p className="voice m-0 mt-2 text-2xl text-app">{shownKind ? promptBody(shownPrompt) : shownPrompt}</p>}
+              {shownPrompt && <p className="m-0 mt-1 text-[22px] font-semibold leading-snug text-app">{shownKind ? promptBody(shownPrompt) : shownPrompt}</p>}
             </div>
             {!editing && (
               <IconButton icon={<Shuffle size={20} />} label="Show a different prompt" variant="surface" onClick={shuffle} className="rounded-full" />
@@ -117,7 +118,7 @@ export default function MindJournalScreen() {
               onChange={(e) => setText(e.target.value)}
               rows={8}
               placeholder="Start anywhere."
-              className="block min-h-[15rem] w-full resize-none overflow-hidden rounded-2xl border border-line bg-surface-2 px-4 py-3.5 font-serif text-[19px] leading-[1.6] text-app focus:border-pillar-line"
+              className="block min-h-[12rem] w-full resize-none overflow-hidden rounded-2xl border border-line bg-surface px-4 py-3.5 text-[17px] leading-relaxed text-app focus:border-pillar-line"
             />
           </div>
 
@@ -136,8 +137,8 @@ export default function MindJournalScreen() {
             </button>
           )}
 
-          <p className="m-0 flex items-center gap-2 text-sm text-muted">
-            <Lock size={16} className="shrink-0 text-pillar" aria-hidden />
+          <p className="m-0 flex items-center gap-2 text-[13px] text-muted">
+            <Lock size={14} className="shrink-0" aria-hidden />
             <span>Stays on this device.</span>
           </p>
 
@@ -148,28 +149,28 @@ export default function MindJournalScreen() {
         </section>
 
         <section aria-label="Entries" className="anim-rise flex flex-col gap-3" style={{ animationDelay: '55ms' }}>
-          <h2 className="eyebrow m-0 text-pillar">Entries</h2>
+          <h2 className="eyebrow m-0 px-1 text-muted">Entries</h2>
           {entries.length === 0 ? (
-            <p className="voice m-0 px-1 py-6 text-center text-xl text-muted">Nothing written yet.</p>
+            <p className="m-0 px-1 py-4 text-[15px] text-muted">Nothing written yet.</p>
           ) : (
-            <ul className="m-0 flex list-none flex-col gap-3 p-0">
+            <ul className="m-0 flex list-none flex-col overflow-hidden rounded-[1.25rem] border border-line bg-surface p-0">
               {visible.map((e) => {
                 const kind = promptById(e.promptId)?.kind
                 return (
-                  <li key={e.id} className="rounded-[1.25rem] border border-line bg-surface p-4">
+                  <li key={e.id} className="border-t border-line p-4 first:border-t-0">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <p className="eyebrow m-0 text-muted">
+                        <p className="m-0 text-[13px] text-muted">
                           {fmtDate(dateOf(e.ts))} · {fmtTime(e.ts)}{kind ? ` · ${JOURNAL_KIND_LABELS[kind]}` : ''}
                         </p>
-                        {e.prompt && <p className="voice m-0 mt-1.5 text-[15px] text-muted">{kind ? promptBody(e.prompt) : e.prompt}</p>}
+                        {e.prompt && <p className="m-0 mt-1 text-[15px] font-medium text-app">{kind ? promptBody(e.prompt) : e.prompt}</p>}
                       </div>
                       <div className="-mr-2 -mt-2 flex shrink-0 gap-1">
                         <IconButton icon={<Pencil size={18} />} label={`Edit entry from ${fmtDate(dateOf(e.ts))}`} onClick={() => startEdit(e)} />
                         <IconButton icon={<Trash2 size={18} />} label={`Delete entry from ${fmtDate(dateOf(e.ts))}`} onClick={() => setDeleting(e)} />
                       </div>
                     </div>
-                    <p className="m-0 mt-2 whitespace-pre-wrap break-words font-serif text-[17px] leading-[1.6] text-app">{e.text}</p>
+                    <p className="m-0 mt-2 whitespace-pre-wrap break-words text-[15px] leading-relaxed text-muted">{e.text}</p>
                     {e.tags.length > 0 && (
                       <ul className="m-0 mt-3 flex list-none flex-wrap gap-1.5 p-0" aria-label="Tags">
                         {e.tags.map((t) => (

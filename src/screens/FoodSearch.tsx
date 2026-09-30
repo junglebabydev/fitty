@@ -15,11 +15,11 @@ import {
 } from '../features/meal/draft'
 import { estimateFoodWithAI } from '../features/meal/refine'
 import { useAIStatus } from '../features/ai/config'
-import { ConfidencePill, FoodRow, MacroReadout, MealTypeSelect, PortionControl, RowList, SectionLabel } from '../features/meal/ui'
+import { ConfidencePill, FoodRow, MacroReadout, PortionControl, RowList, SectionLabel } from '../features/meal/ui'
 import { inferMealType } from '../engine/voice'
 import { cx } from '../lib/util'
 
-const PREVIEW_ROWS = 8
+const PREVIEW_ROWS = 5
 /** Shown when a query has no close match at all. */
 const FALLBACK_QUERIES = ['chicken rice', 'eggs', 'fish soup', 'yogurt', 'whey', 'kopi']
 
@@ -72,15 +72,13 @@ function closeMatches(q: string): FoodRecord[] {
 
 // --- quantity sheet ------------------------------------------------------------
 
-function QuantityForm({ pick, reviewMode, defaultMealType, onAdd }: {
+function QuantityForm({ pick, reviewMode, onAdd }: {
   pick: Pick
   reviewMode: boolean
-  defaultMealType: MealType
-  onAdd: (item: DraftItem, mealType: MealType) => void
+  onAdd: (item: DraftItem) => void
 }) {
   const baseG = pick.kind === 'food' ? pick.food.servingG : pick.kind === 'recent' ? pick.item.quantityG : pick.kind === 'estimate' ? pick.item.baseQuantityG : 0
   const [grams, setGrams] = useState<number | null>(pick.kind === 'custom' ? null : baseG)
-  const [mealType, setMealType] = useState<MealType>(defaultMealType)
   // AI estimate: the row itself is editable (macros move the per-100 g basis, grams rescale it)
   const [est, setEst] = useState<DraftItem | null>(pick.kind === 'estimate' ? pick.item : null)
   const [estOpen, setEstOpen] = useState(false)
@@ -128,7 +126,7 @@ function QuantityForm({ pick, reviewMode, defaultMealType, onAdd }: {
     <div className="flex flex-col gap-4">
       {pick.kind !== 'custom' && (
         <>
-          <div className="rounded-[1.25rem] border border-line bg-surface-2 p-4">
+          <div>
             {pick.kind === 'estimate' && (
               <div className="flex items-center justify-between gap-2 mb-3">
                 <span className="inline-flex items-center gap-2 text-[13px] font-medium text-muted"><AIBadge label="AI estimate" />Edit anything</span>
@@ -209,20 +207,12 @@ function QuantityForm({ pick, reviewMode, defaultMealType, onAdd }: {
             <div className="text-[15px] text-muted">Servings</div>
             <Stepper value={servings} onChange={setServings} step={0.5} min={0.5} max={20} format={(n) => `${n} ×`} label="Servings" />
           </div>
-          <div className="rounded-[1.25rem] border border-line bg-surface-2 p-4">
-            {item ? <MacroReadout m={item} size="lg" /> : <p className="text-[15px] text-muted">Name, serving size and calories are needed.</p>}
-          </div>
+          {item ? <MacroReadout m={item} size="lg" /> : <p className="text-[15px] text-muted">Name, serving size and calories are needed.</p>}
         </>
       )}
 
-      {!reviewMode && (
-        <Field label="Meal type" htmlFor="log-meal-type">
-          <MealTypeSelect id="log-meal-type" value={mealType} onChange={setMealType} />
-        </Field>
-      )}
-
-      <Button size="lg" full disabled={!item} onClick={() => item && onAdd(item, mealType)}>
-        {reviewMode ? 'Add to the plate' : item ? `Log ${Math.round(item.kcal)} kcal · ${fmtG(item.proteinG)} protein` : 'Log'}
+      <Button size="lg" full disabled={!item} onClick={() => item && onAdd(item)}>
+        {reviewMode ? 'Add to the plate' : 'Log'}
       </Button>
     </div>
   )
@@ -239,7 +229,6 @@ export default function FoodSearchScreen() {
   const reviewMode = state.returnTo === '/eat/review' && !!draft
   const today = todayStr()
   const date = state.date && /^\d{4}-\d{2}-\d{2}$/.test(state.date) ? state.date : today
-  const defaultMealType: MealType = reviewMode && draft ? draft.mealType : (state.mealType ?? inferMealType(mealTsForDate(date, today)))
 
   const [q, setQ] = useState('')
   const [pick, setPick] = useState<Pick | null>(null)
@@ -248,7 +237,8 @@ export default function FoodSearchScreen() {
   useAIStatus() // re-render when the AI connection changes
   const connected = aiConnected()
 
-  const recent = useQuery(() => recentFoods(10), [])
+  // Quick-add rows have no weight to scale, so they stay out of Recent.
+  const recent = useQuery(() => recentFoods(10).filter((it) => it.quantityG > 0), [])
   const saved = useQuery(() => getSavedMeals(), [])
   const query = q.trim()
   const results = useMemo(() => (query ? searchFoods(query, 30) : []), [query])
@@ -267,16 +257,17 @@ export default function FoodSearchScreen() {
     else navigate(`/eat?date=${date}`, { replace: true })
   }
 
-  const addItem = (item: DraftItem, mealType: MealType) => {
+  const addItem = (item: DraftItem) => {
     setPick(null)
     if (reviewMode) {
       updateDraft((d) => ({ ...d, items: [...d.items, item] }))
       finish(`Added ${item.foodName}`)
       return
     }
+    const ts = mealTsForDate(date, today)
     try {
       addMeal(
-        { ts: mealTsForDate(date, today), mealType, photoUri: null, notes: '', source: 'search', savedName: null, isSaved: false },
+        { ts, mealType: inferMealType(ts), photoUri: null, notes: '', source: 'search', savedName: null, isSaved: false },
         toNewItems([item]),
       )
     } catch (e) {
@@ -284,7 +275,7 @@ export default function FoodSearchScreen() {
       toast.show('Could not log that food', 'error')
       return
     }
-    finish(`Logged ${item.foodName} · ${Math.round(item.kcal)} kcal · P ${fmtG(item.proteinG)}`)
+    finish(`Logged ${item.foodName}`)
   }
 
   const addSavedMeal = (meal: Meal) => {
@@ -336,9 +327,9 @@ export default function FoodSearchScreen() {
     <button
       type="button"
       onClick={() => setPick({ kind: 'custom', name })}
-      className="press w-full inline-flex items-center justify-center gap-2 h-[52px] rounded-[1.25rem] border border-dashed border-line-strong text-[16px] font-medium"
+      className="press w-full inline-flex items-center justify-center gap-2 h-11 text-[15px] font-medium text-pillar"
     >
-      <Plus size={18} aria-hidden />
+      <Plus size={16} aria-hidden />
       <span className="truncate">{label}</span>
     </button>
   )
@@ -353,8 +344,8 @@ export default function FoodSearchScreen() {
       title={reviewMode ? 'Add item' : 'Search'}
       back={reviewMode ? true : '/eat'}
     >
-      <div className="relative mb-5">
-        <Search size={22} className="absolute left-4 top-1/2 -translate-y-1/2 text-faint pointer-events-none" aria-hidden />
+      <div className="relative mb-4">
+        <Search size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-faint pointer-events-none" aria-hidden />
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
@@ -364,7 +355,7 @@ export default function FoodSearchScreen() {
           autoCapitalize="none"
           enterKeyHint="search"
           aria-label="Search foods"
-          className="w-full h-14 pl-12 pr-12 rounded-2xl bg-surface-2 border border-line text-[19px] text-app focus:bg-surface focus:border-line-strong transition-colors"
+          className="w-full h-12 pl-10 pr-12 rounded-xl bg-surface-2 text-[17px] text-app"
         />
         {q && (
           <button
@@ -382,7 +373,7 @@ export default function FoodSearchScreen() {
         {query ? (
           results.length ? (
             <section>
-              <SectionLabel note="per serving">{results.length} result{results.length === 1 ? '' : 's'}</SectionLabel>
+              <SectionLabel>{results.length} result{results.length === 1 ? '' : 's'}</SectionLabel>
               <RowList className="mb-3">{results.map((f) => <div key={f.id}>{foodRow(f)}</div>)}</RowList>
               {customButton(`Add “${query}” as a custom food`, query)}
             </section>
@@ -401,7 +392,7 @@ export default function FoodSearchScreen() {
               )}
               {near.length > 0 ? (
                 <>
-                  <SectionLabel className="mt-5" note="per serving">Closest matches</SectionLabel>
+                  <SectionLabel className="mt-5">Closest matches</SectionLabel>
                   <RowList>{near.map((f) => <div key={f.id}>{foodRow(f)}</div>)}</RowList>
                 </>
               ) : (
@@ -445,7 +436,7 @@ export default function FoodSearchScreen() {
 
             {saved.length > 0 && (
               <section>
-                <SectionLabel note={reviewMode ? 'Adds every item' : 'One tap logs the meal'}>Saved</SectionLabel>
+                <SectionLabel>Saved meals</SectionLabel>
                 <PreviewList
                   items={saved}
                   keyOf={(m) => String(m.id)}
@@ -470,7 +461,7 @@ export default function FoodSearchScreen() {
             )}
 
             <section>
-              <SectionLabel note="≈ HPB-style">Singapore</SectionLabel>
+              <SectionLabel>Singapore</SectionLabel>
               <PreviewList items={sg} keyOf={(f) => f.id} expanded={!!expanded.sg} onExpand={() => expand('sg')} render={foodRow} />
             </section>
 
@@ -485,7 +476,7 @@ export default function FoodSearchScreen() {
       </div>
 
       <Sheet open={pick !== null} onClose={() => setPick(null)} title={sheetTitle}>
-        {pick && <QuantityForm key={pickKey} pick={pick} reviewMode={reviewMode} defaultMealType={defaultMealType} onAdd={addItem} />}
+        {pick && <QuantityForm key={pickKey} pick={pick} reviewMode={reviewMode} onAdd={addItem} />}
       </Sheet>
     </Screen>
   )

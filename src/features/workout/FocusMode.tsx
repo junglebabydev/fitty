@@ -1,8 +1,9 @@
-// Focus Mode (docs/PRD_FOCUS_MODE.md): the BFT-style workout screen, one movement at a time. The movement
-// fills a white stage with its station number; a dark panel holds one huge number (target reps, or the timed-set
-// / rest countdown), set n of total, elapsed · % done · time left, a segment per exercise, and Prev · Done · Next. Logging goes through useSetLogger, so rows match the list view exactly.
+// Focus Mode (docs/PRD_FOCUS_MODE.md): one movement at a time. The movement fills a white stage; a dark panel
+// holds one huge number (target reps, or the timed-set / rest countdown), set n / total, elapsed and time left,
+// a segment per exercise, quiet Prev / Next, and one full-width primary button. Pain is a quiet one-tap text
+// button; everything else lives behind ···. Logging goes through useSetLogger, so rows match the list view exactly.
 // Rendered by WorkoutScreen, which owns the gate, rest timer, pain, substitute and finish handlers.
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type TouchEvent } from 'react'
 import { ArrowLeftRight, Bandage, Check, ChevronLeft, ChevronRight, Ellipsis, Flag, List, Play, Settings2, ShieldAlert, TriangleAlert } from 'lucide-react'
 import type { Exercise, ExerciseSet, PlannedExercise, WorkoutSession } from '../../domain/types'
 import type { GateResult } from '../../engine'
@@ -79,7 +80,6 @@ export function FocusMode(p: FocusModeProps) {
 
   const resting = p.timer.running
   const setNo = Math.min(p.sets.length + 1, p.planned.sets)
-  const pct = p.progress.total > 0 ? Math.min(100, Math.round((p.progress.logged / p.progress.total) * 100)) : 0
 
   const primary = () => {
     if (timed) {
@@ -102,39 +102,47 @@ export function FocusMode(p: FocusModeProps) {
   const mainUnit = resting ? 'rest' : timedEndAt != null ? `of ${duration ?? p.planned.repMin} s` : timed ? 'seconds' : `reps${loadable && load != null ? ` · ${fmtLoad(load)}` : ''}`
   const primaryLabel = resting ? 'Skip rest' : timed ? (timedEndAt != null ? 'Done early' : `Start ${duration ?? p.planned.repMin} s`) : 'Done set'
 
+  // Swipe down on the stage goes back to the list (PRD §4). Only the stage listens, so sheets never trigger it.
+  const [touchStart, setTouchStart] = useState<{ x: number; y: number } | null>(null)
+  const onStageTouchEnd = (e: TouchEvent) => {
+    const t = e.changedTouches[0]
+    if (touchStart && t) {
+      const dy = t.clientY - touchStart.y
+      if (dy > 80 && Math.abs(t.clientX - touchStart.x) < dy / 2) p.onList()
+    }
+    setTouchStart(null)
+  }
+  const left = p.remaining.endsWith('min') ? `${p.remaining} left` : p.remaining
+
   return (
     <div data-pillar="train" className="fixed inset-0 z-[35] flex flex-col bg-media text-media-fg" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
       <div className="mx-auto flex w-full max-w-[430px] flex-1 flex-col min-h-0">
-        {/* Top bar on the white stage: list · gate state · menu */}
-        <div className="flex h-12 shrink-0 items-center gap-2 px-2">
+        {/* Top bar: list · menu. Nothing else. */}
+        <div className="flex h-12 shrink-0 items-center justify-between px-2">
           <IconButton icon={<List size={22} />} label="Show the list view" onClick={p.onList} className="text-media-fg" />
-          <div className="flex-1" />
-          {p.gate.overall !== 'OK' && (
-            <button
-              type="button"
-              onClick={() => setGateOpen(true)}
-              className={cx('press inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-xs font-semibold', p.gate.overall === 'RED' ? 'bg-stop/10 text-stop' : 'bg-warn/10 text-warn')}
-            >
-              {p.gate.overall === 'RED' ? <ShieldAlert size={13} aria-hidden /> : <TriangleAlert size={13} aria-hidden />}
-              {p.gate.overall === 'RED' ? 'Protect it today' : 'Modified today'}
-            </button>
-          )}
           <IconButton icon={<Ellipsis size={22} />} label="Exercise options" onClick={() => setMenuOpen(true)} className="text-media-fg" />
         </div>
 
-        {/* Stage: the movement, a BFT-style station number, the name in caps */}
-        <div className={cx('relative flex-1 min-h-0 px-4 transition-opacity', resting && 'opacity-50')}>
+        {/* Stage: the movement */}
+        <div
+          className={cx('relative flex-1 min-h-0 px-4 transition-opacity', resting && 'opacity-50')}
+          onTouchStart={(e) => { const t = e.touches[0]; if (t) setTouchStart({ x: t.clientX, y: t.clientY }) }}
+          onTouchEnd={onStageTouchEnd}
+        >
           <ExerciseVisual exercise={p.exercise} size="hero" className="h-full! w-full aspect-auto! border-0! bg-transparent!" />
-          <div className="absolute left-4 top-0 flex h-14 w-12 flex-col items-center justify-center rounded-xl bg-pillar text-media" aria-label={`Station ${station} of ${p.segments.length}`}>
-            <span className="num text-[1.7rem] leading-none">{station}</span>
-          </div>
         </div>
-        <div className="shrink-0 px-4 pb-3 pt-2">
-          <div className="text-xs font-semibold uppercase tracking-wide opacity-60">{resting ? 'Up next' : `Exercise ${station} of ${p.segments.length}`}</div>
-          <h1 className="display text-[1.9rem] leading-[1.05] uppercase line-clamp-2">{p.exercise.name}</h1>
+        <div className="shrink-0 px-4 pb-2 pt-2">
+          <div className="flex items-center justify-between gap-3">
+            <div className="eyebrow opacity-60">{resting ? 'Up next' : `${station} of ${p.segments.length}`}</div>
+            {/* Pain stays one tap away (DESIGN §11 invariant). */}
+            <button type="button" onClick={p.onPain} aria-label="Report pain or an issue" className="press -mr-2 inline-flex h-11 items-center gap-1.5 px-2 text-[15px] font-medium opacity-60">
+              <Bandage size={16} aria-hidden />Pain
+            </button>
+          </div>
+          <h1 className="display text-[1.75rem] leading-[1.1] line-clamp-2">{p.exercise.name}</h1>
         </div>
 
-        {/* Dark data panel */}
+        {/* Dark data panel: one big number, the set, the clock, one button */}
         <div className="shrink-0 rounded-t-[1.75rem] bg-panel px-5 pt-5 text-panel-fg" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 1rem)' }}>
           <div className="flex items-end justify-between gap-3">
             <button
@@ -143,64 +151,69 @@ export function FocusMode(p: FocusModeProps) {
               className="press min-w-0 text-left"
               aria-label={resting ? `Rest ${main}` : `${main} ${mainUnit}. Adjust`}
             >
-              <div className="num text-[4.5rem] leading-none" role={resting || timedEndAt != null ? 'timer' : undefined}>{main}</div>
-              <div className="mt-1 text-sm opacity-70">{mainUnit}</div>
+              <div className="num whitespace-nowrap text-[4.5rem] leading-none" role={resting || timedEndAt != null ? 'timer' : undefined}>{main}</div>
+              <div className="mt-1 truncate text-[15px] opacity-60">{mainUnit}</div>
             </button>
-            <div className="text-right">
-              <div className="text-xs font-semibold uppercase tracking-wide opacity-60">Set</div>
-              <div className="num text-4xl leading-none">{setNo}<span className="text-xl opacity-60"> / {p.planned.sets}</span></div>
+            <div className="shrink-0 pb-6 text-right" aria-label={`Set ${setNo} of ${p.planned.sets}`}>
+              <div className="num whitespace-nowrap text-4xl leading-none">{setNo}<span className="text-xl opacity-50"> / {p.planned.sets}</span></div>
             </div>
           </div>
 
           {resting && (
-            <div className="mt-3 flex gap-2">
-              <button type="button" onClick={() => p.timer.extend(-15)} className="press h-10 flex-1 rounded-xl border border-panel-fg/20 text-sm font-semibold">−15 s</button>
-              <button type="button" onClick={() => p.timer.extend(15)} className="press h-10 flex-1 rounded-xl border border-panel-fg/20 text-sm font-semibold">+15 s</button>
+            <div className="-ml-2 mt-1 flex gap-1">
+              <button type="button" onClick={() => p.timer.extend(-15)} aria-label="Remove 15 seconds of rest" className="press h-11 px-2 text-[15px] font-medium opacity-60">−15 s</button>
+              <button type="button" onClick={() => p.timer.extend(15)} aria-label="Add 15 seconds of rest" className="press h-11 px-2 text-[15px] font-medium opacity-60">+15 s</button>
             </div>
           )}
-
-          <div className="mt-4 grid grid-cols-3 gap-2 text-sm">
-            <div><div className="num text-xl leading-none">{p.elapsed}</div><div className="mt-1 text-xs uppercase tracking-wide opacity-60">Elapsed</div></div>
-            <div className="text-center"><div className="num text-xl leading-none">{pct}%</div><div className="mt-1 text-xs uppercase tracking-wide opacity-60">Done</div></div>
-            <div className="text-right"><div className="num text-xl leading-none">{p.remaining}</div><div className="mt-1 text-xs uppercase tracking-wide opacity-60">Left</div></div>
-          </div>
 
           {/* One segment per exercise, filling set by set */}
           <div className="mt-4 flex gap-1" role="progressbar" aria-label="Sets done" aria-valuemin={0} aria-valuemax={p.progress.total} aria-valuenow={p.progress.logged}>
             {p.segments.map((seg, i) => (
-              <div key={i} className={cx('h-1.5 flex-1 overflow-hidden rounded-full bg-panel-fg/15', i === p.index && 'ring-1 ring-panel-fg/50')}>
+              <div key={i} className={cx('h-1 flex-1 overflow-hidden rounded-full bg-panel-fg/15', i === p.index && 'ring-1 ring-panel-fg/50')}>
                 <div className="h-full rounded-full bg-pillar" style={{ width: `${seg.stopped ? 100 : Math.min(100, (seg.done / Math.max(1, seg.planned)) * 100)}%`, opacity: seg.stopped ? 0.35 : 1 }} />
               </div>
             ))}
           </div>
-          <div className="mt-2 truncate text-sm opacity-70">{p.nextName ? `Next: ${p.nextName}` : 'Last exercise'}</div>
+          <div className="mt-2 flex items-baseline justify-between gap-3 whitespace-nowrap text-[15px] opacity-60">
+            <span className="tnum" role="timer" aria-label={`Elapsed ${p.elapsed}`}>{p.elapsed}</span>
+            <span className="tnum">{left}</span>
+          </div>
 
-          {/* Prev · primary · Next */}
-          <div className="mt-4 flex items-center gap-3">
-            <button type="button" onClick={p.onPrev ?? undefined} disabled={!p.onPrev} aria-label="Previous exercise" className="press flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-panel-fg/20 disabled:opacity-30">
-              <ChevronLeft size={24} aria-hidden />
+          {/* Quiet browse: previous · what's next · next */}
+          <div className="mt-2 flex items-center gap-1">
+            <button type="button" onClick={p.onPrev ?? undefined} disabled={!p.onPrev} aria-label="Previous exercise" className="press -ml-3 flex h-11 w-11 shrink-0 items-center justify-center opacity-60 disabled:opacity-20">
+              <ChevronLeft size={22} aria-hidden />
             </button>
-            <button
-              type="button"
-              onClick={resting ? p.timer.skip : primary}
-              disabled={!resting && !canLog && timedEndAt == null}
-              className="press flex h-14 flex-1 items-center justify-center gap-2 rounded-full bg-pillar text-[17px] font-semibold text-media disabled:opacity-40"
-            >
-              {!resting && (timed && timedEndAt == null ? <Play size={20} aria-hidden /> : <Check size={20} aria-hidden />)}
-              {primaryLabel}
-            </button>
-            <button type="button" onClick={p.onNext ?? undefined} disabled={!p.onNext} aria-label="Next exercise" className="press flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-panel-fg/20 disabled:opacity-30">
-              <ChevronRight size={24} aria-hidden />
+            <div className="min-w-0 flex-1 truncate text-center text-[15px] opacity-60">{p.nextName ? `Next: ${p.nextName}` : 'Last exercise'}</div>
+            <button type="button" onClick={p.onNext ?? undefined} disabled={!p.onNext} aria-label="Next exercise" className="press -mr-3 flex h-11 w-11 shrink-0 items-center justify-center opacity-60 disabled:opacity-20">
+              <ChevronRight size={22} aria-hidden />
             </button>
           </div>
+
+          <button
+            type="button"
+            onClick={resting ? p.timer.skip : primary}
+            disabled={!resting && !canLog && timedEndAt == null}
+            className="press mt-2 flex h-14 w-full items-center justify-center gap-2 rounded-full bg-pillar text-[17px] font-semibold text-media disabled:opacity-40"
+          >
+            {!resting && (timed && timedEndAt == null ? <Play size={20} aria-hidden /> : <Check size={20} aria-hidden />)}
+            {primaryLabel}
+          </button>
         </div>
       </div>
 
       <Sheet open={menuOpen} onClose={() => setMenuOpen(false)} title={p.exercise.name}>
         <div className="-mx-4 flex flex-col">
-          <ListRow icon={<Bandage size={18} />} title="Pain / Issue" subtitle="Log it; the plan adapts" onClick={() => { setMenuOpen(false); p.onPain() }} />
-          <ListRow icon={<ArrowLeftRight size={18} />} title="Substitute" subtitle="Swap for a safer or free alternative" onClick={() => { setMenuOpen(false); p.onSubstitute() }} />
-          <ListRow icon={<Settings2 size={18} />} title="Session options" subtitle="Shorten or skip the session" onClick={() => { setMenuOpen(false); p.onOptions() }} />
+          {p.gate.overall !== 'OK' && (
+            <ListRow
+              icon={p.gate.overall === 'RED' ? <ShieldAlert size={18} className="text-stop" /> : <TriangleAlert size={18} className="text-warn" />}
+              title={p.gate.overall === 'RED' ? 'Protect it today' : 'Modified for today'}
+              onClick={() => { setMenuOpen(false); setGateOpen(true) }}
+            />
+          )}
+          <ListRow icon={<Bandage size={18} />} title="Pain / Issue" onClick={() => { setMenuOpen(false); p.onPain() }} />
+          <ListRow icon={<ArrowLeftRight size={18} />} title="Substitute" onClick={() => { setMenuOpen(false); p.onSubstitute() }} />
+          <ListRow icon={<Settings2 size={18} />} title="Session options" subtitle="Shorten or skip" onClick={() => { setMenuOpen(false); p.onOptions() }} />
           <ListRow icon={<Flag size={18} />} title="Finish session" onClick={() => { setMenuOpen(false); p.onFinish() }} />
         </div>
       </Sheet>
@@ -233,8 +246,7 @@ export function FocusDone({ onFinish, onList }: { onFinish(): void; onList(): vo
   return (
     <div data-pillar="train" className="fixed inset-0 z-[35] flex flex-col items-center justify-center gap-4 bg-app px-6 text-center">
       <div className="display text-[2.2rem] leading-tight text-app">All sets done</div>
-      <p className="text-muted">Nice work. Wrap it up to save the session.</p>
-      <Button variant="primary" size="lg" full className="max-w-sm" icon={<Check size={20} />} onClick={onFinish}>Finish session</Button>
+      <Button variant="primary" size="lg" full className="mt-2 max-w-sm" icon={<Check size={20} />} onClick={onFinish}>Finish session</Button>
       <Button variant="ghost" onClick={onList}>Review in the list</Button>
     </div>
   )

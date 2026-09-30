@@ -112,7 +112,7 @@ export function FinishSheet({ open, onClose, session, regions, defaultDurationMi
       <div data-pillar="train" className="flex flex-col gap-7">
         {/* What you did: numbers only, no boxes. Time is tap-to-correct. */}
         <div>
-          <dl className="flex items-end justify-between gap-4">
+          <dl className="flex flex-wrap items-end justify-between gap-x-4 gap-y-3">
             {stats.map((s) => (
               <div key={s.label} className="min-w-0">
                 <dt className="sr-only">{s.label}</dt>
