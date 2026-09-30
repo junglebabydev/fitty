@@ -7,7 +7,7 @@ import { useQuery } from '../hooks'
 import { PLAN_FOCUSES, estimateSessionMinutes, type PlanFocus } from '../engine'
 import { useAIStatus } from '../features/ai/config'
 import { useSetupGate } from '../features/onboarding/SetupGate'
-import { cx, dayName, fmtDate, startOfWeek, todayStr } from '../lib/util'
+import { cx, dayName, startOfWeek, todayStr } from '../lib/util'
 import { SESSION_TYPE_META, exerciseMap, libraryExercises, missedSessions, sessionStatusInfo, weekSessions } from '../features/workout'
 import { PlanSheet } from '../features/workout/PlanSheet'
 import { MuscleSummary } from '../features/workout/PlanVisuals'
@@ -79,7 +79,7 @@ function TrainRoot() {
   const openRoutine = (r: Routine) => { if (setup.require('workout')) setRoutine(r) }
 
   return (
-    <Screen pillar="train" large title="Train" eyebrow={`Week of ${fmtDate(weekStart)}`}>
+    <Screen pillar="train" large title="Train">
       <div className="flex flex-col gap-3 pb-8">
         {/* 1 · today's session */}
         <section className="anim-rise rounded-[1.25rem] border border-pillar-line bg-surface p-4" style={rise(0)} aria-label="Today's session">
@@ -156,7 +156,7 @@ function TrainRoot() {
               })}
             </ul>
           )}
-          <div className="mt-2 grid grid-cols-2 gap-2">
+          <div className="mt-1 flex items-center justify-center gap-6">
             <QuietLink to="/train/mobility" icon={<StretchHorizontal size={16} />} label="Mobility" />
             <QuietLink to="/train?view=library" icon={<BookOpen size={16} />} label="Library" />
           </div>
@@ -172,8 +172,8 @@ function TrainRoot() {
 
 function QuietLink({ to, icon, label }: { to: string; icon: React.ReactNode; label: string }) {
   return (
-    <Link to={to} className="press h-11 rounded-xl border border-line bg-surface text-sm font-semibold text-app inline-flex items-center justify-center gap-1.5">
-      <span className="text-muted" aria-hidden>{icon}</span>{label}
+    <Link to={to} className="press h-11 px-2 text-sm font-medium text-muted inline-flex items-center justify-center gap-1.5">
+      <span aria-hidden>{icon}</span>{label}
     </Link>
   )
 }

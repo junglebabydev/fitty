@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
-  ArrowLeftRight, Check, ChevronLeft, ChevronRight, CircleAlert, Clock3, Dumbbell, Ellipsis, Layers, Play, Scissors, ShieldAlert, ShieldCheck,
+  ArrowLeftRight, Check, ChevronLeft, ChevronRight, CircleAlert, Clock3, Dumbbell, Ellipsis, Layers, Maximize2, Play, Scissors, ShieldAlert, ShieldCheck,
   SkipForward, TriangleAlert, Trophy, Weight,
 } from 'lucide-react'
 import type { Exercise, ExerciseSet, PlannedExercise, Readiness, Region, WorkoutSession } from '../domain/types'
@@ -267,7 +267,6 @@ export default function WorkoutScreen() {
   const plannedTotal = session.exercises.reduce((n, e) => n + e.sets, 0)
   const future = session.scheduledDate > today
   const typeMeta = SESSION_TYPE_META[session.type]
-  const TypeIcon = typeMeta.icon
   const progressPct = plannedTotal > 0 ? Math.min(100, Math.round((sets.length / plannedTotal) * 100)) : 0
 
   const sheets = (
@@ -320,9 +319,7 @@ export default function WorkoutScreen() {
   }
 
   // --- in progress: sticky glass header, set tables, sticky rest bar -------------------------
-  const gateWord = gate.overall === 'OK' ? 'Gate clear' : gate.overall === 'RED' ? 'Protecting today' : 'Modified today'
   const GateIcon = gate.overall === 'OK' ? ShieldCheck : gate.overall === 'RED' ? ShieldAlert : TriangleAlert
-  const gateCls = gate.overall === 'OK' ? 'bg-ok/10 text-ok' : gate.overall === 'RED' ? 'bg-stop/10 text-stop' : 'bg-warn/10 text-warn'
 
   const stale = isStaleSession(session, now)
   const wrapUp = staleWrapUp(session, sets)
@@ -422,13 +419,9 @@ export default function WorkoutScreen() {
         <div className="flex items-center gap-1 pl-1 pr-3 h-14">
           <IconButton icon={<ChevronLeft size={24} />} label="Back to Train" onClick={() => navigate('/train')} />
           <div className="min-w-0 flex-1">
-            <div className="eyebrow text-pillar flex items-center gap-1"><TypeIcon size={12} aria-hidden /><span className="truncate">{typeMeta.label}</span></div>
-            <h1 className="text-[15px] font-semibold leading-tight truncate">{session.name}</h1>
+            <h1 className="text-[15px] font-semibold leading-tight truncate">{session.name.replace(/\s*\(.*\)$/, '')}</h1>
+            <div className="text-[13px] text-muted tnum" role="timer" aria-label={`Elapsed ${fmtElapsed(elapsedSec)}`}>{fmtElapsed(elapsedSec)}</div>
           </div>
-          <div className="num text-3xl text-app px-1" role="timer" aria-label={`Elapsed ${fmtElapsed(elapsedSec)}`}>{fmtElapsed(elapsedSec)}</div>
-          {session.exercises.length > 0 && (
-            <button type="button" onClick={() => setParams({})} className="press h-11 px-3 rounded-xl border border-line-strong text-[15px] font-semibold">Focus</button>
-          )}
           <IconButton icon={<Ellipsis size={20} />} label="Session options" onClick={() => setMoreOpen(true)} className="text-muted" />
           <button type="button" onClick={() => setFinishOpen(true)} className="press ml-1 h-11 px-4 rounded-xl bg-accent text-accent-fg text-[15px] font-semibold">
             Finish
@@ -450,13 +443,6 @@ export default function WorkoutScreen() {
       </header>
 
       <div className="flex flex-col gap-3 px-4 pt-3 pb-44">
-        <div className="flex items-center gap-2 flex-wrap">
-          {session.readiness && <ReadinessBadge state={session.readiness} compact />}
-          <span className={cx('inline-flex items-center gap-1.5 h-7 px-2.5 rounded-full text-xs font-semibold', gateCls)}>
-            <GateIcon size={13} aria-hidden />{gateWord}
-          </span>
-        </div>
-
         {gate.overall !== 'OK' && (
           <div className={cx('rounded-[1.25rem] border p-4 flex items-start gap-3', gate.overall === 'RED' ? 'border-stop/40 bg-stop/5' : 'border-warn/40 bg-warn/5')}>
             <GateIcon size={20} className={cx('shrink-0 mt-0.5', gate.overall === 'RED' ? 'text-stop' : 'text-warn')} aria-hidden />
@@ -505,9 +491,6 @@ export default function WorkoutScreen() {
           })
         )}
 
-        <Button variant="secondary" size="lg" full icon={<Check size={20} />} onClick={() => setFinishOpen(true)} className="mt-2">
-          Finish session
-        </Button>
       </div>
 
       {/* /train/session/:id hides the tab bar, so the rest bar sits on the bottom edge. */}
@@ -557,6 +540,14 @@ export default function WorkoutScreen() {
 
       <Sheet open={moreOpen} onClose={() => setMoreOpen(false)} title="Session options">
         <div className="flex flex-col -mx-4">
+          {session.exercises.length > 0 && (
+            <ListRow
+              icon={<Maximize2 size={18} />}
+              title="Focus mode"
+              subtitle="One move at a time, full screen"
+              onClick={() => { setMoreOpen(false); setParams({}) }}
+            />
+          )}
           <ListRow
             icon={<Scissors size={18} />}
             title="Shortened version (25–35 min)"

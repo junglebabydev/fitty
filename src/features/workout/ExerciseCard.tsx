@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
-  ArrowLeftRight, Bandage, Check, ChevronDown, ChevronRight, ChevronUp, Equal, Keyboard, Mic, MicOff, Play, Plus, ShieldAlert, Square,
+  ArrowLeftRight, Bandage, Check, ChevronRight, Equal, Keyboard, Mic, MicOff, Play, Plus, ShieldAlert, Square,
   TrendingDown, TrendingUp, TriangleAlert, type LucideIcon,
 } from 'lucide-react'
 import type { Exercise, ExerciseSet, PlannedExercise, WorkoutSession } from '../../domain/types'
@@ -43,10 +43,8 @@ const CHIP_META: Record<ChipKind, { label: string; icon: LucideIcon }> = {
   reduced: { label: 'Reduced', icon: ShieldAlert },
 }
 
-const RIR_CHIPS = [0, 1, 2, 3, 4]
-
-// SET | PREVIOUS | KG | REPS | RIR | ✓ — fits a 375 px screen with 44 px inputs and check.
-const GRID = 'grid grid-cols-[1.5rem_minmax(0,1fr)_3.5rem_3.25rem_1.5rem_2.75rem] items-center gap-2'
+// SET | PREVIOUS | KG | REPS | ✓. Effort (RIR) is not asked per set; voice can still set it.
+const GRID = 'grid grid-cols-[1.5rem_minmax(0,1fr)_4rem_4rem_2.75rem] items-center gap-2'
 
 function fmtKgBare(kg: number | null): string {
   if (kg == null) return 'BW'
@@ -63,7 +61,7 @@ function previousText(s: ExerciseSet | undefined, timed: boolean): string {
 export function ExerciseCard({ session, index, planned, exercise, sets, library, stopped, painNext, onLogged, onSubstitute, onPain }: ExerciseCardProps) {
   const toast = useToast()
   const logger = useSetLogger({ session, planned, exercise, sets, stopped, painNext })
-  const { timed, loadable, history, effective, painHere, reduced, painSub, load, setLoad, reps, setReps, duration, setDuration, rir, setRir, canLog } = logger
+  const { timed, loadable, history, effective, painHere, reduced, painSub, load, setLoad, reps, setReps, duration, setDuration, setRir, canLog } = logger
 
   const done = sets.length >= planned.sets
   const [collapsed, setCollapsed] = useState(false)
@@ -157,18 +155,13 @@ export function ExerciseCard({ session, index, planned, exercise, sets, library,
         {stopped ? (
           <span className="inline-flex items-center gap-1 h-7 px-2.5 rounded-full bg-stop/10 text-stop text-xs font-semibold shrink-0"><Square size={12} aria-hidden />Stopped</span>
         ) : (
-          <span className={cx('inline-flex items-center gap-1 h-7 px-2.5 rounded-full text-xs font-semibold tnum shrink-0', done ? 'bg-pillar-soft text-pillar' : 'bg-surface-2 text-muted')}>
-            {done && <Check size={12} strokeWidth={3} aria-hidden />}
-            {sets.length}/{planned.sets}<span className="sr-only"> sets{done ? ' — done' : ''}</span>
-          </span>
+          <button type="button" aria-expanded={!collapsed} aria-label={`${sets.length} of ${planned.sets} sets${done ? ', done' : ''}. ${collapsed ? 'Show' : 'Hide'} sets`} onClick={() => setCollapsed((c) => !c)} className="press min-h-11 -mr-1 pl-1 inline-flex items-center shrink-0">
+            <span className={cx('inline-flex items-center gap-1 h-7 px-2.5 rounded-full text-xs font-semibold tnum', done ? 'bg-pillar-soft text-pillar' : 'bg-surface-2 text-muted')} aria-hidden>
+              {done && <Check size={12} strokeWidth={3} aria-hidden />}
+              {sets.length}/{planned.sets}
+            </span>
+          </button>
         )}
-        <IconButton
-          icon={collapsed ? <ChevronDown size={20} /> : <ChevronUp size={20} />}
-          label={collapsed ? `Expand ${exercise.name}` : `Collapse ${exercise.name}`}
-          aria-expanded={!collapsed}
-          onClick={() => setCollapsed((c) => !c)}
-          className="text-muted -mr-1"
-        />
       </div>
 
       {/* Active card leads with the visual. */}
@@ -204,9 +197,11 @@ export function ExerciseCard({ session, index, planned, exercise, sets, library,
             </>
           )}
         </span>
-        <span className={cx('inline-flex items-center gap-1 h-7 px-2.5 rounded-full border text-xs font-semibold', chipCls)}>
-          <ChipIcon size={13} strokeWidth={2.5} aria-hidden />{chip.label}
-        </span>
+        {chipKind !== 'start' && chipKind !== 'hold' && (
+          <span className={cx('inline-flex items-center gap-1 h-7 px-2.5 rounded-full border text-xs font-semibold', chipCls)}>
+            <ChipIcon size={13} strokeWidth={2.5} aria-hidden />{chip.label}
+          </span>
+        )}
       </button>
       {/* The reason sits behind the chip tap; a pain-driven hold always shows it. */}
       {(reasonOpen || painHold || reduced) && !collapsed && <p className="pl-1 -mt-0.5 text-[13px] text-muted leading-snug">{effective.reason}</p>}
@@ -221,7 +216,6 @@ export function ExerciseCard({ session, index, planned, exercise, sets, library,
               <span>Previous</span>
               <span className="text-center">Kg</span>
               <span className="text-center">{timed ? 'Sec' : 'Reps'}</span>
-              <span className="text-center">RIR</span>
               <span className="flex justify-center"><Check size={12} strokeWidth={3} /></span>
             </div>
           )}
@@ -236,7 +230,6 @@ export function ExerciseCard({ session, index, planned, exercise, sets, library,
               )}
               <span className="num text-xl text-app text-center">{loadable ? fmtKgBare(s.loadKg) : 'BW'}</span>
               <span className="num text-xl text-app text-center">{timed ? s.durationSec ?? '—' : s.reps ?? '—'}</span>
-              <span className="num text-lg text-muted text-center">{s.rir ?? '—'}</span>
               <button
                 type="button"
                 onClick={() => remove(s)}
@@ -274,7 +267,6 @@ export function ExerciseCard({ session, index, planned, exercise, sets, library,
                 ) : (
                   <CellInput value={reps} onChange={setReps} label={`Set ${activeNo} reps`} placeholder={String(effective.repMin)} />
                 )}
-                <span className="num text-lg text-app text-center">{timed ? '—' : rir}</span>
                 <button
                   type="button"
                   onClick={log}
@@ -286,29 +278,6 @@ export function ExerciseCard({ session, index, planned, exercise, sets, library,
                 </button>
               </div>
 
-              {!timed && (
-                <div className="flex items-center gap-2 pl-1" role="group" aria-label="Reps in reserve">
-                  <span className="w-6 text-[10px] font-semibold uppercase tracking-[0.12em] text-faint text-center" aria-hidden>RIR</span>
-                  {RIR_CHIPS.map((n) => {
-                    const selected = n === 4 ? rir >= 4 : rir === n
-                    return (
-                      <button
-                        key={n}
-                        type="button"
-                        aria-pressed={selected}
-                        aria-label={`${n === 4 ? '4 or more' : n} reps in reserve`}
-                        onClick={() => setRir(n)}
-                        className={cx(
-                          'press flex-1 h-11 rounded-xl border num text-lg',
-                          selected ? 'bg-accent text-accent-fg border-accent' : 'bg-surface-2 text-muted border-line',
-                        )}
-                      >
-                        {n === 4 ? '4+' : n}
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
             </>
           )}
 
@@ -320,7 +289,6 @@ export function ExerciseCard({ session, index, planned, exercise, sets, library,
                 <span className="text-[13px] text-faint tnum truncate">{previousText(history.last[no - 1], timed)}</span>
                 <span className="num text-lg text-faint text-center">{loadable ? (targetLoad != null ? fmtKgBare(targetLoad) : '—') : 'BW'}</span>
                 <span className="num text-lg text-faint text-center">{effective.repMin}–{effective.repMax}</span>
-                <span className="num text-lg text-faint text-center">—</span>
                 <span className="mx-auto h-6 w-6 rounded-lg border border-dashed border-line-strong" aria-hidden />
               </div>
             )
@@ -364,18 +332,21 @@ export function ExerciseCard({ session, index, planned, exercise, sets, library,
       )}
 
       {/* Safety actions stay on every card, in every state. */}
-      <div className="mt-3 flex items-center gap-2">
-        <button type="button" onClick={onSubstitute} className="press flex-1 min-w-0 h-11 rounded-xl border border-line-strong text-app text-sm font-semibold inline-flex items-center justify-center gap-1.5">
-          <ArrowLeftRight size={16} aria-hidden />Substitute
+      <div className="mt-2 -mb-1 flex items-center gap-1">
+        {!collapsed && (
+          <button type="button" onClick={onSubstitute} className="press h-11 px-2 text-sm font-medium text-muted inline-flex items-center gap-1.5">
+            <ArrowLeftRight size={15} aria-hidden />Swap
+          </button>
+        )}
+        <button type="button" onClick={onPain} className="press h-11 px-2 text-sm font-medium text-warn inline-flex items-center gap-1.5">
+          <Bandage size={15} aria-hidden />Pain
         </button>
-        <button type="button" onClick={onPain} className="press flex-1 min-w-0 h-11 rounded-xl border border-warn/40 bg-warn/10 text-warn text-sm font-semibold inline-flex items-center justify-center gap-1.5">
-          <Bandage size={16} aria-hidden />Pain / Issue
-        </button>
+        <span className="flex-1" />
         {!stopped && !collapsed && (
           <IconButton
             icon={voice.listening ? <MicOff size={18} /> : <Mic size={18} />}
             label={voice.listening ? 'Stop listening' : `Log a ${exercise.name} set by voice`}
-            variant={voice.listening ? 'primary' : 'surface'}
+            variant={voice.listening ? 'primary' : 'ghost'}
             onClick={() => (voice.listening ? voice.stop() : voice.available ? voice.start() : setTextMode((v) => !v))}
           />
         )}
