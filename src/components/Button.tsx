@@ -59,7 +59,7 @@ export function Button({
       disabled={isDisabled}
       aria-busy={loading || undefined}
       className={cx(
-        'press inline-flex items-center justify-center rounded-full font-semibold tracking-[0.01em] select-none whitespace-nowrap',
+        'press inline-flex items-center justify-center rounded-full font-semibold select-none whitespace-nowrap',
         'disabled:cursor-not-allowed disabled:active:scale-100',
         loading ? 'disabled:opacity-70' : 'disabled:opacity-40',
         VARIANT[variant],

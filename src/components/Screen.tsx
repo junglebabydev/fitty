@@ -60,9 +60,9 @@ export function Screen({
 
   const titleBlock = (
     <div className="min-w-0 flex-1">
-      {eyebrow !== undefined && <p className="eyebrow m-0 mb-1.5 text-pillar">{eyebrow}</p>}
+      {eyebrow !== undefined && <p className="eyebrow m-0 mb-1 text-muted">{eyebrow}</p>}
       {title !== undefined && !titleInBar && (
-        <h1 className={cx('display m-0 text-app text-balance', large ? 'text-4xl' : 'text-3xl')}>{title}</h1>
+        <h1 className={cx('display m-0 text-app text-balance', large ? 'text-[34px]' : 'text-[28px]')}>{title}</h1>
       )}
       {subtitle !== undefined && <p className="m-0 mt-1.5 text-[15px] leading-snug text-muted">{subtitle}</p>}
     </div>
@@ -76,13 +76,13 @@ export function Screen({
             <button
               type="button"
               onClick={goBack}
-              className="press inline-flex h-11 shrink-0 items-center gap-0.5 rounded-full pl-1.5 pr-3 text-[15px] font-medium text-app active:bg-surface-3"
+              className="press inline-flex h-11 shrink-0 items-center gap-0.5 rounded-full pl-1 pr-3 text-[17px] text-pillar active:opacity-60"
             >
               <ChevronLeft size={24} aria-hidden />
               <span>{backLabel}</span>
             </button>
             <div className="min-w-0 flex-1 text-center">
-              {titleInBar && title !== undefined && <h1 className="display m-0 truncate text-xl text-app">{title}</h1>}
+              {titleInBar && title !== undefined && <h1 className="m-0 truncate text-[17px] font-semibold text-app">{title}</h1>}
             </div>
             <div className="flex min-w-11 shrink-0 items-center justify-end gap-1 pr-1">{right}</div>
           </div>

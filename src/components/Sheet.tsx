@@ -117,7 +117,7 @@ export function Sheet({ open, onClose, title, children, footer, hideClose = fals
 
         {(title !== undefined || !hideClose) && (
           <div className="shrink-0 flex items-center justify-between gap-3 px-4 pb-3 min-h-11">
-            <h2 className="display m-0 min-w-0 truncate text-2xl">{title}</h2>
+            <h2 className="display m-0 min-w-0 truncate text-[22px]">{title}</h2>
             {!hideClose && (
               <IconButton icon={<X size={18} />} label="Close" variant="surface" size="sm" onClick={onClose} className="-mr-0.5" />
             )}

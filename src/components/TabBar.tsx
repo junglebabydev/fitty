@@ -59,17 +59,17 @@ export function TabBar({ className }: { className?: string }) {
               aria-label={t.label}
               className={({ isActive }) =>
                 cx(
-                  'flex h-12 min-w-12 items-center justify-center gap-2 rounded-full select-none',
-                  'transition-[flex-grow,background-color,color,transform] duration-300 active:scale-[0.96]',
-                  isActive ? 'grow-[2.2] bg-pillar-soft text-pillar' : 'grow text-muted active:text-app',
+                  'flex h-12 grow flex-col items-center justify-center gap-0.5 rounded-full select-none',
+                  'transition-[background-color,color,transform] duration-200 active:scale-[0.96]',
+                  isActive ? 'bg-accent-soft text-pillar' : 'text-muted active:text-app',
                 )
               }
               style={{ flexBasis: 0 }}
             >
               {({ isActive }) => (
                 <>
-                  <Icon size={22} strokeWidth={isActive ? 2.4 : 2} aria-hidden />
-                  {isActive && <span className="text-[13px] font-semibold leading-none tracking-wide">{t.label}</span>}
+                  <Icon size={21} strokeWidth={isActive ? 2.3 : 1.9} aria-hidden />
+                  <span className="text-[10px] font-medium leading-none">{t.label}</span>
                 </>
               )}
             </NavLink>
