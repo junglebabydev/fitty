@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeftRight, ChevronDown, CircleAlert, ShieldCheck, TriangleAlert, Trophy } from 'lucide-react'
 import type { Exercise } from '../domain/types'
 import { Button, Card, EmptyState, ExerciseVisual, LineChart, MuscleMap, Screen } from '../components'
-import { exerciseMedia } from '../data/exerciseMedia'
+import { EXERCISE_ART_LICENSE_URL, exerciseMedia } from '../data/exerciseMedia'
 import { useQuery } from '../hooks'
 import { exerciseHistory } from '../db/repositories'
 import { TIMED_IDS } from '../engine'
@@ -73,6 +73,12 @@ export default function ExerciseDetailScreen() {
         <div className="anim-rise">
           <ExerciseVisual exercise={exercise} size="hero" />
           {media.animation && <p className="mt-1.5 px-1 text-[12px] text-faint">Animation: ExerciseDB</p>}
+          {media.art && (
+            <p className="mt-1.5 px-1 text-[12px] text-faint">
+              Illustration: Workout Guide by Bryl Lim, after Everkinetic ·{' '}
+              <a href={EXERCISE_ART_LICENSE_URL} target="_blank" rel="noreferrer" className="underline">CC BY-SA 4.0</a>
+            </p>
+          )}
         </div>
 
         {/* Muscles */}

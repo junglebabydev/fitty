@@ -45,21 +45,23 @@ function usePrefersReducedMotion(): boolean {
 }
 
 /**
- * Best available picture of the movement: the looping animation, then the verified photos, then (or on load
- * error) a tinted MuscleMap tile. Reduced motion skips the animation.
+ * Best available picture of the movement: the looping animation, then the verified photos, then the line
+ * illustration, then (or on load error) a tinted MuscleMap tile. Reduced motion skips the animation.
  */
 export function ExerciseVisual({ exercise, size = 'card', className }: ExerciseVisualProps) {
-  const { animation, images } = exerciseMedia(exercise.id)
+  const { animation, images, art } = exerciseMedia(exercise.id)
   const [animFailed, setAnimFailed] = useState(false)
   const [failed, setFailed] = useState(false)
+  const [artFailed, setArtFailed] = useState(false)
   const [frame, setFrame] = useState(0)
   const reduced = usePrefersReducedMotion()
 
   // A new exercise gets a fresh chance to load its media.
-  useEffect(() => { setAnimFailed(false); setFailed(false); setFrame(0) }, [exercise.id])
+  useEffect(() => { setAnimFailed(false); setFailed(false); setArtFailed(false); setFrame(0) }, [exercise.id])
 
   const showAnim = !!animation && !animFailed && !reduced
   const showPhoto = !showAnim && images.length > 0 && !failed
+  const showArt = !showAnim && !showPhoto && !!art && !artFailed
   const crossfade = showPhoto && size === 'hero' && images.length > 1 && !reduced
 
   useEffect(() => {
@@ -72,21 +74,22 @@ export function ExerciseVisual({ exercise, size = 'card', className }: ExerciseV
     <MuscleMap primary={exercise.primaryMuscles} secondary={exercise.secondaryMuscles} size={h} view={view} ariaLabel="" />
   )
 
-  if (showAnim) {
+  if (showAnim || showArt) {
     return (
       <div
         role="img"
         aria-label={exercise.name}
         className={cx('relative overflow-hidden border border-line bg-media', FRAME[size], className)}
       >
+        {/* The illustration is white line art: inverted to near-black ink (#1c1c1c) on the white media tile. */}
         <img
-          src={animation}
+          src={showAnim ? animation! : art!}
           alt=""
           loading="lazy"
           decoding="async"
           draggable={false}
-          onError={() => setAnimFailed(true)}
-          className="absolute inset-0 h-full w-full object-contain"
+          onError={() => (showAnim ? setAnimFailed(true) : setArtFailed(true))}
+          className={cx('absolute inset-0 h-full w-full object-contain', showArt && 'opacity-[0.89] invert')}
         />
       </div>
     )

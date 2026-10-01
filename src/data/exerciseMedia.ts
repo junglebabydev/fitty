@@ -141,11 +141,43 @@ export const EXERCISE_ANIMATION_IDS: Record<string, string> = {
   smith_squat: 'jFtipLl', ab_crunch_machine: 'Wgaz7pm',
 }
 
+// Line illustrations come from Workout Guide by Bryl Lim (https://github.com/bryllim/workout-guide), built on
+// Everkinetic pose artwork; both are CC BY-SA 4.0 (the repository's code is MIT). They fill only the exercises
+// that have neither an animation nor a photo. Each is a white single-path 512 × 512 SVG, loaded on demand from
+// GitHub's raw host at a pinned commit and cached by the service worker (`exercise-art` in vite.config.ts);
+// ExerciseVisual draws it dark on the white media tile. Credit: README → Media, and a line on the exercise screen.
+//
+// The three frames of an exercise vary in quality and pose, so each entry names the one frame that matches our
+// variant (the tucked hollow hold and tuck L-sit use frame 3; frames 1 show the full versions). Every frame was
+// picked by eye on 2026-10-01 and answered HTTP 200 as image/svg+xml. Deliberately left out: the swims (the
+// "swimming" drawing is a machine, not a pool), band moves drawn with other equipment, box step-over, mixed carry,
+// and the range-limited moves the animations also skip. Judgement calls: side plank reach shows the start
+// position only, shrimp squat is drawn holding a pole, landmine row uses the T-bar row drawing.
+
+export const EXERCISE_ART_SOURCE = 'Workout Guide by Bryl Lim, after Everkinetic (CC BY-SA 4.0)'
+export const EXERCISE_ART_LICENSE_URL = 'https://creativecommons.org/licenses/by-sa/4.0/'
+export const EXERCISE_ART_BASE =
+  'https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets'
+
+/** Our exercise id → Workout Guide `<slug>/frame-<n>`. */
+export const EXERCISE_ART_FRAMES: Record<string, string> = {
+  bird_dog: 'bird-dog/frame-1', hollow_hold: 'hollow-body-hold/frame-3', cable_hip_abduction: 'cable-standing-hip-abduction/frame-1',
+  side_lying_hip_abduction: 'side-lying-hip-abduction/frame-2', bb_hip_thrust: 'hip-thrust/frame-1', bb_push_press: 'push-press/frame-1',
+  landmine_press: 'landmine-press/frame-1', landmine_row: 't-bar-row/frame-1', negative_pull_up: 'negative-pull-up/frame-2',
+  hanging_knee_raise: 'hanging-knee-raise/frame-1', pike_push_up: 'pike-push-up/frame-1', bodyweight_squat: 'bodyweight-squat/frame-1',
+  shrimp_squat: 'shrimp-squat/frame-1', nordic_curl_negative: 'nordic-hamstring-curl/frame-1', wall_sit: 'wall-sit/frame-1',
+  copenhagen_plank: 'copenhagen-plank/frame-1', side_plank_reach: 'side-plank/frame-1', l_sit_tuck: 'l-sit-hold/frame-3',
+  half_kneeling_pallof: 'half-kneeling-pallof-press/frame-1', battle_rope: 'battle-ropes/frame-1', rowing_machine: 'rowing/frame-1',
+  assault_bike: 'assault-bike/frame-1',
+}
+
 export interface ExerciseMedia {
   /** Looping GIF of the movement, or null when the exercise has no checked animation. */
   animation: string | null
   /** Start and end position photos ([] when the exercise has no verified photo). */
   images: string[]
+  /** One white line-art frame (SVG), or null when the exercise has no checked illustration. */
+  art: string | null
   source: string | null
 }
 
@@ -153,10 +185,12 @@ export interface ExerciseMedia {
 export function exerciseMedia(id: string): ExerciseMedia {
   const animId = EXERCISE_ANIMATION_IDS[id]
   const photoId = EXERCISE_PHOTO_IDS[id]
+  const artFrame = EXERCISE_ART_FRAMES[id]
   const images = photoId ? [`${EXERCISE_MEDIA_BASE}/${photoId}/0.jpg`, `${EXERCISE_MEDIA_BASE}/${photoId}/1.jpg`] : []
   return {
     animation: animId ? `${EXERCISE_ANIMATION_BASE}/${animId}.gif` : null,
     images,
+    art: artFrame ? `${EXERCISE_ART_BASE}/${artFrame}.svg` : null,
     source: photoId ? EXERCISE_MEDIA_SOURCE : null,
   }
 }
