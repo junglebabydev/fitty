@@ -4,7 +4,7 @@
 // button; everything else lives behind ···. Logging goes through useSetLogger, so rows match the list view exactly.
 // Rendered by WorkoutScreen, which owns the gate, rest timer, pain, substitute and finish handlers.
 import { useEffect, useState, type TouchEvent } from 'react'
-import { ArrowLeftRight, Bandage, Check, ChevronLeft, ChevronRight, Ellipsis, Flag, List, Play, Settings2, ShieldAlert, TriangleAlert } from 'lucide-react'
+import { ArrowLeftRight, Bandage, Check, ChevronLeft, ChevronRight, Ellipsis, Flag, List, Play, ShieldAlert, TriangleAlert } from 'lucide-react'
 import type { Exercise, ExerciseSet, PlannedExercise, WorkoutSession } from '../../domain/types'
 import type { GateResult } from '../../engine'
 import { Button, ExerciseVisual, Field, IconButton, ListRow, NumberInput, Sheet } from '../../components'
@@ -211,10 +211,8 @@ export function FocusMode(p: FocusModeProps) {
               onClick={() => { setMenuOpen(false); setGateOpen(true) }}
             />
           )}
-          <ListRow icon={<Bandage size={18} />} title="Pain / Issue" onClick={() => { setMenuOpen(false); p.onPain() }} />
-          <ListRow icon={<ArrowLeftRight size={18} />} title="Substitute" onClick={() => { setMenuOpen(false); p.onSubstitute() }} />
-          <ListRow icon={<Settings2 size={18} />} title="Session options" subtitle="Shorten or skip" onClick={() => { setMenuOpen(false); p.onOptions() }} />
-          <ListRow icon={<Flag size={18} />} title="Finish session" onClick={() => { setMenuOpen(false); p.onFinish() }} />
+          <ListRow icon={<ArrowLeftRight size={18} />} title="Swap exercise" onClick={() => { setMenuOpen(false); p.onSubstitute() }} />
+          <ListRow icon={<Flag size={18} />} title="End workout" onClick={() => { setMenuOpen(false); p.onFinish() }} />
         </div>
       </Sheet>
 

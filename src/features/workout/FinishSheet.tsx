@@ -30,20 +30,8 @@ const CHANGE_OPTIONS: { value: SymptomChangeKind; label: string }[] = [
   { value: 'worse', label: 'Worse' },
 ]
 
-/** Four words instead of ten numbers. Each maps to a session RPE. */
-const EFFORT: { rpe: number; label: string }[] = [
-  { rpe: 4, label: 'Easy' },
-  { rpe: 6, label: 'Steady' },
-  { rpe: 8, label: 'Hard' },
-  { rpe: 10, label: 'All out' },
-]
-
-const nearestEffort = (rpe: number | null | undefined) =>
-  rpe == null ? null : EFFORT.reduce((a, b) => (Math.abs(b.rpe - rpe) < Math.abs(a.rpe - rpe) ? b : a)).rpe
-
-/** Finish flow: what you did in one line, how it felt in one tap. Everything else stays out of the way. */
+/** Finish flow: what you did in one line, and how a sore area feels now (only if one was reported). */
 export function FinishSheet({ open, onClose, session, regions, defaultDurationMin, setCount, volumeKg = 0, prCount = 0, finishing, onFinish }: FinishSheetProps) {
-  const [rpe, setRpe] = useState<number | null>(null)
   const [duration, setDuration] = useState<number | null>(defaultDurationMin)
   const [editDuration, setEditDuration] = useState(false)
   const [note, setNote] = useState('')
@@ -54,7 +42,6 @@ export function FinishSheet({ open, onClose, session, regions, defaultDurationMi
 
   useEffect(() => {
     if (!open) return
-    setRpe(nearestEffort(session.sessionRpe))
     setDuration(defaultDurationMin)
     setEditDuration(false)
     setNote('')
@@ -88,7 +75,7 @@ export function FinishSheet({ open, onClose, session, regions, defaultDurationMi
     })
     // The session's own notes (planner rationale) are kept; a new note is added under them.
     const notes = [session.notes?.trim(), note.trim()].filter(Boolean).join('\n')
-    onFinish({ rpe, durationMin: shownDuration, notes, symptomChanges, writeToHealth: healthOn })
+    onFinish({ rpe: session.sessionRpe ?? null, durationMin: shownDuration, notes, symptomChanges, writeToHealth: healthOn })
   }
 
   const stats: { value: string | number; unit: string; label: string }[] = [
@@ -136,39 +123,13 @@ export function FinishSheet({ open, onClose, session, regions, defaultDurationMi
           )}
         </div>
 
-        {/* How it felt: one optional tap. */}
-        <div role="radiogroup" aria-label="How hard was it?">
-          <div className="text-[15px] font-medium text-app mb-2.5">How hard was it?</div>
-          <div className="grid grid-cols-4 gap-2">
-            {EFFORT.map((e) => (
-              <button
-                key={e.rpe}
-                type="button"
-                role="radio"
-                aria-checked={rpe === e.rpe}
-                onClick={() => setRpe((v) => (v === e.rpe ? null : e.rpe))}
-                className={cx(
-                  'press h-12 rounded-2xl text-[15px] font-semibold transition-colors duration-150',
-                  rpe === e.rpe ? 'bg-accent text-accent-fg' : 'bg-surface-2 text-muted',
-                )}
-              >
-                {e.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
         {regions.length > 0 && (
           <div className="flex flex-col gap-4">
-            <div className="text-[15px] font-medium text-app">How do they feel now?</div>
             {regions.map((r) => {
               const c = changes[r.region] ?? { change: 'same' as SymptomChangeKind, postPain: r.prePain }
               return (
                 <div key={r.region} className="flex flex-col gap-2">
-                  <div className="flex items-baseline justify-between">
-                    <span className="text-[15px] text-app">{REGION_LABELS[r.region]}</span>
-                    <span className="text-[13px] text-muted">was <span className="tnum">{r.prePain}</span>/10</span>
-                  </div>
+                  <div className="text-[15px] font-medium text-app">How's your {REGION_LABELS[r.region].toLowerCase()} now?</div>
                   <Segmented options={CHANGE_OPTIONS} value={c.change} onChange={(v) => setChange(r.region, r.prePain, v)} label={`${REGION_LABELS[r.region]} now`} />
                   {c.change === 'worse' && (
                     <Slider

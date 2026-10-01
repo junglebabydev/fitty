@@ -392,7 +392,8 @@ export default function WorkoutScreen() {
           onPain={() => setPainIndex(idx)}
           onSubstitute={() => { setSubReason(undefined); setSubIndex(idx) }}
           onOptions={() => setMoreOpen(true)}
-          onFinish={() => setFinishOpen(true)}
+          // Nothing logged yet: ending means skipping (it can be brought back from the session page).
+          onFinish={() => (sets.length > 0 ? setFinishOpen(true) : doSkip())}
         />
       ) : (
         <FocusDone onFinish={() => setFinishOpen(true)} onList={() => setParams({ view: 'list' })} />
