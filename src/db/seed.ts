@@ -460,10 +460,34 @@ export function defaultSettings(): Record<string, unknown> {
   }
 }
 
-/** Exercise library + default settings. Idempotent; returns true when anything was written. */
+/** `meta` key holding the fingerprint of the library last written (meta, not settings: backups and counts skip it). */
+export const LIBRARY_META_KEY = 'library_fingerprint'
+
+/** FNV-1a hash of the bundled library: changes whenever any exercise is added or edited. Pure. */
+export function libraryFingerprint(list = EXERCISES): string {
+  const text = JSON.stringify(list)
+  let h = 0x811c9dc5
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i)
+    h = Math.imul(h, 0x01000193)
+  }
+  return `${list.length}:${(h >>> 0).toString(16)}`
+}
+
+/**
+ * Exercise library + default settings. Idempotent; returns true when anything was written.
+ * The library is upserted when the table is empty or the bundled library changed since the last boot,
+ * so installs from before an app update gain new ids and fixed entries (PRD_TRAINING_PROGRAMS §5.4).
+ */
 function seedReference(): boolean {
   let wrote = false
-  if (exerciseCount() === 0) { upsertExercises(EXERCISES); wrote = true }
+  const fingerprint = libraryFingerprint()
+  const stored = db.get<{ value: string }>(`SELECT value FROM meta WHERE key = ?`, [LIBRARY_META_KEY])?.value
+  if (exerciseCount() === 0 || stored !== fingerprint) {
+    upsertExercises(EXERCISES)
+    db.run(`INSERT OR REPLACE INTO meta(key, value) VALUES (?, ?)`, [LIBRARY_META_KEY, fingerprint])
+    wrote = true
+  }
   for (const [key, value] of Object.entries(defaultSettings())) {
     if (getSetting<unknown>(key, undefined) !== undefined) continue
     setSetting(key, value)

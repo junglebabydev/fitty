@@ -148,7 +148,7 @@ const UPPER: Exercise[] = [
   {
     id: 'db_shoulder_press', name: 'Seated Dumbbell Shoulder Press', equipment: 'dumbbell',
     primaryMuscles: ['front delts'], secondaryMuscles: ['side delts', 'triceps'], pattern: 'vertical_push',
-    safetyTags: ['overhead', 'neck_load'], substitutions: ['machine_shoulder_press', 'lateral_raise', 'db_front_raise'],
+    safetyTags: ['overhead', 'neck_load'], substitutions: ['machine_shoulder_press', 'incline_db_press', 'lateral_raise', 'db_front_raise'],
     instructions: 'Sit on an upright bench with your back and head against the pad and feet flat. Press the dumbbells up and slightly inward, stopping just short of lockout, and lower to about ear level. Keep the chin tucked and ribs down — do not push the head forward or arch the lower back to finish a rep. Skip this on a neck-flare day and use lateral raises instead.',
     timed: false,
   },
@@ -978,7 +978,7 @@ const EXPANSION: Exercise[] = [
     id: 'wall_sit', name: 'Wall Sit', equipment: 'bodyweight',
     primaryMuscles: ['quads'], secondaryMuscles: ['glutes', 'core'], pattern: 'squat',
     safetyTags: ['knee_load'], substitutions: ['leg_press', 'glute_bridge', 'plank'],
-    instructions: 'Slide down a wall until the thighs are about parallel to the floor with the knees over the ankles, back flat against the wall. Hold and breathe normally. Come out of it before the knees start aching rather than grinding out the last seconds.',
+    instructions: 'Slide down a wall until the knees bend about 45–60 degrees, thighs above parallel, with the knees over the ankles and the back flat against the wall. Hold and breathe normally. Come out of it before the knees start aching rather than grinding out the last seconds.',
     timed: true,
   },
   {
@@ -1208,8 +1208,8 @@ const EXPANSION: Exercise[] = [
   {
     id: 'ski_erg', name: 'Ski Erg', equipment: 'machine',
     primaryMuscles: ['lats', 'core'], secondaryMuscles: ['triceps', 'glutes'], pattern: 'cardio',
-    safetyTags: [], substitutions: ['stationary_bike', 'elliptical', 'rowing_machine'],
-    instructions: 'Stand tall, reach the handles overhead and drive them down past the hips using the lats and a hip hinge, not just the arms. Keep the back flat through the hinge. Upper-body dominant conditioning that spares the knees entirely.',
+    safetyTags: ['overhead'], substitutions: ['stationary_bike', 'elliptical', 'rowing_machine'],
+    instructions: 'Stand tall, reach the handles overhead and drive them down past the hips using the lats and a hip hinge, not just the arms. Keep the back flat through the hinge and the head level, without craning the neck up at the handles. Upper-body dominant conditioning that spares the knees entirely.',
     timed: true,
   },
   {
@@ -1256,8 +1256,254 @@ const EXPANSION: Exercise[] = [
   },
 ]
 
+// ── Training programmes (docs/programs/README.md, "New exercise ids") ─────────
+// Walks and runs, postpartum floor work, balance and impact checks, no-kit HIIT
+// stations and bar-free pulls the six series need. The first sentence of each
+// instruction is the series doc's §7 "Library gaps" wording, safety words kept.
+// New patterns: breathing, pelvic_floor, balance, plyometric (no peers, so the
+// listed substitutions do all the work).
+const PROGRAMS: Exercise[] = [
+  // ---------- Walking and running ----------
+  {
+    id: 'brisk_walk', name: 'Brisk Walk (outdoor)', equipment: 'bodyweight',
+    primaryMuscles: ['glutes', 'calves'], secondaryMuscles: ['quads', 'hamstrings', 'cardiovascular'], pattern: 'cardio',
+    safetyTags: [], substitutions: ['treadmill_walk', 'incline_walk', 'stationary_bike'],
+    instructions: 'Walk tall at a pace that warms you up and raises your breathing while you can still talk easily, arms swinging and steps quick. Look ahead rather than down at a phone so the neck stays long. Go easy for warm-ups and cool-downs and brisk when the session asks for it.',
+    timed: true,
+  },
+  {
+    id: 'easy_run', name: 'Easy Run (outdoor)', equipment: 'bodyweight',
+    primaryMuscles: ['quads', 'calves'], secondaryMuscles: ['glutes', 'hamstrings', 'cardiovascular'], pattern: 'cardio',
+    safetyTags: ['impact', 'knee_load'], substitutions: ['treadmill_jog', 'incline_walk', 'stationary_bike', 'elliptical'],
+    instructions: 'Run at a pace where you can still talk in full sentences, with short quick steps landing softly under the hips; slow to a walk whenever you cannot talk. Keep the shoulders relaxed and the head level. Walk instead if a knee or hip aches, catches or swells, and note how it feels the next morning.',
+    timed: true,
+  },
+
+  // ---------- Postpartum floor work ----------
+  {
+    id: 'breathing_360', name: '360 Breathing', equipment: 'bodyweight',
+    primaryMuscles: ['deep core'], secondaryMuscles: ['abs'], pattern: 'breathing',
+    safetyTags: [], substitutions: ['pelvic_tilt'],
+    instructions: 'Lie on your back or side and breathe in through your nose so your ribs widen to the sides and back, then breathe out slowly and let your pelvic floor and lower tummy gently lift. Keep the shoulders and neck soft rather than lifting the chest. Take your time; this should feel calm, not effortful.',
+    timed: true,
+  },
+  {
+    id: 'pelvic_floor_hold', name: 'Pelvic Floor Squeeze (long hold)', equipment: 'bodyweight',
+    primaryMuscles: ['deep core'], secondaryMuscles: [], pattern: 'pelvic_floor',
+    safetyTags: [], substitutions: ['pelvic_floor_quick'],
+    instructions: 'Squeeze and lift as if stopping wind and wee at the same time, hold for up to 10 seconds while breathing normally, then let go fully for as long as you held. Keep your bottom, thighs and tummy relaxed so the pelvic floor does the work. End the hold early rather than holding your breath.',
+    timed: true,
+  },
+  {
+    id: 'pelvic_floor_quick', name: 'Pelvic Floor Squeeze (quick)', equipment: 'bodyweight',
+    primaryMuscles: ['deep core'], secondaryMuscles: [], pattern: 'pelvic_floor',
+    safetyTags: [], substitutions: ['pelvic_floor_hold'],
+    instructions: 'Squeeze and lift quickly, let go straight away, and relax fully before the next one, without holding your breath or clenching your bottom. Each one is a quick lift and a full release. If the release stops feeling complete, stop the set and rest.',
+    timed: false,
+  },
+  {
+    id: 'pelvic_tilt', name: 'Pelvic Tilt (lying)', equipment: 'bodyweight',
+    primaryMuscles: ['deep core'], secondaryMuscles: ['abs', 'glutes'], pattern: 'core_anti_extension',
+    safetyTags: [], substitutions: ['breathing_360'],
+    instructions: 'Lie on your back with knees bent, breathe out and gently flatten your lower back into the floor, hold for 3 seconds, then release to neutral. The movement is small and comes from the pelvis, not from pushing with the legs. Keep your head resting on the floor and your neck relaxed.',
+    timed: false,
+  },
+  {
+    id: 'heel_slide', name: 'Heel Slide', equipment: 'bodyweight',
+    primaryMuscles: ['deep core'], secondaryMuscles: ['abs', 'hip flexors'], pattern: 'core_anti_extension',
+    safetyTags: [], substitutions: ['pelvic_tilt', 'dead_bug'],
+    instructions: 'Lie on your back with knees bent, breathe out, and slowly slide one heel along the floor until the leg is nearly straight, keeping your back and pelvis still. Breathe in as you slide it back, then switch sides. If your lower back arches or your tummy domes, shorten the slide.',
+    timed: false,
+  },
+  {
+    id: 'knee_fallout', name: 'Bent-Knee Fall-Out', equipment: 'bodyweight',
+    primaryMuscles: ['deep core'], secondaryMuscles: ['obliques', 'adductors'], pattern: 'core_anti_rotation',
+    safetyTags: [], substitutions: ['pelvic_tilt', 'heel_slide'],
+    instructions: 'Lie on your back with knees bent and let one knee lower slowly out to the side and back while your pelvis stays still. Breathe out as the knee opens and keep the other leg where it is. Only go as far as you can without the hips rocking.',
+    timed: false,
+  },
+  {
+    id: 'clamshell', name: 'Clamshell', equipment: 'bodyweight',
+    primaryMuscles: ['glute medius'], secondaryMuscles: ['glutes'], pattern: 'hip_abduction',
+    safetyTags: [], substitutions: ['side_lying_hip_abduction', 'band_monster_walk'],
+    instructions: 'Lie on your side with hips and knees bent and heels together, lift the top knee without rolling your hips back, then lower slowly. Rest your head on your arm or a pillow so the neck stays neutral. A small, controlled lift works the side of the hip better than a big one.',
+    timed: false,
+  },
+  {
+    id: 'wall_push_up', name: 'Wall Push-Up', equipment: 'bodyweight',
+    primaryMuscles: ['chest'], secondaryMuscles: ['triceps', 'front delts', 'core'], pattern: 'horizontal_push',
+    safetyTags: [], substitutions: ['incline_push_up', 'band_chest_press'],
+    instructions: "Stand an arm's length from a wall with hands at chest height, lower your chest towards the wall with your body in one line, then push away. Keep the ribs down and the glutes lightly squeezed so the lower back does not sag. Step the feet further back to make it harder.",
+    timed: false,
+  },
+
+  // ---------- Legs and balance ----------
+  {
+    id: 'sit_to_stand_chair', name: 'Sit-to-Stand (chair)', equipment: 'bodyweight',
+    primaryMuscles: ['quads', 'glutes'], secondaryMuscles: ['hamstrings', 'core'], pattern: 'squat',
+    safetyTags: ['knee_load'], substitutions: ['glute_bridge', 'leg_press'],
+    instructions: 'Sit tall near the front of a sturdy chair whose seat is at or above knee height, lean forward and stand up without using your hands, then sit down slowly with your knees in line with your toes. Push through the whole foot and keep the chest tall. Use a higher seat if a knee aches.',
+    timed: false,
+  },
+  {
+    id: 'single_leg_sit_to_stand', name: 'Single-Leg Sit-to-Stand', equipment: 'bodyweight',
+    primaryMuscles: ['quads', 'glutes'], secondaryMuscles: ['glute medius', 'core'], pattern: 'squat',
+    safetyTags: ['knee_load'], substitutions: ['sit_to_stand_chair', 'step_up_bw'],
+    instructions: 'Sit on a chair, lift one foot, then stand up and sit down on the other leg with the knee in line with the toes, touching a wall for balance. Lower slowly rather than dropping into the seat. If the knee drifts inwards or aches, go back to standing on both feet.',
+    timed: false,
+  },
+  {
+    id: 'single_leg_calf_raise', name: 'Single-Leg Calf Raise', equipment: 'bodyweight',
+    primaryMuscles: ['calves'], secondaryMuscles: [], pattern: 'calf',
+    safetyTags: [], substitutions: ['seated_calf_raise'],
+    instructions: 'Stand on one foot holding a wall, rise onto the ball of the foot as high as you can, then lower slowly. Keep the standing knee straight but not locked and the body tall. Do the same number on each side, starting with the weaker one.',
+    timed: false,
+  },
+  {
+    id: 'single_leg_balance', name: 'Single-Leg Balance', equipment: 'bodyweight',
+    primaryMuscles: ['glute medius'], secondaryMuscles: ['core', 'calves'], pattern: 'balance',
+    safetyTags: [], substitutions: ['bird_dog'],
+    instructions: 'Stand on one leg with a soft knee next to a wall and hold for 10 seconds without touching down, then switch. Keep the pelvis level and look at a fixed point ahead. Touch the wall lightly whenever you need to; steadiness comes with practice.',
+    timed: true,
+  },
+  {
+    id: 'single_leg_squat_partial', name: 'Single-Leg Mini Squat', equipment: 'bodyweight',
+    primaryMuscles: ['quads', 'glutes'], secondaryMuscles: ['glute medius', 'core'], pattern: 'lunge',
+    safetyTags: ['knee_load'], substitutions: ['sit_to_stand_chair', 'step_up_bw'],
+    instructions: 'Stand on one leg next to a wall and bend the knee about a quarter of the way down, knee over the middle toes and pelvis level, then stand. Keep a fingertip on the wall for balance. Stop the set if the knee drifts inwards or aches.',
+    timed: false,
+  },
+  {
+    id: 'step_up_bw', name: 'Bodyweight Step-Up (low step)', equipment: 'bodyweight',
+    primaryMuscles: ['quads', 'glutes'], secondaryMuscles: ['hamstrings', 'calves'], pattern: 'lunge',
+    safetyTags: ['knee_load'], substitutions: ['sit_to_stand_chair', 'glute_bridge', 'db_step_up'],
+    instructions: 'Place the whole foot on a stair or step no higher than 20 cm, drive up to stand tall, and step down slowly with the same leg. Keep the working knee in line with the toes and hold a rail or wall for balance. Use a lower step if the knee aches.',
+    timed: false,
+  },
+
+  // ---------- Impact check ----------
+  {
+    id: 'jog_on_spot', name: 'Jog on the Spot', equipment: 'bodyweight',
+    primaryMuscles: ['calves', 'quads'], secondaryMuscles: ['glutes', 'cardiovascular'], pattern: 'cardio',
+    safetyTags: ['impact', 'knee_load'], substitutions: ['brisk_walk', 'stationary_bike'],
+    instructions: 'Jog lightly in place with quick, soft steps and relaxed shoulders, and stop if you feel leaking, heaviness or knee pain. Land on the balls of the feet with the knees slightly bent. Keep it short and easy; it checks how impact feels, not how fit you are.',
+    timed: true,
+  },
+  {
+    id: 'forward_bound', name: 'Forward Bound', equipment: 'bodyweight',
+    primaryMuscles: ['quads', 'glutes'], secondaryMuscles: ['calves', 'hamstrings'], pattern: 'plyometric',
+    safetyTags: ['impact', 'knee_load'], substitutions: ['step_up_bw', 'sit_to_stand_chair'],
+    instructions: 'Take one long, springy stride forward and land softly on the other foot with the knee over the toes, then walk back and repeat. Absorb the landing through a bent knee rather than a stiff leg. Stop if you feel leaking, heaviness or knee pain.',
+    timed: false,
+  },
+  {
+    id: 'single_leg_hop', name: 'Single-Leg Hop in Place', equipment: 'bodyweight',
+    primaryMuscles: ['calves'], secondaryMuscles: ['quads', 'glutes'], pattern: 'plyometric',
+    safetyTags: ['impact', 'knee_load'], substitutions: ['single_leg_calf_raise', 'jog_on_spot'],
+    instructions: 'Hop gently on one foot on the spot, landing softly through the ball of the foot with the knee slightly bent, next to a wall for balance. Keep the hops small and quiet. Stop if you feel leaking, heaviness or knee pain.',
+    timed: false,
+  },
+  {
+    id: 'running_man', name: 'Single-Leg Running Man', equipment: 'bodyweight',
+    primaryMuscles: ['glutes', 'hip flexors'], secondaryMuscles: ['glute medius', 'core'], pattern: 'balance',
+    safetyTags: [], substitutions: ['single_leg_balance'],
+    instructions: 'Stand on one leg with a soft knee and swing the other knee forward and back with the opposite arm, like a slow running stride, without touching down. Keep the trunk tall and the pelvis level. Rest a fingertip on a wall until you feel steady.',
+    timed: false,
+  },
+
+  // ---------- HIIT stations (no kit) ----------
+  {
+    id: 'march_in_place', name: 'March in Place', equipment: 'bodyweight',
+    primaryMuscles: ['hip flexors', 'quads'], secondaryMuscles: ['calves', 'cardiovascular'], pattern: 'cardio',
+    safetyTags: [], substitutions: ['stationary_bike'],
+    instructions: 'March on the spot, lifting each knee towards hip height with arms swinging and the trunk tall; go slow for warm-ups and fast for work intervals. Land quietly through the whole foot. There is no jumping, so it suits a sore knee.',
+    timed: true,
+  },
+  {
+    id: 'step_jack', name: 'Step Jack (low-impact jack)', equipment: 'bodyweight',
+    primaryMuscles: ['quads', 'shoulders'], secondaryMuscles: ['calves', 'glute medius', 'cardiovascular'], pattern: 'cardio',
+    safetyTags: [], substitutions: ['march_in_place'],
+    instructions: 'Step one foot out to the side as both arms rise to shoulder height, step back in, then repeat to the other side at a brisk, even rhythm with no jumping. The arms stay at shoulder height, so the neck and shoulders stay easy. Keep a soft knee on each step.',
+    timed: true,
+  },
+  {
+    id: 'shadow_boxing', name: 'Shadow Boxing', equipment: 'bodyweight',
+    primaryMuscles: ['shoulders'], secondaryMuscles: ['core', 'arms', 'cardiovascular'], pattern: 'cardio',
+    safetyTags: [], substitutions: ['march_in_place'],
+    instructions: 'In a staggered stance with knees soft, throw fast alternating straight punches at shoulder height, breathing out on each punch, without locking the elbows. Turn from the trunk and keep the chin slightly tucked. Switch the lead foot halfway through.',
+    timed: true,
+  },
+  {
+    id: 'jumping_jack', name: 'Jumping Jack', equipment: 'bodyweight',
+    primaryMuscles: ['calves', 'shoulders'], secondaryMuscles: ['quads', 'glute medius', 'cardiovascular'], pattern: 'cardio',
+    safetyTags: ['impact', 'knee_load', 'overhead'], substitutions: ['step_jack', 'march_in_place'],
+    instructions: 'Jump the feet out wide while the arms sweep overhead, then jump back in, landing softly on the balls of the feet with knees slightly bent. Keep the head level and the neck relaxed as the arms rise. Swap to step jacks if a knee aches or the neck is sore.',
+    timed: true,
+  },
+  {
+    id: 'high_knees', name: 'High Knees', equipment: 'bodyweight',
+    primaryMuscles: ['hip flexors', 'quads'], secondaryMuscles: ['calves', 'core', 'cardiovascular'], pattern: 'cardio',
+    safetyTags: ['impact', 'knee_load'], substitutions: ['march_in_place', 'step_jack'],
+    instructions: 'Run on the spot, driving the knees towards hip height with quick, light foot contacts and a tall chest. Pump the arms and land softly on the balls of the feet. March instead if a knee aches.',
+    timed: true,
+  },
+
+  // ---------- Bodyweight upper ----------
+  {
+    id: 'table_inverted_row', name: 'Table Row', equipment: 'bodyweight',
+    primaryMuscles: ['mid back', 'lats'], secondaryMuscles: ['biceps', 'rear delts', 'core'], pattern: 'horizontal_pull',
+    safetyTags: [], substitutions: ['towel_door_row', 'inverted_row', 'band_row'],
+    instructions: 'Lie under a heavy table that you have tested will not tip, grip the long edge at shoulder width, and pull your chest to the edge with your body straight from heels to head, then lower slowly. Squeeze the shoulder blades together at the top and keep the chin tucked. Bend the knees and plant the feet to make it easier.',
+    timed: false,
+  },
+  {
+    id: 'towel_door_row', name: 'Door Towel Row', equipment: 'bodyweight',
+    primaryMuscles: ['mid back', 'lats'], secondaryMuscles: ['biceps', 'rear delts'], pattern: 'horizontal_pull',
+    safetyTags: [], substitutions: ['table_inverted_row', 'prone_y_t_raise', 'band_row'],
+    instructions: 'Test the handles first: open a solid door, loop a towel around both handles, stand with the door edge between your feet, lean back on straight arms and pull your chest towards the edge. Keep the body in one straight line and lower slowly. The more upright you stand, the easier it is.',
+    timed: false,
+  },
+  {
+    id: 'prone_y_t_raise', name: 'Prone Y-T Raise', equipment: 'bodyweight',
+    primaryMuscles: ['rear delts'], secondaryMuscles: ['mid back', 'traps'], pattern: 'rear_delt',
+    safetyTags: [], substitutions: ['band_pull_apart', 'face_pull'],
+    instructions: 'Lie face down with your forehead on a folded towel, lift both arms in a Y and then a T with thumbs up, squeezing the shoulder blades together without lifting the head. Keep the lift small and the neck long. It trains the upper back but does not replace a row.',
+    timed: false,
+  },
+
+  // ---------- Hinge, loaded and unloaded ----------
+  {
+    id: 'db_single_leg_rdl', name: 'Dumbbell Single-Leg Romanian Deadlift', equipment: 'dumbbell',
+    primaryMuscles: ['hamstrings', 'glutes'], secondaryMuscles: ['glute medius', 'core', 'lower back'], pattern: 'hinge',
+    safetyTags: ['spinal_load'], substitutions: ['single_leg_rdl_bw', 'glute_bridge', 'db_rdl'],
+    instructions: 'Hold a dumbbell in the hand opposite the standing leg and hinge at the hip with a soft knee until the hamstring stretches, hips square, then stand tall; touch a wall for balance if needed. Keep the back flat and the neck in line with the spine, eyes on the floor ahead. Stop the hinge before the lower back rounds.',
+    timed: false,
+  },
+  {
+    id: 'db_single_leg_hip_thrust', name: 'Single-Leg Dumbbell Hip Thrust', equipment: 'dumbbell',
+    primaryMuscles: ['glutes'], secondaryMuscles: ['hamstrings', 'core'], pattern: 'hinge',
+    safetyTags: ['spinal_load'], substitutions: ['single_leg_hip_thrust', 'single_leg_glute_bridge', 'hip_thrust'],
+    instructions: 'With your upper back on a bench or sofa edge and one foot flat, rest a dumbbell on that hip and drive up until the torso is level, then lower under control. Keep the ribs down and finish by squeezing the glute, not by arching the lower back. Keep the hips level from side to side.',
+    timed: false,
+  },
+  {
+    id: 'single_leg_hip_thrust', name: 'Single-Leg Hip Thrust (shoulders elevated)', equipment: 'bodyweight',
+    primaryMuscles: ['glutes'], secondaryMuscles: ['hamstrings', 'core'], pattern: 'hinge',
+    safetyTags: [], substitutions: ['single_leg_glute_bridge', 'glute_bridge'],
+    instructions: 'Rest your upper back on a sofa or bed edge, plant one foot, and drive the hips up until the body is straight from shoulders to knee, ribs down, then lower slowly. Keep the hips level and the chin tucked. Go back to the floor bridge if the lower back takes over.',
+    timed: false,
+  },
+  {
+    id: 'dowel_hip_hinge', name: 'Dowel Hip Hinge', equipment: 'bodyweight',
+    primaryMuscles: ['hamstrings', 'glutes'], secondaryMuscles: ['lower back', 'core'], pattern: 'hinge',
+    safetyTags: [], substitutions: ['glute_bridge', 'band_good_morning'],
+    instructions: 'Hold a stick along your spine touching head, upper back and tailbone, then push your hips back and return, keeping all three points in contact. Keep a soft bend in the knees and stop when the hamstrings stretch. A broomstick works; the drill teaches the hinge before any load.',
+    timed: false,
+  },
+]
+
 export const EXERCISES: Exercise[] = [
-  ...UPPER, ...LOWER, ...CORE_AND_CARDIO, ...BARBELL_AND_KETTLEBELL, ...EXPANSION,
+  ...UPPER, ...LOWER, ...CORE_AND_CARDIO, ...BARBELL_AND_KETTLEBELL, ...EXPANSION, ...PROGRAMS,
 ]
 
 export const EXERCISE_BY_ID: Record<string, Exercise> = Object.fromEntries(EXERCISES.map(e => [e.id, e]))
@@ -1341,7 +1587,7 @@ export const EXERCISE_ALIASES: Record<string, string[]> = {
   hip_abduction_machine: ['abduction', 'abductions', 'hip abduction', 'abductor', 'abductors', 'abductor machine', 'hip abduction machine'],
   hip_adduction_machine: ['adduction', 'adductions', 'hip adduction', 'adductor', 'adductors', 'adductor machine', 'inner thigh'],
   cable_hip_abduction: ['cable abduction', 'cable hip abduction'],
-  side_lying_hip_abduction: ['side lying leg raise', 'side leg raise', 'side leg raises', 'clamshell'],
+  side_lying_hip_abduction: ['side lying leg raise', 'side leg raise', 'side leg raises', 'side lying abduction'],
   glute_kickback_machine: ['glute kickback', 'glute kickbacks', 'cable kickback', 'kickback machine', 'donkey kick', 'donkey kicks'],
   dead_bug: ['dead bug', 'dead bugs', 'deadbug', 'deadbugs'],
   bird_dog: ['bird dog', 'bird dogs', 'birddog', 'birddogs'],
@@ -1451,6 +1697,39 @@ export const EXERCISE_ALIASES: Record<string, string[]> = {
   smith_row: ['smith row', 'smith machine row'],
   ab_crunch_machine: ['ab crunch machine', 'crunch machine', 'ab machine'],
   glute_drive_machine: ['glute drive', 'glute drive machine', 'hip thrust machine'],
+  // Training programmes
+  brisk_walk: ['brisk walk', 'fast walk', 'outdoor walk', 'pram walk', 'power walk'],
+  easy_run: ['easy run', 'outdoor run', 'run outside', 'easy outdoor run'],
+  breathing_360: ['360 breathing', 'three sixty breathing', 'rib breathing', 'diaphragmatic breathing'],
+  pelvic_floor_hold: ['pelvic floor hold', 'pelvic floor holds', 'kegel hold', 'long pelvic floor squeeze'],
+  pelvic_floor_quick: ['quick pelvic floor', 'pelvic floor quick', 'quick kegels', 'quick flicks'],
+  pelvic_tilt: ['pelvic tilt', 'pelvic tilts'],
+  heel_slide: ['heel slide', 'heel slides'],
+  knee_fallout: ['knee fallout', 'knee fall out', 'knee fallouts', 'bent knee fall out'],
+  clamshell: ['clamshell', 'clamshells', 'clam shell', 'clam shells'],
+  wall_push_up: ['wall push up', 'wall push ups', 'wall pushup', 'wall press up'],
+  sit_to_stand_chair: ['sit to stand', 'sit to stands', 'chair squat', 'chair squats', 'chair stand'],
+  single_leg_sit_to_stand: ['single leg sit to stand', 'one leg sit to stand', 'single leg chair stand'],
+  single_leg_calf_raise: ['single leg calf raise', 'single leg calf raises', 'one leg calf raise'],
+  single_leg_balance: ['single leg balance', 'one leg balance', 'balance on one leg', 'single leg stand'],
+  single_leg_squat_partial: ['single leg mini squat', 'mini squat', 'mini squats', 'one leg mini squat'],
+  step_up_bw: ['bodyweight step up', 'bodyweight step ups', 'low step up', 'stair step up'],
+  jog_on_spot: ['jog on the spot', 'jog in place', 'jogging on the spot', 'running on the spot'],
+  forward_bound: ['forward bound', 'forward bounds', 'bounding'],
+  single_leg_hop: ['single leg hop', 'single leg hops', 'one leg hop', 'hop in place'],
+  running_man: ['running man', 'single leg running man'],
+  march_in_place: ['march in place', 'marching in place', 'march on the spot', 'marching on the spot'],
+  step_jack: ['step jack', 'step jacks', 'low impact jack', 'low impact jacks'],
+  shadow_boxing: ['shadow boxing', 'shadowboxing', 'shadow box'],
+  jumping_jack: ['jumping jack', 'jumping jacks', 'star jump', 'star jumps'],
+  high_knees: ['high knees', 'high knee', 'high knee run'],
+  table_inverted_row: ['table row', 'table rows', 'under table row'],
+  towel_door_row: ['door row', 'door rows', 'towel row', 'door towel row'],
+  prone_y_t_raise: ['y t raise', 'y t raises', 'prone y t', 'yt raise'],
+  db_single_leg_rdl: ['dumbbell single leg rdl', 'single leg dumbbell rdl', 'dumbbell single leg deadlift'],
+  db_single_leg_hip_thrust: ['single leg dumbbell hip thrust', 'dumbbell single leg hip thrust'],
+  single_leg_hip_thrust: ['single leg hip thrust', 'single leg hip thrusts', 'one leg hip thrust'],
+  dowel_hip_hinge: ['dowel hip hinge', 'dowel hinge', 'hip hinge drill', 'broomstick hinge'],
 }
 
 function normalizeText(s: string): string {

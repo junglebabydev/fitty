@@ -121,6 +121,78 @@ describe('exercises', () => {
   })
 })
 
+describe('exercises for training programmes (docs/programs/README.md)', () => {
+  // The canonical new ids and their tags, exactly as the README lists them.
+  const NEW_IDS: Record<string, SafetyTag[]> = {
+    brisk_walk: [], easy_run: ['impact', 'knee_load'],
+    breathing_360: [], pelvic_floor_hold: [], pelvic_floor_quick: [], pelvic_tilt: [], heel_slide: [], knee_fallout: [],
+    clamshell: [], wall_push_up: [],
+    sit_to_stand_chair: ['knee_load'], single_leg_sit_to_stand: ['knee_load'], single_leg_calf_raise: [],
+    single_leg_balance: [], single_leg_squat_partial: ['knee_load'], step_up_bw: ['knee_load'],
+    jog_on_spot: ['impact', 'knee_load'], forward_bound: ['impact', 'knee_load'], single_leg_hop: ['impact', 'knee_load'], running_man: [],
+    march_in_place: [], step_jack: [], shadow_boxing: [], jumping_jack: ['impact', 'knee_load', 'overhead'], high_knees: ['impact', 'knee_load'],
+    table_inverted_row: [], towel_door_row: [], prone_y_t_raise: [],
+    db_single_leg_rdl: ['spinal_load'], db_single_leg_hip_thrust: ['spinal_load'], single_leg_hip_thrust: [], dowel_hip_hinge: [],
+  }
+
+  it('adds all 32 new ids with the README tags, and no merged duplicate', () => {
+    expect(Object.keys(NEW_IDS)).toHaveLength(32)
+    for (const [id, tags] of Object.entries(NEW_IDS)) {
+      expect(EXERCISE_BY_ID[id], id).toBeDefined()
+      expect(EXERCISE_BY_ID[id].safetyTags, id).toEqual(tags)
+    }
+    for (const merged of ['pram_walk', 'chair_squat', 'run_walk']) expect(EXERCISE_BY_ID[merged], merged).toBeUndefined()
+  })
+
+  it('uses the new patterns, existing equipment and the timed flag for holds, walks, runs and marches', () => {
+    expect(EXERCISE_BY_ID.breathing_360.pattern).toBe('breathing')
+    expect(EXERCISE_BY_ID.pelvic_floor_hold.pattern).toBe('pelvic_floor')
+    expect(EXERCISE_BY_ID.pelvic_floor_quick.pattern).toBe('pelvic_floor')
+    expect(EXERCISE_BY_ID.single_leg_balance.pattern).toBe('balance')
+    expect(EXERCISE_BY_ID.forward_bound.pattern).toBe('plyometric')
+    expect(EXERCISE_BY_ID.prone_y_t_raise.pattern).toBe('rear_delt')
+    const equipment = new Set(EXERCISES.filter(e => !(e.id in NEW_IDS)).map(e => e.equipment))
+    for (const id of Object.keys(NEW_IDS)) expect(equipment.has(EXERCISE_BY_ID[id].equipment), id).toBe(true)
+    for (const id of ['db_single_leg_rdl', 'db_single_leg_hip_thrust']) expect(EXERCISE_BY_ID[id].equipment).toBe('dumbbell')
+    const timed = ['brisk_walk', 'easy_run', 'breathing_360', 'pelvic_floor_hold', 'single_leg_balance', 'jog_on_spot',
+      'march_in_place', 'step_jack', 'shadow_boxing', 'jumping_jack', 'high_knees']
+    for (const id of Object.keys(NEW_IDS)) expect(EXERCISE_BY_ID[id].timed, id).toBe(timed.includes(id))
+  })
+
+  it('keeps the safety wording from the series docs', () => {
+    expect(EXERCISE_BY_ID.sit_to_stand_chair.instructions).toMatch(/at or above knee height/)
+    expect(EXERCISE_BY_ID.step_up_bw.instructions).toMatch(/no higher than 20 cm/)
+    expect(EXERCISE_BY_ID.table_inverted_row.instructions).toMatch(/tested will not tip/)
+    expect(EXERCISE_BY_ID.towel_door_row.instructions).toMatch(/^Test the handles first/)
+    for (const id of ['jog_on_spot', 'forward_bound', 'single_leg_hop']) {
+      expect(EXERCISE_BY_ID[id].instructions, id).toMatch(/leaking, heaviness or knee pain/)
+    }
+    expect(EXERCISE_BY_ID.easy_run.instructions).toMatch(/slow to a walk whenever you cannot talk/)
+  })
+
+  it('applies the README fixes to existing entries', () => {
+    expect(EXERCISE_BY_ID.ski_erg.safetyTags).toContain('overhead')
+    expect(EXERCISE_BY_ID.wall_sit.instructions).toMatch(/thighs above parallel/)
+    expect(EXERCISE_BY_ID.wall_sit.safetyTags).not.toContain('deep_knee_flexion')
+    const chain = EXERCISE_BY_ID.db_shoulder_press.substitutions
+    const firstRaise = chain.findIndex(id => /raise/.test(id))
+    expect(chain.indexOf('incline_db_press')).toBeGreaterThanOrEqual(0)
+    expect(chain.indexOf('incline_db_press')).toBeLessThan(firstRaise)
+  })
+
+  it('reaches the new moves by voice', () => {
+    expect(findExerciseByAlias('clamshells 15 each side')?.id).toBe('clamshell')
+    expect(findExerciseByAlias('side lying leg raise 12')?.id).toBe('side_lying_hip_abduction')
+    expect(findExerciseByAlias('brisk walk 20 minutes')?.id).toBe('brisk_walk')
+    expect(findExerciseByAlias('jumping jacks 30 seconds')?.id).toBe('jumping_jack')
+    expect(findExerciseByAlias('sit to stand 10 reps')?.id).toBe('sit_to_stand_chair')
+    expect(findExerciseByAlias('single leg hip thrust 12')?.id).toBe('single_leg_hip_thrust')
+    expect(findExerciseByAlias('hip thrust 40 for 10')?.id).toBe('hip_thrust')
+    expect(findExerciseByAlias('walk 30 minutes')?.id).toBe('treadmill_walk')
+    expect(findExerciseByAlias('run 5k')?.id).toBe('treadmill_jog')
+  })
+})
+
 describe('foods', () => {
   it('has at least 120 foods with unique ids and sane numbers', () => {
     expect(FOODS.length).toBeGreaterThanOrEqual(120)
