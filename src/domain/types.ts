@@ -91,6 +91,23 @@ export interface PlannedExercise {
   substitutionReason?: string
   /** Set when a Pain / Issue report reduced the load mid-session; progression holds at loadKg. */
   reducedReason?: string
+  // Programme fields (docs/PRD_TRAINING_PROGRAMS.md §5.3). All optional: a missing field means today's behaviour.
+  /** Prescription comes from a programme week: timed and bodyweight targets are not auto-progressed (§6.4). */
+  program?: true
+  /** Not logged and exempt from the duplicate-id rule: warm-up, cool-down or interval rest. */
+  role?: 'warmup' | 'cooldown' | 'rest'
+  /** What to do during the rest (e.g. 'brisk_walk' between runs). */
+  restExerciseId?: string
+  /** Entries sharing a key run round-robin as a circuit; `sets` is the number of rounds. */
+  circuit?: string
+  /** Rest after the last station of a circuit round (otherwise `restSec`). */
+  roundRestSec?: number
+  /** Coach line for this exercise. */
+  cue?: string
+  /** One side at a time: reps or seconds are per side. */
+  perSide?: boolean
+  /** Bodyweight ladder slot this entry fills. */
+  slot?: string
 }
 
 export type SessionType = 'strength' | 'conditioning' | 'swim' | 'mobility'
