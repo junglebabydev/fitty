@@ -11,13 +11,13 @@ import {
 } from '../components'
 import { useNow, useQuery } from '../hooks'
 import { getSession, getSetsForSession, getSymptomChecks, lastSetsForExercise, previousSetsForExercise, updateSession, updateSet } from '../db/repositories'
-import { TIMED_IDS, estimateSessionMinutes, shortenedVersion, type GateResult } from '../engine'
+import { estimateSessionMinutes, isTimedTarget, shortenedVersion, type GateResult } from '../engine'
 import { acquireWakeLock } from '../native'
 import { todayReadiness } from '../features/coach/facts'
 import { cx, dayName, fmtDate, fmtTime, todayStr } from '../lib/util'
 import {
   ExerciseCard, FinishSheet, PainSheet, RestTimerBar, SubstituteSheet, SymptomGateSheet,
-  REGION_LABELS, SESSION_TYPE_META, computeDurationMin, evaluateProgressionWithPain, exerciseMap, fmtClock, fmtLoad, fmtSec, fmtVolume,
+  REGION_LABELS, SESSION_TYPE_META, computeDurationMin, evaluateProgressionWithPain, exerciseMap, fmtClock, fmtLoad, fmtSec, fmtTarget, fmtVolume,
   finishSession, libraryExercises, readSessionFlag, reapplyGate, reducePlannedLoad, rirSummary, sessionPRs, sessionStatusInfo, sessionVolumeKg,
   setsByExercise, skipSession, startSessionWithGate, substituteExercise, summarizeSets, todaysGate, todaysRegionState, writeSessionFlag,
   type GateEntry, type GateOutcome, type LivePR, type PainOutcome, type SymptomChange,
@@ -25,7 +25,7 @@ import {
 import { useRestTimer } from '../features/workout/useRestTimer'
 import { MuscleSummary } from '../features/workout/PlanVisuals'
 import { FocusDone, FocusMode } from '../features/workout/FocusMode'
-import { focusIndex, nextFocusIndex, remainingPlan } from '../features/workout/focus'
+import { circuitRestAfter, focusIndex, nextFocusIndex, remainingPlan } from '../features/workout/focus'
 import type { LoggedSet } from '../features/workout/useSetLogger'
 import { isStaleSession, staleWrapUp } from '../features/workout/stale'
 import { StaleSessionSheet } from '../features/workout/StaleSessionSheet'
@@ -368,9 +368,14 @@ export default function WorkoutScreen() {
     if (s.pr) setPr(s.pr)
     const doneHere = (setsFor.get(planned.exerciseId)?.length ?? 0) + 1 >= planned.sets
     const othersLeft = session.exercises.some((_, i) => i !== index && hasLeft(i))
+    // A circuit moves on after every logged round, even from a hand-picked station.
+    if (planned.circuit) setBrowseIdx(null)
+    const circuitRest = circuitRestAfter(session.exercises, setsFor, stopped, index)
     if (focusOn && doneHere && !othersLeft) {
       timer.skip()
       setFinishOpen(true)
+    } else if (circuitRest != null) {
+      if (circuitRest > 0) timer.start(circuitRest)
     } else if (s.restSec > 0) timer.start(s.restSec)
   }
 
@@ -587,7 +592,7 @@ function PlannedPreview({ session, byId }: { session: WorkoutSession; byId: Map<
   const navigate = useNavigate()
   const rows = useQuery(() => session.exercises.map((planned, index) => {
     const ex = byId.get(planned.exerciseId)
-    const timed = !!ex && (ex.timed || TIMED_IDS.has(ex.id))
+    const timed = !!ex && isTimedTarget(planned, ex)
     const last = ex ? lastSetsForExercise(ex.id, session.id) : []
     const p = ex ? evaluateProgressionWithPain(planned, ex, last, previousSetsForExercise(ex.id, session.id)) : null
     return {
@@ -624,7 +629,7 @@ function PlannedPreview({ session, byId }: { session: WorkoutSession; byId: Map<
                 </span>
               </span>
               <span className="text-right shrink-0">
-                <span className="block num text-xl text-app">{r.sets} × {r.repMin}–{r.repMax}{r.timed ? ' s' : ''}</span>
+                <span className="block num text-xl text-app">{r.sets} × {fmtTarget(r.repMin, r.repMax, r.timed)}</span>
                 <span className="block text-xs text-muted tnum">
                   {r.target != null ? fmtLoad(r.target) : ''}{r.target != null && r.action && r.last.length ? ' · ' : ''}{r.action && r.last.length ? ACTION_WORD[r.action] : ''}
                 </span>
@@ -781,7 +786,7 @@ function CompletedView({ session, sets, library, today }: { session: WorkoutSess
           <ul className="divide-y divide-line">
             {rows.map((r) => {
               const ex = byId.get(r.id)
-              const timed = ex ? ex.timed : false
+              const timed = ex ? (r.planned ? isTimedTarget(r.planned, ex) : ex.timed) : false
               const subFrom = r.planned?.substitutedFrom ? byId.get(r.planned.substitutedFrom)?.name ?? r.planned.substitutedFrom : null
               return (
                 <li key={r.id}>

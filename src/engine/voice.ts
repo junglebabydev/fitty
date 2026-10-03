@@ -513,8 +513,10 @@ export function parseVoiceCommand(transcript: string, ctx: VoiceContext): Parsed
   const today = dateOf(ctx.now)
   if (!t) return unknown(raw)
 
-  // 1. start / finish workout
-  if (/\b(start|begin|kick off|launch|open|lets (?:do|start|go|train|lift))\b.*\b(workout|session|training|lifting|gym|todays)\b/.test(t) || /^(?:lets\s+)?(?:train|lift|work ?out)\b/.test(t)) {
+  // 1. start / finish workout. A programme word means a new series, not today's session
+  // ("begin postpartum training", "start a running program": PRD_TRAINING_PROGRAMS §7).
+  const seriesWord = /\b(?:post ?partum|post ?natal|couch to 5k|c25k)\b|\b(?:a|an|new)\s+(?:[\w-]+\s+){0,2}program(?:me)?s?\b/.test(t.replace(/-/g, ' '))
+  if (!seriesWord && (/\b(start|begin|kick off|launch|open|lets (?:do|start|go|train|lift))\b.*\b(workout|session|training|lifting|gym|todays)\b/.test(t) || /^(?:lets\s+)?(?:train|lift|work ?out)\b/.test(t))) {
     return { intent: 'start_workout', payload: { action: 'start' }, confidence: 0.95, preview: "Start today's workout", needsConfirmation: false }
   }
   if (/\b(finish|end|complete|done with|wrap up)\b.*\b(workout|session|training)\b/.test(t)) {

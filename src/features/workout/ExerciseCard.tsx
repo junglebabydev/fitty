@@ -10,7 +10,7 @@ import { formatNumberInput, parseNumberInput } from '../../components/util'
 import { deleteSet } from '../../db/repositories'
 import type { ProgressionAction } from '../../engine'
 import { cx } from '../../lib/util'
-import { fmtSec, summarizeSets } from './helpers'
+import { fmtSec, fmtTarget, summarizeSets } from './helpers'
 import { useSetLogger, type LoggedSet } from './useSetLogger'
 import { useVoiceSet } from './useVoiceSet'
 
@@ -143,6 +143,7 @@ export function ExerciseCard({ session, index, planned, exercise, sets, library,
       )}
       aria-label={exercise.name}
     >
+      {planned.circuit && <div className="eyebrow text-pillar pl-1 mb-1">Circuit · {planned.sets} {planned.sets === 1 ? 'round' : 'rounds'}</div>}
       {/* Header: visual (thumb when collapsed), name → detail, sets done, collapse */}
       <div className="flex items-center gap-2.5">
         {collapsed ? (
@@ -194,8 +195,7 @@ export function ExerciseCard({ session, index, planned, exercise, sets, library,
         className="w-full min-h-11 pl-1 flex items-center gap-x-2.5 gap-y-1 flex-wrap text-left"
       >
         <span className="flex items-baseline gap-1 whitespace-nowrap">
-          <span className="num text-2xl text-app">{planned.sets} × {effective.repMin}–{effective.repMax}</span>
-          {timed && <span className="text-sm font-medium text-muted">s</span>}
+          <span className="num text-2xl text-app">{planned.sets} × {fmtTarget(effective.repMin, effective.repMax, timed)}</span>
           {loadable && targetLoad != null && (
             <>
               <span className="text-sm font-medium text-muted px-0.5">@</span>

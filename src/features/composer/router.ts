@@ -5,12 +5,13 @@
 import { aiJson } from '../../ai'
 import { parseRegion, type ParsedCommand } from '../../engine/voice'
 import type { FoodItem, Region } from '../../domain/types'
+import { PROGRAM_IDS, type ProgramId } from '../../domain/programs'
 
 // --- contract with the model -----------------------------------------------------------
 
 export type RouterIntent =
   | 'log_meal' | 'log_body_metric' | 'log_set' | 'log_symptom' | 'log_mood'
-  | 'start_workout' | 'plan_workout' | 'question'
+  | 'start_workout' | 'plan_workout' | 'start_program' | 'question'
 
 export interface RouterMealItem { name: string; grams: number; kcal: number; protein_g: number; carbs_g: number; fat_g: number }
 
@@ -22,6 +23,8 @@ export interface RouterResult {
   symptom?: { region: string; pain: number | null }
   mood?: { valence: number; note: string }
   plan?: { minutes: number; focus: string }
+  /** Untrusted model output: checked against PROGRAM_IDS before use. */
+  program?: { id: string }
   answer?: string
 }
 
@@ -33,7 +36,7 @@ export const ROUTER_SCHEMA: Record<string, unknown> = {
   additionalProperties: false,
   required: ['intent'],
   properties: {
-    intent: { type: 'string', enum: ['log_meal', 'log_body_metric', 'log_set', 'log_symptom', 'log_mood', 'start_workout', 'plan_workout', 'question'] },
+    intent: { type: 'string', enum: ['log_meal', 'log_body_metric', 'log_set', 'log_symptom', 'log_mood', 'start_workout', 'plan_workout', 'start_program', 'question'] },
     meal: {
       type: 'object', additionalProperties: false, required: ['items'],
       properties: {
@@ -54,16 +57,17 @@ export const ROUTER_SCHEMA: Record<string, unknown> = {
     symptom: { type: 'object', additionalProperties: false, required: ['region', 'pain'], properties: { region: str, pain: { type: ['number', 'null'], description: '0-10 exactly as the user stated it, otherwise null' } } },
     mood: { type: 'object', additionalProperties: false, required: ['valence', 'note'], properties: { valence: num, note: str } },
     plan: { type: 'object', additionalProperties: false, required: ['minutes', 'focus'], properties: { minutes: num, focus: str } },
+    program: { type: 'object', additionalProperties: false, required: ['id'], properties: { id: { type: 'string', enum: [...PROGRAM_IDS] } } },
     answer: str,
   },
 }
 
 export const ROUTER_SYSTEM = [
   'You are the input router for a personal wellness app (training, nutrition, sleep, mood). One short message comes in; you return ONE JSON object and nothing else.',
-  'Pick the intent: log_meal (they ate or drank something), log_body_metric (body weight or waist), log_set (a lifting set), log_symptom (pain or discomfort in a body area), log_mood (how they feel), start_workout, plan_workout (they want a session built), question (anything else).',
+  'Pick the intent: log_meal (they ate or drank something), log_body_metric (body weight or waist), log_set (a lifting set), log_symptom (pain or discomfort in a body area), log_mood (how they feel), start_workout, plan_workout (they want one session built), start_program (they want to start a multi-week series, or get into or back into a kind of training), question (anything else).',
   'Extract only what the user said. Never invent data the user did not give: no weights, reps, pain scores, moods or measurements they did not state. If a required value is missing, use intent "question". A symptom without a pain number is still log_symptom, with pain null.',
   'Food is the one exception: for log_meal, estimate grams, kcal, protein_g, carbs_g and fat_g per item from typical portions (Singapore hawker portions when the dish is local). These are estimates and the app labels them as estimates.',
-  'metric: value and unit exactly as stated (kg, lb, cm or in). symptom: region in plain words (e.g. "left knee", "lower back", "neck"), pain 0-10 only if the user gave a number, otherwise null (the app asks for it). mood: valence is an integer from -3 (very unpleasant) to 3 (very pleasant), note is their own words. plan: minutes (20, 30, 45 or 60) and focus (upper, lower, full, conditioning or mobility).',
+  'metric: value and unit exactly as stated (kg, lb, cm or in). symptom: region in plain words (e.g. "left knee", "lower back", "neck"), pain 0-10 only if the user gave a number, otherwise null (the app asks for it). mood: valence is an integer from -3 (very unpleasant) to 3 (very pleasant), note is their own words. plan: minutes (20, 30, 45 or 60) and focus (upper, lower, full, conditioning or mobility). program: id is one of gym-strength (gym or machine strength programme), home-dumbbells (home workouts with dumbbells or weights), bodyweight (no equipment, hotel or travel), hiit (intervals), start-running (getting into running, couch to 5k), postpartum (returning to exercise after having a baby). One session is plan_workout; a series or getting started is start_program.',
   'Never diagnose, never name a medical condition, never give medical advice. Leave "answer" empty for every intent: the coach screen answers questions, and nothing written there is shown.',
   'Plain text in every string. No emoji.',
 ].join('\n')
@@ -129,6 +133,73 @@ export function localPlanRoute(text: string): string | null {
   if (!/\b(workout|session|routine|training|circuit)\b/.test(t)) return null
   const m = t.match(/\b(\d{2,3})\s*-?\s*(?:min|mins|minute|minutes)\b/)
   return planRoute(m ? Number(m[1]) : 30, t)
+}
+
+export function programRoute(id: ProgramId): string {
+  return `/train/program/${id}`
+}
+
+// --- "start a running programme": the series matcher (PRD_TRAINING_PROGRAMS §7) ------------
+// Deterministic and conservative: a series word alone is not enough, the text must also be about
+// starting or following a programme. Anything doubtful returns null and takes the usual path.
+
+const FOOD = /\b(ate|eaten|eat|eating|drank|drink|drinking|breakfast|lunch|dinner|supper|brunch|snack|snacks|meal|meals|kcal|calories|recipe)\b/
+/** Questions go to the coach ("should I start running with a bad knee?"); requests ("can you…") do not count. */
+const QUESTION = /^(how|what|whats|why|when|where|which|who|is|are|was|were|does|do|did|should|shall|will|would i|am i)\b/
+const START_CUE = /\b(start|starting|begin|beginning|get into|get back into|getting into|getting back into|back into|back to|take up|taking up|want to|wanna|would like to|id like to|help me|learn to|try|ready to)\b/
+/** "plan" counts as a series word only where the PRD says so; see ONE_OFF. */
+const SERIES = /\b(programmes?|programs?|plans?|series|course|\d+[ -]?weeks?|weekly)\b/
+const STRONG_SERIES = /\b(programmes?|programs?|series|course|\d+[ -]?weeks?)\b/
+/** One session, not a series: "make me a HIIT workout", "20 min intervals", "start my HIIT workout". */
+const ONE_OFF = /\b\d{1,3}\s*-?\s*(?:min|mins|minute|minutes)\b|\b(?:today|tonight)\b|\b(?:a|an|one|1|quick|single|my|this|the)\s+(?:[\w-]+\s+){0,3}(?:workout|session|class|run)\b/
+const TRAINING_NOUN = /\b(workouts?|work out|working out|training|routines?|exercises?|exercising|programmes?|programs?)\b/
+/** "I don't want to run" is the opposite request (avoid impact, §6.6). Adjacent words only: "never run before, want to start running" still matches. */
+const NO_RUNNING = /\b(?:dont|do not|no longer|stop|stopped|quit|hate|cant|cannot|avoid)\s+(?:want to\s+)?(?:go\s+)?(?:run|running|jog|jogging)\b/
+/** A pain report goes to the parser and the coach, never to an intro ("it hurts to move after my c-section"). */
+const PAIN = /\b(hurts?|hurting|pain|painful|sore|ache|aches|aching|bleeding|leaking|injured|injury)\b/
+
+const POSTPARTUM = /\b(post[ -]?partum|post[ -]?natal|after (?:the|my|a) baby|had (?:a|my|the) baby|after (?:giving )?birth|c[ -]?section|caesarean|cesarean)\b/
+const POSTPARTUM_CUE = /\b(exercise|exercising|train|training|workouts?|work out|working out|fitness|get fit|getting fit|programmes?|programs?|plan|routine|get back|getting back|back in shape|start|begin|ease back|easing back|return to|returning to)\b/
+const HIIT = /\b(hiit|tabata|intervals?|interval training)\b/
+const RUNNING_IDIOM = /\b(running|run) (?:late|out|low|behind|errands|a business)\b/
+const BODYWEIGHT = /\b(bodyweight|body weight|no equipment|without (?:any )?equipment|no gear)\b/
+const TRAVEL = /\b(hotel|travel|travelling|traveling|on the road|on holiday|on vacation)\b/
+const HOME = /\b(home|at home)\b/
+const WEIGHTS = /\b(dumbbells?|weights|kettlebells?)\b/
+const GYM = /\b(gym|machines?)\b/
+
+const tidy = (text: string) => text.toLowerCase().replace(/[’‘]/g, "'").replace(/'/g, '').replace(/[^\w\s-]/g, ' ').replace(/\s+/g, ' ').trim()
+
+/** "start a running program" → 'start-running'. Null unless the text clearly asks to start or follow a series. */
+export function matchProgram(text: string): ProgramId | null {
+  const t = tidy(text)
+  if (!t || FOOD.test(t) || QUESTION.test(t) || PAIN.test(t)) return null
+  const series = SERIES.test(t)
+  const cue = START_CUE.test(t) || series
+  // One session goes to the planner, unless a series word says otherwise. Postpartum always goes to its intro,
+  // because that is where its safety check lives.
+  const oneOff = ONE_OFF.test(t) && !STRONG_SERIES.test(t)
+
+  if (POSTPARTUM.test(t) && POSTPARTUM_CUE.test(t)) return 'postpartum'
+  if (oneOff) return null
+
+  if (HIIT.test(t) && cue) return 'hiit'
+
+  const runWord = /\b(running|jogging|couch to 5k|c25k)\b/.test(t) || (/\b(run|jog|5k)\b/.test(t) && START_CUE.test(t))
+  if (runWord && !RUNNING_IDIOM.test(t) && !NO_RUNNING.test(t)) {
+    if (/\b(couch to 5k|c25k)\b/.test(t) || cue) return 'start-running'
+  }
+
+  const trained = cue || TRAINING_NOUN.test(t)
+  if (BODYWEIGHT.test(t) && trained) return 'bodyweight'
+  if (TRAVEL.test(t) && TRAINING_NOUN.test(t)) return 'bodyweight'
+
+  if (/\bhome workouts?\b/.test(t)) return 'home-dumbbells'
+  if (HOME.test(t) && WEIGHTS.test(t) && trained) return 'home-dumbbells'
+
+  if (GYM.test(t) && (series || (/\bstrength\b/.test(t) && (START_CUE.test(t) || /\btraining\b/.test(t))))) return 'gym-strength'
+  if (/\bstrength (?:training )?(?:programmes?|programs?|plans?)\b/.test(t)) return 'gym-strength'
+  return null
 }
 
 /** kg / cm as stored. Null when the value is missing or implausible (never guess a measurement). */
@@ -232,6 +303,10 @@ export function actionFromRouter(result: RouterResult | null | undefined, text: 
       return { kind: 'command', cmd: { intent: 'start_workout', payload: { action: 'start' }, confidence: 0.85, preview: "Start today's workout", needsConfirmation: true } }
     case 'plan_workout':
       return { kind: 'navigate', to: planRoute(result.plan?.minutes, result.plan?.focus ?? text) }
+    case 'start_program': {
+      const id = result.program?.id
+      return typeof id === 'string' && (PROGRAM_IDS as readonly string[]).includes(id) ? { kind: 'navigate', to: programRoute(id as ProgramId) } : ask
+    }
     default:
       return ask
   }
@@ -240,6 +315,7 @@ export function actionFromRouter(result: RouterResult | null | undefined, text: 
 // --- which path does a message take? ------------------------------------------------------
 
 export type RouteDecision =
+  | { via: 'program'; to: string }
   | { via: 'plan'; to: string }
   | { via: 'coach'; to: string }
   | { via: 'preview'; cmd: ParsedCommand }
@@ -249,6 +325,8 @@ export type RouteDecision =
 export const CONFIDENT_PARSE = 0.7
 
 export function decideRoute(text: string, cmd: ParsedCommand, aiOn: boolean): RouteDecision {
+  const program = matchProgram(text)
+  if (program) return { via: 'program', to: programRoute(program) }
   const plan = localPlanRoute(text)
   if (plan) return { via: 'plan', to: plan }
   if (cmd.intent === 'coach_query') return { via: 'coach', to: coachRoute(text) }

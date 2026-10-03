@@ -196,7 +196,7 @@ export function Composer({ context, placeholder = 'Ask or log anything…' }: Co
       cmd = { intent: 'unknown', payload: { transcript: t }, confidence: 0, preview: '', needsConfirmation: true }
     }
     const route = decideRoute(t, cmd, aiConnected())
-    if (route.via === 'plan' || route.via === 'coach') { setText(''); navigate(route.to); return }
+    if (route.via === 'program' || route.via === 'plan' || route.via === 'coach') { setText(''); navigate(route.to); return }
     if (route.via === 'preview') { openPreview(t, route.cmd); return }
 
     setBusy(true)

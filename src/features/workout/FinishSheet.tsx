@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react'
 import { Check, Clock3, HeartPulse, Layers, Trophy, Weight } from 'lucide-react'
 import type { Region, WorkoutSession } from '../../domain/types'
-import { Button, Field, NumberInput, Segmented, Sheet, Slider, StatTile, TextInput } from '../../components'
+import { isProgramSession, type Feel } from '../../domain/programs'
+import { Button, Chip, Field, NumberInput, Segmented, Sheet, Slider, StatTile, TextInput } from '../../components'
 import { getSetting } from '../../db/repositories'
 import { getHealthBridge } from '../../native'
 import { cx } from '../../lib/util'
 import { REGION_LABELS, fmtVolume } from './helpers'
 import { defaultPostPain, type SymptomChange, type SymptomChangeKind } from './finish'
+import { recordFeel } from './program'
 
 export interface FinishSheetProps {
   open: boolean
@@ -30,6 +32,12 @@ const CHANGE_OPTIONS: { value: SymptomChangeKind; label: string }[] = [
   { value: 'worse', label: 'Worse' },
 ]
 
+const FEEL_OPTIONS: { value: Feel; label: string }[] = [
+  { value: 'easy', label: 'Easy' },
+  { value: 'right', label: 'About right' },
+  { value: 'hard', label: 'Too hard' },
+]
+
 const RPE_VALUES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
 function rpeWord(n: number): string {
@@ -47,6 +55,8 @@ export function FinishSheet({ open, onClose, session, regions, defaultDurationMi
   const [notes, setNotes] = useState('')
   const [changes, setChanges] = useState<Record<string, { change: SymptomChangeKind; postPain: number }>>({})
   const [writeHealth, setWriteHealth] = useState(false)
+  const [feel, setFeel] = useState<Feel | null>(null)
+  const program = isProgramSession(session)
   const [health, setHealth] = useState<{ enabled: boolean; available: boolean | null; reason: string | null }>({ enabled: false, available: null, reason: null })
 
   useEffect(() => {
@@ -57,6 +67,7 @@ export function FinishSheet({ open, onClose, session, regions, defaultDurationMi
     const init: Record<string, { change: SymptomChangeKind; postPain: number }> = {}
     for (const r of regions) init[r.region] = { change: 'same', postPain: r.prePain }
     setChanges(init)
+    setFeel(null)
     const enabled = getSetting<boolean>('health.writeWorkouts', false)
     setHealth({ enabled, available: null, reason: null })
     setWriteHealth(false)
@@ -73,6 +84,10 @@ export function FinishSheet({ open, onClose, session, regions, defaultDurationMi
     setChanges((prev) => ({ ...prev, [region]: { change, postPain: defaultPostPain(prePain, change) } }))
 
   const submit = () => {
+    // Before finishing: the answer counts for the programme week the session belongs to. Optional, so it never blocks.
+    if (program && feel) {
+      try { recordFeel(session.id, feel) } catch { /* keep finishing */ }
+    }
     const symptomChanges: SymptomChange[] = regions.map((r) => {
       const c = changes[r.region] ?? { change: 'same' as SymptomChangeKind, postPain: r.prePain }
       return { region: r.region, prePain: r.prePain, change: c.change, postPain: c.postPain }
@@ -204,6 +219,20 @@ export function FinishSheet({ open, onClose, session, regions, defaultDurationMi
             <span className="sr-only">{healthOn ? 'On' : 'Off'}</span>
           </button>
         </div>
+
+        {program && (
+          <div>
+            <div id="finish-feel-label" className="eyebrow text-muted mb-2">How did it feel?</div>
+            <div role="group" aria-labelledby="finish-feel-label" className="grid grid-cols-3 gap-2">
+              {FEEL_OPTIONS.map((o) => (
+                <Chip key={o.value} selected={feel === o.value} onClick={() => setFeel((f) => (f === o.value ? null : o.value))} className="w-full px-2!">
+                  {o.label}
+                </Chip>
+              ))}
+            </div>
+            {feel === 'hard' && <p className="mt-2 text-[13px] text-muted leading-snug">Too hard repeats this week. That's normal.</p>}
+          </div>
+        )}
       </div>
     </Sheet>
   )

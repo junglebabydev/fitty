@@ -21,6 +21,7 @@ import { getHealthBridge } from '../native'
 import { SetupPrompt, useSetupGate } from '../features/onboarding/SetupGate'
 import { buildCoachFacts, buildPillars } from '../features/coach/facts'
 import { syncProposals } from '../features/coach/apply'
+import { ensureProgramWeek } from '../features/workout/program'
 import { Composer } from '../features/composer'
 import { importHealthData } from '../features/settings/healthImport'
 import { KEYS, readHealthPermissions } from '../features/settings/keys'
@@ -74,6 +75,9 @@ export default function TodayScreen() {
   const [whyOpen, setWhyOpen] = useState(false)
   // Training is locked until the intake is done (features/onboarding/setup.ts).
   const setup = useSetupGate()
+
+  // Write this programme week's sessions when it has none yet, so Today shows the programme session (idempotent).
+  useEffect(() => { try { ensureProgramWeek(today) } catch (e) { console.warn('ensureProgramWeek failed', e) } }, [today])
 
   // Keep the proposal queue fresh: inserts only proposals not already raised in the last 7 days.
   useEffect(() => {
