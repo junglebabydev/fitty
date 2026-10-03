@@ -57,10 +57,13 @@ const TAGS_BY_GROUP: Record<RegionGroup, { amber: SafetyTag[]; red: SafetyTag[] 
  * Standing avoid-tags for a baseline condition flag (not today's symptoms): the AMBER
  * set for that region's group. A user with no condition flags gets nothing back, which
  * is what keeps the whole exercise library reachable for everyone else.
+ * `allowImpact` (programme sessions, PRD §6.6): a history flag no longer removes impact;
+ * today's gate and the next-morning check decide that instead.
  */
-export function baselineAvoidTags(regions: Region[]): SafetyTag[] {
+export function baselineAvoidTags(regions: Region[], opts: { allowImpact?: boolean } = {}): SafetyTag[] {
   const out = new Set<SafetyTag>()
   for (const r of regions) for (const t of TAGS_BY_GROUP[regionGroup(r)].amber) out.add(t)
+  if (opts.allowImpact) out.delete('impact')
   return [...out]
 }
 

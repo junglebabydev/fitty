@@ -6,7 +6,7 @@ import type { Exercise } from '../../domain/types'
 import { ExerciseVisual, MuscleMap } from '../../components'
 import { TIMED_IDS } from '../../engine'
 import { cx } from '../../lib/util'
-import { fmtSec } from './helpers'
+import { fmtTarget } from './helpers'
 import { musclesOf } from './routines'
 
 export interface VisualRow {
@@ -15,13 +15,14 @@ export interface VisualRow {
   repMin: number
   repMax: number
   note?: string
+  /** 'sec': the target is seconds even though the exercise is not timed (PlannedExercise.unit). */
+  unit?: 'sec'
 }
 
 /** "3 × 8–12" or "2 × 30–45 s". */
 export function setsLine(row: VisualRow, ex: Exercise | undefined): string {
-  const timed = !!ex && (ex.timed || TIMED_IDS.has(ex.id))
-  if (timed) return `${row.sets} × ${row.repMax >= 120 ? fmtSec(row.repMax) : `${row.repMin}–${row.repMax} s`}`
-  return `${row.sets} × ${row.repMin === row.repMax ? row.repMin : `${row.repMin}–${row.repMax}`}`
+  const timed = row.unit === 'sec' || (!!ex && (ex.timed || TIMED_IDS.has(ex.id)))
+  return `${row.sets} × ${fmtTarget(row.repMin, row.repMax, timed)}`
 }
 
 /** Two-column grid of exercise cards: visual, name, sets × reps and (optionally) a swap button. */

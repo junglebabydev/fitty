@@ -11,6 +11,8 @@ import { LIBRARY_AREAS, libraryResults, type LibraryArea } from './library'
 import { AddSessionSheet, ReflowSheet, RescheduleSheet, SkipSheet } from './PlanSheets'
 import { SAFETY_TAG_SHORT, SESSION_TYPE_META, TIER_OPTIONS, TRAIN_TIER_SETTING, isMissed, libraryExercises, sessionStatusInfo, weekTierOf, type Tier } from './helpers'
 import { addSessionFromTemplate, applyReflow, applyTier, computeReflow, missedSessions, planWeek, weekSessions } from './plan'
+import { skipSession } from './finish'
+import { isProgramSession } from '../../domain/programs'
 
 const TIER_SEGMENTS = TIER_OPTIONS.map((t) => ({ value: t.value, label: t.label }))
 
@@ -241,7 +243,14 @@ export function WeekPlanView() {
         today={today}
         weekSessions={[...sessions, ...nextWeek]}
         onMove={(id, date) => { updateSession(id, { scheduledDate: date }); setReschedule(null); toast.show(`Moved to ${date === today ? 'today' : dayName(date)}`, 'success') }}
-        onRemove={(id) => { deleteSession(id); setReschedule(null); toast.show('Session removed', 'info') }}
+        onRemove={(id) => {
+          const s = sessions.find((x) => x.id === id)
+          // A programme session would be written again on the next open: mark it skipped instead (it counts as missed for the week).
+          if (s && isProgramSession(s)) skipSession(s, 'Removed from the week')
+          else deleteSession(id)
+          setReschedule(null)
+          toast.show('Session removed', 'info')
+        }}
       />
 
       <SkipSheet

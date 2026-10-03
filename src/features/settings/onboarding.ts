@@ -22,6 +22,7 @@ import {
   upsertGoal,
 } from '../../db/repositories'
 import type { ConditionFlag, Goal, Region, Units, UserProfile } from '../../domain/types'
+import { PROGRAM_SETTING, type Enrollment } from '../../domain/programs'
 import { buildWeek, estimateTargets, type Activity, type NutritionGoal, type TargetEstimate, type Tier } from '../../engine'
 import { addDays, nowIso, round, startOfWeek, todayStr, uid } from '../../lib/util'
 import type { HealthDataType, HealthPermission } from '../../native'
@@ -292,8 +293,9 @@ export function validateStep(step: number, s: WizardState, today: string = today
 
 // --- plan ------------------------------------------------------------------------
 
-/** Creates this week's sessions when the week has none. Returns the number created. */
+/** Creates this week's sessions when the week has none. Returns the number created. Skipped while a programme is active (PRD §6.1). */
 export function ensureWeekPlanned(today: string, tier: Tier): number {
+  if (getSetting<Enrollment | null>(PROGRAM_SETTING, null)?.status === 'active') return 0
   const start = startOfWeek(today)
   const existing = getSessions(start, addDays(start, 6))
   if (existing.length) return 0

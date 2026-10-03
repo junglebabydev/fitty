@@ -1,15 +1,18 @@
 // Pre-workout and mid-workout symptom gate: records checks, evaluates the gate and rewrites
 // the session's exercise list with safe substitutions (PRD §7.2, §9.3).
 import type { Exercise, ExerciseSet, PlannedExercise, Readiness, RedFlags, Region, SymptomCheck, WorkoutSession } from '../../domain/types'
+import { isProgramDerived, parseProgramKey } from '../../domain/programs'
+import { getProgram } from '../../data/programs'
 import { db } from '../../db/database'
 import { addSymptomCheck, getSymptomChecks, updateSession } from '../../db/repositories'
 import {
-  applyGateToSession, evaluateProgression, evaluateSymptomGate, isExerciseAllowed, latestSymptomsByRegion,
-  type GateResult, type ProgressionResult,
+  applyGateToSession, evaluateProgression, evaluateSymptomGate, isExerciseAllowed, latestSymptomsByRegion, programLibrary,
+  type GateResult, type GateSessionOptions, type ProgressionResult,
 } from '../../engine'
 import { dateOf, fmtDate, nowIso, todayStr } from '../../lib/util'
 import { gateSymptoms } from '../coach/facts'
 import { REGION_LABELS, activeFlagKeys } from './helpers'
+import { programExtraAvoid } from './program'
 
 export interface GateEntry {
   region: Region
@@ -83,6 +86,20 @@ function blockedIn(exercises: PlannedExercise[], gate: GateResult, library: Exer
 }
 
 /**
+ * Programme and standalone-workout sessions (§6.3): every entry is checked against the full library, substitutes
+ * come only from the series' equipment plus bodyweight (`candidates`), the series' standing-flag tags and the
+ * no-impact choice are avoided, and reps ↔ seconds swaps convert. Others: as before.
+ */
+function gateInputs(session: WorkoutSession, gate: GateResult, library: Exercise[]): { gate: GateResult; library: Exercise[]; opts?: GateSessionOptions } {
+  const key = isProgramDerived(session) ? parseProgramKey(session.templateKey) : null
+  const program = key ? getProgram(key.programId) : null
+  if (!program) return { gate, library }
+  const extraAvoid = programExtraAvoid(program, todayStr())
+  const effective = extraAvoid.length ? { ...gate, avoidTags: [...new Set([...gate.avoidTags, ...extraAvoid])] } : gate
+  return { gate: effective, library, opts: { extraAvoid, convertUnits: true, candidates: programLibrary(program, library) } }
+}
+
+/**
  * Start a planned session: record the gate entries, evaluate the gate, substitute disallowed
  * exercises, and move the session to in_progress in one transaction.
  */
@@ -95,7 +112,8 @@ export function startSessionWithGate(
   return db.transaction(() => {
     recordGateEntries(session.id, entries, 'pre_workout')
     const gate = todaysGate()
-    const applied = applyGateToSession(session.exercises, gate, library)
+    const g = gateInputs(session, gate, library)
+    const applied = g.opts ? applyGateToSession(session.exercises, gate, g.library, g.opts) : applyGateToSession(session.exercises, gate, g.library)
     updateSession(session.id, {
       exercises: applied.exercises,
       status: 'in_progress',
@@ -104,7 +122,7 @@ export function startSessionWithGate(
       // A missed or future session started now belongs to today (Today reads plannedSessionFor(today)).
       scheduledDate: todayStr(),
     })
-    return { gate, exercises: applied.exercises, changes: applied.changes, blocked: blockedIn(applied.exercises, gate, library) }
+    return { gate, exercises: applied.exercises, changes: applied.changes, blocked: blockedIn(applied.exercises, g.gate, g.library) }
   })
 }
 
@@ -149,9 +167,10 @@ export function evaluateProgressionWithPain(
 /** Re-run the gate on an in-progress session after a new symptom report; persists only when something changes. */
 export function reapplyGate(session: WorkoutSession, library: Exercise[]): GateOutcome {
   const gate = todaysGate()
-  const applied = applyGateToSession(session.exercises, gate, library)
+  const g = gateInputs(session, gate, library)
+  const applied = g.opts ? applyGateToSession(session.exercises, gate, g.library, g.opts) : applyGateToSession(session.exercises, gate, g.library)
   if (applied.changes.length) updateSession(session.id, { exercises: applied.exercises })
-  return { gate, exercises: applied.exercises, changes: applied.changes, blocked: blockedIn(applied.exercises, gate, library) }
+  return { gate, exercises: applied.exercises, changes: applied.changes, blocked: blockedIn(applied.exercises, g.gate, g.library) }
 }
 
 /** Replace one planned exercise with a substitute, keeping the original as `substitutedFrom`. */

@@ -99,7 +99,9 @@ export function FocusMode(p: FocusModeProps) {
 
   const station = p.index + 1
   const main = resting ? fmtClock(p.timer.remaining) : timedEndAt != null ? fmtClock(timedLeft) : timed ? `${duration ?? p.planned.repMin}` : `${reps ?? p.planned.repMin}`
-  const mainUnit = resting ? 'rest' : timedEndAt != null ? `of ${duration ?? p.planned.repMin} s` : timed ? 'seconds' : `reps${loadable && load != null ? ` · ${fmtLoad(load)}` : ''}`
+  const side = p.planned.perSide
+  const mainUnit = resting ? 'rest' : timedEndAt != null ? `of ${duration ?? p.planned.repMin} s` : timed ? (side ? 's a side' : 'seconds') : `${side ? 'reps a side' : 'reps'}${loadable && load != null ? ` · ${fmtLoad(load)}` : ''}`
+  const roleLabel = p.planned.role === 'warmup' ? 'Warm-up' : p.planned.role === 'cooldown' ? 'Cool-down' : null
   const primaryLabel = resting ? 'Skip rest' : timed ? (timedEndAt != null ? 'Done early' : `Start ${duration ?? p.planned.repMin} s`) : 'Done set'
 
   return (
@@ -130,8 +132,10 @@ export function FocusMode(p: FocusModeProps) {
           </div>
         </div>
         <div className="shrink-0 px-4 pb-3 pt-2">
-          <div className="text-xs font-semibold uppercase tracking-wide opacity-60">{resting ? 'Up next' : `Exercise ${station} of ${p.segments.length}`}</div>
+          <div className="text-xs font-semibold uppercase tracking-wide opacity-60">{resting ? 'Up next' : roleLabel ?? `Exercise ${station} of ${p.segments.length}`}</div>
           <h1 className="display text-[1.9rem] leading-[1.05] uppercase line-clamp-2">{p.exercise.name}</h1>
+          {/* The cue belongs to the planned movement; a swap (manual or gate) keeps the entry, so hide it then. */}
+          {p.planned.cue && !p.planned.substitutedFrom && <p className="voice mt-1 truncate text-lg opacity-80">{p.planned.cue}</p>}
         </div>
 
         {/* Dark data panel */}
@@ -147,7 +151,7 @@ export function FocusMode(p: FocusModeProps) {
               <div className="mt-1 text-sm opacity-70">{mainUnit}</div>
             </button>
             <div className="text-right">
-              <div className="text-xs font-semibold uppercase tracking-wide opacity-60">Set</div>
+              <div className="text-xs font-semibold uppercase tracking-wide opacity-60">{p.planned.circuit ? 'Round' : 'Set'}</div>
               <div className="num text-4xl leading-none">{setNo}<span className="text-xl opacity-60"> / {p.planned.sets}</span></div>
             </div>
           </div>

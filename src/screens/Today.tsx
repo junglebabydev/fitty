@@ -8,6 +8,7 @@ import {
   ChartLine, ChevronRight, ClipboardCheck, Clock, Inbox, Moon, Play, Settings, Smile, StretchHorizontal, Utensils, type LucideIcon,
 } from 'lucide-react'
 import type { WorkoutSession } from '../domain/types'
+import { isProgramDerived } from '../domain/programs'
 import { addDays, dateOf, dayName, fmtDate, toDateStr } from '../lib/util'
 import { AIStatusChip, Button, IconButton, PillarDial, Screen, Sheet } from '../components'
 import { useNow, useQuery, useToast } from '../hooks'
@@ -20,6 +21,7 @@ import { getHealthBridge } from '../native'
 import { SetupPrompt, useSetupGate } from '../features/onboarding/SetupGate'
 import { buildCoachFacts, buildPillars } from '../features/coach/facts'
 import { syncProposals } from '../features/coach/apply'
+import { ensureProgramWeek } from '../features/workout/program'
 import { Composer } from '../features/composer'
 import { importHealthData } from '../features/settings/healthImport'
 import { KEYS, readHealthPermissions } from '../features/settings/keys'
@@ -74,6 +76,9 @@ export default function TodayScreen() {
   // Training is locked until the intake is done (features/onboarding/setup.ts).
   const setup = useSetupGate()
 
+  // Write this programme week's sessions when it has none yet, so Today shows the programme session (idempotent).
+  useEffect(() => { try { ensureProgramWeek(today) } catch (e) { console.warn('ensureProgramWeek failed', e) } }, [today])
+
   // Keep the proposal queue fresh: inserts only proposals not already raised in the last 7 days.
   useEffect(() => {
     try {
@@ -105,7 +110,8 @@ export default function TodayScreen() {
   // A workout started and never finished gets a nudge to wrap it up. The window runs a week ahead too: a
   // session can be started early, before its scheduled date.
   const staleSession = useQuery(() => getSessions(addDays(today, -14), addDays(today, 7)).find((s) => isStaleSession(s)) ?? null, [today, hour])
-  const short = useMemo(() => (session ? shortenedVersion(session.exercises) : []), [session])
+  // Programme sessions are never shortened (PRD §6.5), so canShorten stays false for them.
+  const short = useMemo(() => (session && !isProgramDerived(session) ? shortenedVersion(session.exercises) : []), [session])
   const blocked = facts.readiness.state === 'RED' || facts.gate.overall === 'RED'
 
   const action = nextAction({

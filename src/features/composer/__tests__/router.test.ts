@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import type { ParsedCommand } from '../../../engine/voice'
+import { PROGRAM_IDS } from '../../../domain/programs'
+import { screenMessage } from '../../../engine/chatSafety'
+import { parseVoiceCommand, type ParsedCommand } from '../../../engine/voice'
 import {
-  AI_ESTIMATE_REASON, ROUTER_SCHEMA, actionFromRouter, clampValence, coachRoute, decideRoute, localPlanRoute, mealItemsFromRouter,
+  AI_ESTIMATE_REASON, ROUTER_SCHEMA, actionFromRouter, clampValence, coachRoute, decideRoute, localPlanRoute, matchProgram, mealItemsFromRouter,
   metricToStored, normalizeFocus, planRoute, snapMinutes, type RouterResult,
 } from '../router'
 
@@ -9,11 +11,19 @@ const NOW = '2026-09-17T12:30:00.000+08:00'
 const cmd = (intent: ParsedCommand['intent'], confidence: number): ParsedCommand => ({ intent, payload: {}, confidence, preview: '', needsConfirmation: true })
 
 describe('schema', () => {
-  it('lists exactly the eight intents and forbids extra keys', () => {
+  it('lists exactly the nine intents and forbids extra keys', () => {
+    // start_program added deliberately (docs/PRD_TRAINING_PROGRAMS.md §7).
     const props = ROUTER_SCHEMA.properties as Record<string, { enum?: string[] }>
-    expect(props.intent.enum).toEqual(['log_meal', 'log_body_metric', 'log_set', 'log_symptom', 'log_mood', 'start_workout', 'plan_workout', 'question'])
+    expect(props.intent.enum).toEqual(['log_meal', 'log_body_metric', 'log_set', 'log_symptom', 'log_mood', 'start_workout', 'plan_workout', 'start_program', 'question'])
     expect(ROUTER_SCHEMA.additionalProperties).toBe(false)
     expect(ROUTER_SCHEMA.required).toEqual(['intent'])
+  })
+
+  it('start_program carries a closed program id', () => {
+    const program = (ROUTER_SCHEMA.properties as Record<string, { additionalProperties?: boolean; required?: string[]; properties?: Record<string, { enum?: string[] }> }>).program
+    expect(program.additionalProperties).toBe(false)
+    expect(program.required).toEqual(['id'])
+    expect([...(program.properties?.id.enum ?? [])].sort()).toEqual([...PROGRAM_IDS].sort())
   })
 })
 
@@ -87,6 +97,15 @@ describe('actionFromRouter', () => {
     expect(actionFromRouter({ intent: 'plan_workout' }, 'something for my shoulders', NOW)).toEqual({ kind: 'navigate', to: '/train?plan=1&minutes=30&focus=upper' })
   })
 
+  it('start_program → the programme intro; an unknown or missing id falls back to the coach', () => {
+    expect(actionFromRouter({ intent: 'start_program', program: { id: 'hiit' } }, 'x', NOW)).toEqual({ kind: 'navigate', to: '/train/program/hiit' })
+    for (const id of PROGRAM_IDS) expect(actionFromRouter({ intent: 'start_program', program: { id } }, 'x', NOW)).toEqual({ kind: 'navigate', to: `/train/program/${id}` })
+    expect(actionFromRouter({ intent: 'start_program', program: { id: 'marathon' } }, 'run a marathon', NOW)).toEqual({ kind: 'navigate', to: coachRoute('run a marathon') })
+    expect(actionFromRouter({ intent: 'start_program' }, 'run a marathon', NOW)).toEqual({ kind: 'navigate', to: coachRoute('run a marathon') })
+    expect(actionFromRouter({ intent: 'start_program', program: { id: 7 } } as unknown as RouterResult, 'x', NOW).kind).toBe('navigate')
+    expect(actionFromRouter({ intent: 'start_program', program: { id: 'toString' } }, 'x', NOW)).toEqual({ kind: 'navigate', to: coachRoute('x') })
+  })
+
   it('question, junk and null all go to the coach with the original text', () => {
     const to = '/coach?q=why%20am%20I%20tired%3F'
     expect(actionFromRouter({ intent: 'question', answer: 'ignored' }, 'why am I tired?', NOW)).toEqual({ kind: 'navigate', to })
@@ -147,5 +166,110 @@ describe('decideRoute', () => {
   it('unknown text goes to the model when connected, else to the local coach', () => {
     expect(decideRoute('zzz', cmd('unknown', 0), true)).toEqual({ via: 'ai' })
     expect(decideRoute('zzz', cmd('unknown', 0), false)).toEqual({ via: 'coach', to: '/coach?q=zzz' })
+  })
+})
+
+describe('matchProgram (PRD_TRAINING_PROGRAMS §1.6, §7)', () => {
+  it('routes the probe phrases to their series', () => {
+    const cases: [string, string][] = [
+      ['I just had a baby and want to get back to exercise', 'postpartum'],
+      ['begin postpartum training', 'postpartum'],
+      ['postnatal exercise plan', 'postpartum'],
+      ['easing back into workouts after my c-section', 'postpartum'],
+      ['start a running program', 'start-running'],
+      ['I want to get into running', 'start-running'],
+      ['couch to 5k', 'start-running'],
+      ['I want to run a 5k', 'start-running'],
+      ['get back into jogging', 'start-running'],
+      ["I'm not a runner but want to get into running", 'start-running'],
+      ["I've never run before and want to start running", 'start-running'],
+      ['I want to stop being lazy and start running', 'start-running'],
+      ["I can't wait to start running", 'start-running'],
+      ['getting fit after my baby', 'postpartum'],
+      ['make me a HIIT programme', 'hiit'],
+      ['I want to start tabata', 'hiit'],
+      ['a 6 week intervals plan', 'hiit'],
+      ['home dumbbell workouts', 'home-dumbbells'],
+      ['home workouts', 'home-dumbbells'],
+      ['I want to train at home with weights', 'home-dumbbells'],
+      ['a bodyweight programme for travel', 'bodyweight'],
+      ['no equipment workouts', 'bodyweight'],
+      ['hotel workouts while travelling', 'bodyweight'],
+      ['gym strength programme', 'gym-strength'],
+      ['I want a strength programme', 'gym-strength'],
+      ['start gym strength training', 'gym-strength'],
+    ]
+    for (const [text, id] of cases) expect([text, matchProgram(text)]).toEqual([text, id])
+  })
+
+  it('handles curly apostrophes from iOS keyboards', () => {
+    expect(matchProgram('I’d like to get into running')).toBe('start-running')
+    expect(matchProgram('I don’t want to run anymore')).toBeNull()
+  })
+
+  it('stays out of the way of meals, one-off sessions, questions and everyday words', () => {
+    for (const text of [
+      'I ate a big lunch after running',
+      'chicken rice for dinner',
+      'Start today\'s workout',
+      "let's train",
+      'make me a HIIT workout',
+      'plan a 20 min HIIT session',
+      'plan a 20 min mobility session',
+      'start my HIIT workout',
+      'went running this morning',
+      'my knee hurts when running',
+      "I'm running late but want to train",
+      'I don\'t want to run anymore',
+      "I don't want to go running",
+      'stop running',
+      'I want to book a hotel',
+      'help me plan my travel',
+      'I had a baby',
+      "I'm having a baby in March and want to keep training",
+      'it hurts to move after my c-section',
+      'sore after my c-section, want to start training',
+      'my knee hurts, I want to start running',
+      'postpartum depression',
+      'should I start running with a bad knee?',
+      'is it safe to exercise after a c-section?',
+      'bench 20 kg dumbbells at home',
+      'bodyweight squats 3 sets of 10',
+      "I'm at the gym",
+      'weight 83.4 kg',
+      'zzz',
+      '',
+    ]) expect([text, matchProgram(text)]).toEqual([text, null])
+  })
+
+  it('the postpartum probe is not caught by the L1 safety screen, so the Composer reaches the matcher', () => {
+    expect(screenMessage('I just had a baby and want to get back to exercise')).toBeNull()
+    expect(screenMessage('begin postpartum training')).toBeNull()
+  })
+})
+
+describe('decideRoute with programmes', () => {
+  const ctx = { exercises: [], savedMeals: [], now: NOW }
+
+  it('the series matcher runs first, ahead of the planner and the parser', () => {
+    // The real parser reads this as a meal (log_meal 0.75); the matcher wins.
+    expect(decideRoute('I just had a baby and want to get back to exercise', cmd('log_meal', 0.75), true)).toEqual({ via: 'program', to: '/train/program/postpartum' })
+    expect(decideRoute('begin postpartum training', cmd('start_workout', 0.95), false)).toEqual({ via: 'program', to: '/train/program/postpartum' })
+    expect(decideRoute('start a running program', cmd('log_meal', 0.5), true)).toEqual({ via: 'program', to: '/train/program/start-running' })
+    expect(decideRoute('make me a HIIT programme', cmd('unknown', 0), true)).toEqual({ via: 'program', to: '/train/program/hiit' })
+    expect(decideRoute('home dumbbell workouts', cmd('unknown', 0), false)).toEqual({ via: 'program', to: '/train/program/home-dumbbells' })
+    expect(decideRoute('a bodyweight programme for travel', cmd('unknown', 0), false)).toEqual({ via: 'program', to: '/train/program/bodyweight' })
+    expect(decideRoute('gym strength programme', cmd('unknown', 0), false)).toEqual({ via: 'program', to: '/train/program/gym-strength' })
+  })
+
+  it('a one-off session still reaches the planner', () => {
+    expect(decideRoute('make me a HIIT workout', cmd('unknown', 0), true)).toEqual({ via: 'plan', to: '/train?plan=1&minutes=30&focus=conditioning' })
+    expect(decideRoute('plan a 20 min mobility session', cmd('coach_query', 0.85), true)).toEqual({ via: 'plan', to: '/train?plan=1&minutes=20&focus=mobility' })
+  })
+
+  it('with the real parser: the probes never become a meal or today\'s session', () => {
+    for (const text of ['I just had a baby and want to get back to exercise', 'begin postpartum training', 'start a running program', 'I want to get into running']) {
+      expect([text, decideRoute(text, parseVoiceCommand(text, ctx), true).via]).toEqual([text, 'program'])
+    }
   })
 })

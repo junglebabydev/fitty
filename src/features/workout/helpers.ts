@@ -72,6 +72,13 @@ export function fmtLoad(kg: number | null): string {
   return `${Number.isInteger(kg) ? kg : kg.toFixed(1)} kg`
 }
 
+/** A target range for display: "8–12", "40 s", "30–60 s", "4 min". Equal ends collapse; long timed targets read in minutes. */
+export function fmtTarget(min: number, max: number, timed: boolean): string {
+  if (timed && max >= 120) return min === max || min >= 120 ? fmtSec(max) : `${min}–${fmtSec(max)}`
+  const range = min === max ? `${min}` : `${min}–${max}`
+  return timed ? `${range} s` : range
+}
+
 export function fmtSec(sec: number): string {
   if (sec >= 120 && sec % 60 === 0) return `${sec / 60} min`
   if (sec >= 90) return `${Math.floor(sec / 60)}m ${sec % 60}s`

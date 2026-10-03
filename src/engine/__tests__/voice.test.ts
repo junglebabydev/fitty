@@ -97,6 +97,19 @@ describe('parseVoiceCommand — PRD §7.4 examples', () => {
     expect(parse("let's train").intent).toBe('start_workout')
   })
 
+  it('a programme word is not today\'s session (PRD_TRAINING_PROGRAMS §1.6, §7)', () => {
+    for (const t of ['begin postpartum training', 'start a running program', 'begin postnatal workout', 'start my post-partum workout', 'start the couch to 5k programme', "let's train for the c25k"]) {
+      expect([t, parse(t).intent]).not.toEqual([t, 'start_workout'])
+    }
+    // One-off sessions keep opening today's workout.
+    expect(parse('start my HIIT workout').intent).toBe('start_workout')
+    expect(parse('begin the session').intent).toBe('start_workout')
+    expect(parse('lets go gym').intent).toBe('start_workout')
+    expect(parse("start today's programme session").intent).toBe('start_workout')
+    expect(parse('start my program workout').intent).toBe('start_workout')
+    expect(parse('start a new programme session').intent).not.toBe('start_workout')
+  })
+
   it('"My left knee hurts today" → log_symptom with knee_left', () => {
     const r = parse('My left knee hurts today')
     expect(r.intent).toBe('log_symptom')

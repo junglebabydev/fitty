@@ -22,6 +22,7 @@ const TodayScreen = lazy(() => import('./screens/Today'))
 const SleepScreen = lazy(() => import('./screens/Sleep'))
 const CheckInScreen = lazy(() => import('./screens/CheckIn'))
 const TrainScreen = lazy(() => import('./screens/Train'))
+const ProgramIntroScreen = lazy(() => import('./screens/ProgramIntro'))
 const WorkoutScreen = lazy(() => import('./screens/Workout'))
 const ExerciseDetailScreen = lazy(() => import('./screens/ExerciseDetail'))
 const MobilityScreen = lazy(() => import('./screens/Mobility'))
@@ -254,6 +255,7 @@ function AppRoutes() {
       <Route path="/sleep" element={<SleepScreen />} />
       <Route path="/checkin" element={<CheckInScreen />} />
       <Route path="/train" element={<TrainScreen />} />
+      <Route path="/train/program/:id" element={<ProgramIntroScreen />} />
       <Route path="/train/session/:id" element={<RequireSetup action="workout"><WorkoutScreen /></RequireSetup>} />
       <Route path="/train/exercise/:id" element={<ExerciseDetailScreen />} />
       <Route path="/train/mobility" element={<RequireSetup action="mobility"><MobilityScreen /></RequireSetup>} />

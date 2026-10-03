@@ -10,7 +10,7 @@ import { useQuery, useToast } from '../../hooks'
 import { getMeals, getSavedMeals, getSetting, pruneVoiceCommands } from '../../db/repositories'
 import { EXERCISE_BY_ID } from '../../data'
 import { RED_FLAG_LABELS, parseVoiceCommand, regionLabel, screenMessage, type ParsedCommand, type ParsedMealItem, type VoiceIntent } from '../../engine'
-import { coachRoute } from '../composer/router'
+import { coachRoute, matchProgram, programRoute } from '../composer/router'
 import { isSpeechAvailable, startListening, type ListenHandle, type SpeechErrorCode } from '../../native'
 import { KEYBOARD_DICTATION_HINT } from '../../native/speech'
 import {
@@ -353,6 +353,9 @@ export function VoiceSheet({ open, onClose, initialTranscript, initialCommand, a
       if (!transcript) { setPhase({ kind: 'typing' }); return }
       // L1 safety screen first (docs/PRD_COACH_CHAT.md §5): the Coach screen gives the fixed reply and the Support sheet.
       if (screenMessage(transcript)) { onClose(); navigate(coachRoute(transcript)); return }
+      // A series ("start a running program") opens its intro, before the parser can read it as a meal or today's session.
+      const program = matchProgram(transcript)
+      if (program) { onClose(); navigate(programRoute(program)); return }
       const cmd = parseVoiceCommand(transcript, buildVoiceContext())
       // Navigation-only intents change nothing, so they never need a confirmation tap.
       const writes = cmd.intent !== 'coach_query' && !(cmd.intent === 'start_workout' && cmd.payload.action !== 'finish')
