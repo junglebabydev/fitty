@@ -22,7 +22,7 @@ function resolve(pref: ThemePref): 'dark' | 'light' {
 export function applyTheme(pref: ThemePref = getThemePref()): void {
   const mode = resolve(pref)
   document.documentElement.dataset.theme = mode
-  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', mode === 'dark' ? '#0a0b0d' : '#f2f2f7')
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', mode === 'dark' ? '#000000' : '#f2f2f7')
 }
 
 export function setThemePref(pref: ThemePref): void {

@@ -94,11 +94,10 @@ export function BreathOrb({ phase, seconds, label, size = 260 }: BreathOrbProps)
         aria-hidden
       />
       <span
-        className="glow-pillar absolute rounded-full"
+        className="absolute rounded-full"
         style={{
           inset: '22%',
-          background:
-            'radial-gradient(circle at 50% 38%, color-mix(in oklab, var(--pillar) 58%, transparent), color-mix(in oklab, var(--pillar) 26%, transparent))',
+          background: 'color-mix(in oklab, var(--pillar) 42%, transparent)',
           ...move(1),
         }}
         aria-hidden

@@ -1,6 +1,6 @@
-// Hero mood orb for Mind home. Same visual language as MoodSlider's blob: a compact pebble when
-// things feel unpleasant, an open six-petal bloom when they feel pleasant. Decorative only: the
-// caller prints the mood word next to it, so the hue never carries the meaning alone.
+// Mood shape for Mind home. Same visual language as MoodSlider's blob: a compact pebble when
+// things feel unpleasant, an open six-petal bloom when they feel pleasant. Flat and still (DESIGN §11:
+// no glow, no drift). Decorative only: the caller prints the mood word next to it.
 import type { CSSProperties } from 'react'
 
 export interface MoodOrbProps {
@@ -23,7 +23,7 @@ function blobRadius(t: number): string {
   return `${r[0]} ${r[1]} ${r[2]} ${r[3]} / ${r[4]} ${r[5]} ${r[6]} ${r[7]}`
 }
 
-export function MoodOrb({ valence, size = 168 }: MoodOrbProps) {
+export function MoodOrb({ valence, size = 96 }: MoodOrbProps) {
   const v = valence == null ? 0 : Math.max(-3, Math.min(3, Math.round(valence)))
   const t = (v + 3) / 6
   const spread = 60 * t
@@ -34,23 +34,18 @@ export function MoodOrb({ valence, size = 168 }: MoodOrbProps) {
   const layer = (i: number): CSSProperties => ({
     borderRadius: radius,
     transform: `rotate(${(i - 1) * spread}deg) scaleX(${squeeze})`,
-    background:
-      'radial-gradient(circle at 40% 32%, color-mix(in oklab, var(--mood) 80%, var(--c-fg)) 0%, var(--mood) 45%, color-mix(in oklab, var(--mood) 55%, transparent) 100%)',
-    opacity: valence == null ? 0.4 : 0.62,
+    background: 'var(--mood)',
+    opacity: valence == null ? 0.25 : 0.4,
     transition: `transform ${ease}, border-radius ${ease}, background 600ms linear`,
   })
 
   return (
-    <span className="anim-drift block" style={{ '--mood': moodColor(t) } as CSSProperties} aria-hidden>
+    <span className="block" style={{ '--mood': moodColor(t) } as CSSProperties} aria-hidden>
       <span className="relative block" style={{ width: size, height: size, transform: `scale(${lerp(0.78, 1, t)})`, transition: `transform ${ease}` }}>
-        <span
-          className="absolute -inset-[22%] rounded-full"
-          style={{ background: 'radial-gradient(closest-side, color-mix(in oklab, var(--mood) 45%, transparent), transparent)' }}
-        />
         {[0, 1, 2].map((i) => (
           <span key={i} className="absolute inset-0" style={layer(i)} />
         ))}
-        <span className="absolute inset-[34%] rounded-full" style={{ background: 'color-mix(in oklab, var(--mood) 70%, var(--c-fg))', opacity: 0.55 }} />
+        <span className="absolute inset-[34%] rounded-full" style={{ background: 'var(--mood)', opacity: 0.9 }} />
       </span>
     </span>
   )

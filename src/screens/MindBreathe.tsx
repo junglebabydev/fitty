@@ -1,9 +1,10 @@
-// Guided breathing. Full screen, tab bar hidden (see HIDE_TABS_PATTERNS in App.tsx).
+// Guided breathing. Full screen, tab bar hidden (see HIDE_TABS_PATTERNS in App.tsx). Before starting: one
+// technique row (list sheet), a length control, the orb and Start. Nothing else.
 // The schedule runs on wall-clock timestamps (useBreathingSession); the orb is a CSS transition per phase.
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Info, Pause, Play, Square } from 'lucide-react'
-import { BreathOrb, Button, Chip, IconButton, MoodSlider, Screen, Sheet } from '../components'
+import { Check, Info, Pause, Play, Square } from 'lucide-react'
+import { BreathOrb, Button, Card, Divider, IconButton, ListRow, MoodSlider, Screen, Segmented, Sheet } from '../components'
 import { useQuery, useToast } from '../hooks'
 import { addMindSession, getCheckIn, getMindSessions, lastNightSleep, latestMoodLog } from '../db/repositories'
 import { BREATHING_TECHNIQUES, suggestTechnique } from '../engine/mind'
@@ -51,6 +52,7 @@ export default function MindBreatheScreen() {
 
   const [moodOpen, setMoodOpen] = useState(false)
   const [infoOpen, setInfoOpen] = useState(false)
+  const [pickOpen, setPickOpen] = useState(false)
   const [before, setBefore] = useState<number | null>(null)
   const [after, setAfter] = useState<number | null>(null)
   const [doneSec, setDoneSec] = useState(0)
@@ -149,7 +151,7 @@ export default function MindBreatheScreen() {
           <section aria-label="How do you feel now" className="w-full rounded-[1.25rem] border border-line bg-surface p-4">
             <h2 className="eyebrow m-0 text-pillar">How do you feel now?</h2>
             <MoodSlider value={after ?? before ?? 0} onChange={setAfter} />
-            {after != null && <p className="voice m-0 mt-3 text-lg text-app" role="status">{moodDeltaSentence(before, after)}</p>}
+            {after != null && <p className="m-0 mt-3 text-[17px] text-app" role="status">{moodDeltaSentence(before, after)}</p>}
           </section>
 
           <div className="mt-auto flex w-full flex-col gap-2">
@@ -165,33 +167,23 @@ export default function MindBreatheScreen() {
     <Screen
       pillar="mind"
       back
+      title={kind === 'winddown' ? 'Wind down' : technique.name}
       right={active ? undefined : <IconButton icon={<Info size={20} />} label={`About ${technique.name}`} onClick={() => setInfoOpen(true)} />}
     >
       <div className="flex flex-1 flex-col pb-6">
         {!active && (
-          <div className="anim-fade-in flex flex-col gap-5">
-            <div>
-              <p className="eyebrow m-0 text-pillar">{kind === 'winddown' ? 'Wind down' : 'Breathe'}</p>
-              <h1 className="display m-0 mt-1 text-4xl text-app">{technique.name}</h1>
-            </div>
-
-            <fieldset className="m-0 border-0 p-0">
-              <legend className="eyebrow mb-2 p-0 text-muted">Technique</legend>
-              <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 py-1">
-                {BREATHING_TECHNIQUES.map((t) => (
-                  <Chip key={t.id} className="min-h-11 shrink-0" selected={t.id === technique.id} check onClick={() => setTechniqueId(t.id)}>{t.name}</Chip>
-                ))}
-              </div>
-            </fieldset>
-
-            <fieldset className="m-0 border-0 p-0">
-              <legend className="eyebrow mb-2 p-0 text-muted">Length</legend>
-              <div className="flex flex-wrap gap-2">
-                {options.map((o) => (
-                  <Chip key={o.minutes} className="min-h-11 min-w-[72px] justify-center" selected={o.minutes === option.minutes} check onClick={() => setMinutes(o.minutes)}>{o.label}</Chip>
-                ))}
-              </div>
-            </fieldset>
+          <div className="anim-fade-in flex flex-col gap-3">
+            <Card flush>
+              <ListRow title="Technique" right={technique.name} chevron onClick={() => setPickOpen(true)} />
+            </Card>
+            {options.length > 1 && (
+              <Segmented
+                label="Length"
+                options={options.map((o) => ({ value: o.minutes, label: o.label }))}
+                value={option.minutes}
+                onChange={setMinutes}
+              />
+            )}
           </div>
         )}
 
@@ -221,9 +213,9 @@ export default function MindBreatheScreen() {
                 <MoodSlider value={before ?? 0} onChange={setBefore} />
               </section>
             ) : (
-              <Button variant="ghost" full onClick={() => setMoodOpen(true)}>
+              <button type="button" onClick={() => setMoodOpen(true)} className="press min-h-11 self-center px-3 text-[15px] text-pillar">
                 {before == null ? 'Rate your mood first' : 'Change mood rating'}
-              </Button>
+              </button>
             )}
             <Button size="lg" full icon={<Play size={20} />} onClick={start}>Start</Button>
           </div>
@@ -239,9 +231,27 @@ export default function MindBreatheScreen() {
         )}
       </div>
 
+      <Sheet open={pickOpen} onClose={() => setPickOpen(false)} title="Technique">
+        <div data-pillar="mind" className="pb-2">
+          <Card flush>
+            {BREATHING_TECHNIQUES.map((t, i) => (
+              <div key={t.id}>
+                {i > 0 && <Divider inset />}
+                <ListRow
+                  title={t.name}
+                  subtitle={t.purpose}
+                  right={t.id === technique.id ? <Check size={18} className="text-pillar" aria-label="Selected" /> : undefined}
+                  onClick={() => { setTechniqueId(t.id); setPickOpen(false) }}
+                />
+              </div>
+            ))}
+          </Card>
+        </div>
+      </Sheet>
+
       <Sheet open={infoOpen} onClose={() => setInfoOpen(false)} title={technique.name}>
         <div data-pillar="mind" className="flex flex-col gap-3 pb-2">
-          <p className="voice m-0 text-xl text-app">{technique.purpose}.</p>
+          <p className="m-0 text-[17px] font-semibold text-app">{technique.purpose}.</p>
           <p className="m-0 text-base text-muted">
             <span className="num text-2xl text-app">{patternLabel(technique.phases)}</span> seconds · {plan.cycles} {plan.cycles === 1 ? 'cycle' : 'cycles'} · {fmtClock(plan.totalSec)}
           </p>

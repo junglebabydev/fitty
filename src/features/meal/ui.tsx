@@ -2,14 +2,12 @@
 // read-outs, the confidence pill, result rows and the 7-day intake strip.
 // Presentation only — all maths lives in ./draft.
 
-import { useState, type CSSProperties, type ReactNode } from 'react'
-import { ChevronDown, Plus } from 'lucide-react'
+import { useState, type ReactNode } from 'react'
+import { Plus } from 'lucide-react'
 import type { Macros } from '../../domain/types'
-import { FoodGlyph, INPUT_BASE, NumberInput, fmtInt } from '../../components'
+import { FoodGlyph, NumberInput, fmtInt } from '../../components'
 import { cx, dayName, fmtDate } from '../../lib/util'
-import {
-  MEAL_TYPES, MEAL_TYPE_LABELS, PORTION_FACTORS, confidenceBand, fmtG, portionFactor, type MealType,
-} from './draft'
+import { PORTION_FACTORS, confidenceBand, fmtG, portionFactor } from './draft'
 
 const round1 = (n: number) => Math.round(n * 10) / 10
 
@@ -67,53 +65,6 @@ export function PortionControl({ name, baseG, grams, onChange, autoFocus }: {
   )
 }
 
-// --- hero rings ------------------------------------------------------------------
-
-const RING_R = 44
-const RING_C = 2 * Math.PI * RING_R
-
-/**
- * One hero ring with a huge numeral inside. `tone` is a text colour class
- * (the arc uses currentColor). Going past the target keeps the hue: the ring
- * stays full and the remaining view shows "+N".
- */
-export function MacroRing({ label, unit, value, target, mode, tone }: {
-  label: string
-  unit: string
-  value: number
-  target: number
-  mode: 'consumed' | 'remaining'
-  tone: string
-}) {
-  const diff = Math.round(target - value)
-  const over = target > 0 && diff < 0
-  const frac = target > 0 ? Math.max(0, Math.min(1, value / target)) : 0
-  const dash = RING_C * frac
-  const hero = mode === 'remaining' ? (over ? `+${fmtInt(-diff)}` : fmtInt(Math.max(0, diff))) : fmtInt(value)
-  const caption = mode === 'remaining' ? `${unit} ${over ? 'over' : 'left'}` : `of ${fmtInt(target)} ${unit}`
-  return (
-    <div className={cx('relative w-full max-w-[160px] aspect-square mx-auto', tone)}>
-      <svg viewBox="0 0 100 100" className="block w-full h-full" aria-hidden>
-        <circle cx="50" cy="50" r={RING_R} fill="none" stroke="currentColor" strokeWidth="7" opacity="0.14" />
-        {frac > 0 && (
-          <circle
-            cx="50" cy="50" r={RING_R} fill="none" stroke="currentColor" strokeWidth="7" strokeLinecap="round"
-            strokeDasharray={`${dash} ${RING_C}`}
-            transform="rotate(-90 50 50)"
-            className="anim-draw"
-            style={{ '--dash-from': dash, transition: 'stroke-dasharray 600ms var(--ease-out-soft)' } as CSSProperties}
-          />
-        )}
-      </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-        <span className="eyebrow">{label}</span>
-        <span className="num text-5xl mt-1 text-app">{hero}</span>
-        <span className="text-[12px] font-medium text-muted mt-1">{caption}</span>
-      </div>
-    </div>
-  )
-}
-
 /** Meal thumbnail: the photo when there is one, otherwise a FoodGlyph tile. */
 export function MealThumb({ photo, name, size = 64 }: { photo: string | null; name: string; size?: number }) {
   if (!photo) return <FoodGlyph name={name} size={size} />
@@ -131,13 +82,17 @@ export function MacroReadout({ m, size = 'md', className }: { m: Macros; size?: 
         <span className={cx('num', big)}>{fmtInt(m.kcal)}</span>
         <span className="text-sm font-medium text-muted">kcal</span>
       </div>
-      <div className="flex items-baseline gap-1 text-protein">
-        <span className={cx('num', big)}>{fmtInt(m.proteinG)}</span>
-        <span className="text-sm font-semibold">g protein</span>
-      </div>
-      <div className="ml-auto tnum text-[13px] text-muted pb-0.5 whitespace-nowrap">
-        C {fmtInt(m.carbsG)} · F {fmtInt(m.fatG)} g
-      </div>
+      {Math.round(m.proteinG) > 0 && (
+        <div className="flex items-baseline gap-1 text-protein">
+          <span className={cx('num', big)}>{fmtInt(m.proteinG)}</span>
+          <span className="text-sm font-semibold">g protein</span>
+        </div>
+      )}
+      {(Math.round(m.carbsG) > 0 || Math.round(m.fatG) > 0) && (
+        <div className="ml-auto tnum text-[13px] text-muted pb-0.5 whitespace-nowrap">
+          C {fmtInt(m.carbsG)} · F {fmtInt(m.fatG)} g
+        </div>
+      )}
     </div>
   )
 }
@@ -199,7 +154,7 @@ export function FoodRow({ name, detail, kcal, proteinG, glyph, onClick, actionLa
     <button
       type="button"
       onClick={onClick}
-      aria-label={`${actionLabel} ${name}, ${fmtInt(kcal)} kcal, ${fmtG(proteinG)} protein`}
+      aria-label={`${actionLabel} ${name}, ${fmtInt(kcal)} kcal${Math.round(proteinG) > 0 ? `, ${fmtG(proteinG)} protein` : ''}`}
       className="w-full min-h-[64px] flex items-center gap-3 px-3 py-2.5 text-left active:bg-surface-2 transition-colors"
     >
       <FoodGlyph name={glyph ?? name} size={44} />
@@ -211,9 +166,14 @@ export function FoodRow({ name, detail, kcal, proteinG, glyph, onClick, actionLa
         <span className="block num text-[20px]">{fmtInt(kcal)}</span>
         <span className="block text-[12px] text-muted leading-tight">kcal</span>
       </span>
+      {/* the column keeps its width when protein is zero, so kcal stays aligned */}
       <span className="shrink-0 w-12 text-right text-protein">
-        <span className="block"><span className="num text-[20px]">{fmtInt(proteinG)}</span><span className="text-[12px] font-medium ml-0.5">g</span></span>
-        <span className="block text-[12px] font-medium leading-tight">protein</span>
+        {Math.round(proteinG) > 0 && (
+          <>
+            <span className="block"><span className="num text-[20px]">{fmtInt(proteinG)}</span><span className="text-[12px] font-medium ml-0.5">g</span></span>
+            <span className="block text-[12px] font-medium leading-tight">protein</span>
+          </>
+        )}
       </span>
       <Plus size={18} className="shrink-0 text-faint" aria-hidden />
     </button>
@@ -235,25 +195,6 @@ export function SectionLabel({ children, note, className }: { children: ReactNod
     <div className={cx('flex items-baseline justify-between gap-3 px-1 mb-2', className)}>
       <h2 className="eyebrow text-muted">{children}</h2>
       {note && <span className="text-[12px] text-faint text-right">{note}</span>}
-    </div>
-  )
-}
-
-// --- meal type -------------------------------------------------------------------
-
-/** Unobtrusive meal-type selector; the value is pre-filled from the time of day. */
-export function MealTypeSelect({ id, value, onChange }: { id: string; value: MealType; onChange: (v: MealType) => void }) {
-  return (
-    <div className="relative">
-      <select
-        id={id}
-        value={value}
-        onChange={(e) => onChange(e.target.value as MealType)}
-        className={cx(INPUT_BASE, 'h-12 appearance-none pr-10')}
-      >
-        {MEAL_TYPES.map((t) => <option key={t} value={t}>{MEAL_TYPE_LABELS[t]}</option>)}
-      </select>
-      <ChevronDown size={16} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-faint pointer-events-none" aria-hidden />
     </div>
   )
 }

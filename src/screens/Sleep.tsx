@@ -1,13 +1,13 @@
-// Sleep (PRD §11; DESIGN §10.1, pillar rest): last night as a ring against the sleep goal, one 7/30-day
-// trend with the usual-range band, two tiles and a wind-down button. The coach reading, manual log,
-// recent nights and source / HealthKit rows sit behind "More".
+// Sleep (PRD §11; DESIGN §10.1 + §11, pillar rest): last night as one number against the goal, one 7/30-day
+// trend with the usual-range band and goal line, and a quiet wind-down button. The coach reading, averages,
+// bedtime, manual log, recent nights and source / HealthKit rows sit behind "More".
 import { useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { BedDouble, CircleAlert, Ellipsis, HeartPulse, Moon, Plus, Trash2, Watch, Wind } from 'lucide-react'
 import type { SleepRecord } from '../domain/types'
 import { addDays, dateOf, dayName, fmtDate, fmtDuration, fmtTime, isoAt, toDateStr } from '../lib/util'
 import {
-  Button, Card, CoachQuote, Divider, Field, INPUT_BASE, IconButton, Illustration, LineChart, ListRow, RangeTabs, Ring, Screen, Sheet, StatTile, StatusPill,
+  Button, Card, CoachQuote, Divider, Field, INPUT_BASE, IconButton, Illustration, LineChart, ListRow, RangeTabs, Screen, Sheet, StatusPill,
   type Tone,
 } from '../components'
 import { useNow, useQuery, useToast } from '../hooks'
@@ -147,7 +147,7 @@ function consistencyWord(sd: number | null): string {
 }
 
 type Range = 7 | 30
-const RANGE_OPTIONS: { value: Range; label: string }[] = [{ value: 7, label: '7D' }, { value: 30, label: '30D' }]
+const RANGE_OPTIONS: { value: Range; label: string }[] = [{ value: 7, label: '7 days' }, { value: 30, label: '30 days' }]
 
 // --- screen ---------------------------------------------------------------------------
 
@@ -248,21 +248,16 @@ export default function SleepScreen() {
             <Button className="mt-6" size="lg" icon={<Plus size={20} />} onClick={() => setSheetOpen(true)}>Log last night</Button>
           </Rise>
         ) : (
-          <Rise i={0} className="flex flex-col items-center pb-2 pt-3 text-center">
-            <Ring
-              pillar="rest"
-              size={224}
-              stroke={14}
-              value={last?.durationMin ?? 0}
-              max={goal}
-              ariaLabel={last ? `Last night ${fmtDuration(last.durationMin)} of a ${fmtDuration(goal)} goal` : 'No sleep recorded for last night'}
-            >
-              <span className="eyebrow text-pillar">Last night</span>
-              {last ? <Duration min={last.durationMin} size="xl" className="mt-1" /> : <span className="num mt-1 text-7xl text-muted" aria-hidden>—</span>}
-              <span className="mt-1 text-sm text-muted">of {fmtDuration(goal)}</span>
-            </Ring>
-            <p className="voice mt-4 text-xl text-balance">{heroHeadline(last?.durationMin ?? null)}</p>
-            {!last && <Button className="mt-3" variant="secondary" icon={<Plus size={18} />} onClick={() => setSheetOpen(true)}>Log last night</Button>}
+          <Rise i={0} className="flex flex-col items-center pb-2 pt-4 text-center">
+            <span className="eyebrow text-muted">Last night</span>
+            {last ? (
+              <>
+                <Duration min={last.durationMin} size="xl" className="mt-1" />
+                <span className="mt-1 text-[15px] text-muted">of {fmtDuration(goal)} goal</span>
+              </>
+            ) : (
+              <Button className="mt-3" variant="secondary" icon={<Plus size={18} />} onClick={() => setSheetOpen(true)}>Log last night</Button>
+            )}
           </Rise>
         )}
 
@@ -286,15 +281,8 @@ export default function SleepScreen() {
           </Rise>
         )}
 
-        {hasAny && (
-          <Rise i={2} className="grid grid-cols-2 gap-3">
-            <StatTile pillar="rest" icon={BedDouble} label="Bedtime" value={bedClock.value} unit={bedClock.unit} sub={consistencyWord(summary.consistencySd)} />
-            <StatTile pillar="rest" icon={Moon} label="7-day avg" value={summary.avg7 != null ? fmtDuration(summary.avg7) : '—'} sub={`${summary.nights7} of 7 nights`} />
-          </Rise>
-        )}
-
-        <Rise i={3} className="pt-1">
-          <Button variant="secondary" size="lg" full icon={<Wind size={20} />} onClick={() => navigate('/mind/breathe?technique=478&kind=winddown')}>Wind down</Button>
+        <Rise i={2} className="flex justify-center">
+          <Button variant="ghost" icon={<Wind size={18} />} onClick={() => navigate('/mind/breathe?technique=478&kind=winddown')}>Wind down</Button>
         </Rise>
       </div>
 
@@ -305,6 +293,23 @@ export default function SleepScreen() {
           <Card>
             <CoachQuote compact>{sleepInterpretation(summary)}</CoachQuote>
           </Card>
+
+          {(summary.avg7 != null || bedAvg != null) && (
+            <Card flush>
+              {summary.avg7 != null && (
+                <ListRow icon={<Moon size={18} />} title="7-day average" subtitle={`${summary.nights7} of 7 nights`} right={fmtDuration(summary.avg7)} />
+              )}
+              {summary.avg7 != null && bedAvg != null && <Divider inset />}
+              {bedAvg != null && (
+                <ListRow
+                  icon={<BedDouble size={18} />}
+                  title="Bedtime"
+                  subtitle={consistencyWord(summary.consistencySd)}
+                  right={`${bedClock.value}${bedClock.unit ? ` ${bedClock.unit}` : ''}`}
+                />
+              )}
+            </Card>
+          )}
 
           <Card flush>
             <ListRow

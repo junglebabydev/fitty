@@ -36,7 +36,7 @@ export function PillarDial({ pillars, center, size = 280, hideLegend = false }: 
   const stroke = Math.round(size * 0.046)
   const gap = Math.round(size * 0.026)
   const c = size / 2
-  const innerR = c - 2 - stroke / 2 - (PILLAR_KEYS.length - 1) * (stroke + gap)
+  const innerR = c - 2 - stroke / 2 - (Math.max(1, ordered.length) - 1) * (stroke + gap)
   const centerBox = Math.max(0, (innerR - stroke / 2) * 2 - 12)
 
   const summary = ordered.map((p) => `${p.label} ${Math.round(clamp01(p.value) * 100)}%`).join(', ')
@@ -45,12 +45,13 @@ export function PillarDial({ pillars, center, size = 280, hideLegend = false }: 
     <div className="flex w-full flex-col items-center gap-5">
       <div className="relative w-full" style={{ maxWidth: size }}>
         <svg viewBox={`0 0 ${size} ${size}`} width="100%" role="img" aria-label={`Pillars: ${summary}`} className="block h-auto w-full">
-          {PILLAR_KEYS.map((key, i) => {
-            const item = byKey.get(key)
+          {/* Only the pillars passed in get a ring; switched-off pillars leave no empty track. */}
+          {ordered.map((item, i) => {
+            const key = item.key
             const r = c - 2 - stroke / 2 - i * (stroke + gap)
             const circ = 2 * Math.PI * r
             const arc = circ * SWEEP
-            const dash = arc * clamp01(item?.value ?? 0)
+            const dash = arc * clamp01(item.value)
             const meta = PILLARS[key]
             return (
               <g key={key} transform={`rotate(135 ${c} ${c})`}>
