@@ -228,6 +228,15 @@ function isTimedId(id: string): boolean {
 }
 
 /**
+ * A planned entry's target is seconds: the exercise is timed, or the entry says `unit: 'sec'` (a programme gives
+ * seconds for a reps exercise, e.g. a 30 s push-up circuit station). Pass `ex` when the caller has the library entry.
+ */
+export function isTimedTarget(pe: Pick<PlannedExercise, 'exerciseId' | 'unit'>, ex?: Pick<Exercise, 'id' | 'timed'>): boolean {
+  if (pe.unit === 'sec') return true
+  return ex ? ex.timed || TIMED_IDS.has(ex.id) : isTimedId(pe.exerciseId)
+}
+
+/**
  * Rough duration: 5 min warm-up + per-set work and rest. Intervals carry their rest bout in `restSec`;
  * a circuit's `roundRestSec` replaces its last station's rest, once per round.
  */
@@ -236,7 +245,7 @@ export function estimateSessionMinutes(exercises: PlannedExercise[]): number {
   for (const e of exercises) if (e.circuit) lastStation.set(e.circuit, e)
   let sec = 5 * 60
   for (const e of exercises) {
-    const work = isTimedId(e.exerciseId) ? (e.repMin + e.repMax) / 2 : 45
+    const work = isTimedTarget(e) ? (e.repMin + e.repMax) / 2 : 45
     let rest = e.restSec
     if (e.circuit && lastStation.get(e.circuit) === e) {
       rest = exercises.find((x) => x.circuit === e.circuit && x.roundRestSec != null)?.roundRestSec ?? rest
@@ -263,9 +272,12 @@ export const SEC_PER_REP = 3
 
 const isTimedEx = (e: Exercise): boolean => e.timed || TIMED_IDS.has(e.id)
 
-/** reps → seconds (3 s a rep, nearest 5 s, at least 10 s) or seconds → reps (at least 1); {} when the unit is unchanged. */
+/**
+ * reps → seconds (3 s a rep, nearest 5 s, at least 10 s) or seconds → reps (at least 1); {} when the unit is unchanged.
+ * A `unit: 'sec'` entry is already seconds and stays seconds (the caller drops `unit` when the target is timed).
+ */
 function convertRange(pe: PlannedExercise, from: Exercise, to: Exercise): Partial<PlannedExercise> {
-  if (isTimedEx(from) === isTimedEx(to)) return {}
+  if (pe.unit === 'sec' || isTimedEx(from) === isTimedEx(to)) return {}
   const f = isTimedEx(to)
     ? (reps: number) => Math.max(10, Math.round((reps * SEC_PER_REP) / 5) * 5)
     : (sec: number) => Math.max(1, Math.round(sec / SEC_PER_REP))
@@ -277,6 +289,11 @@ export interface GateSessionOptions {
   extraAvoid?: SafetyTag[]
   /** Prefer substitutes in the same unit; when the swap changes reps ↔ seconds, convert the range. */
   convertUnits?: boolean
+  /**
+   * Where substitutes come from (e.g. a programme's equipment plus bodyweight). Every entry is still checked against
+   * the full `library`, so an exercise outside the candidates is never let through unchecked. Default: `library`.
+   */
+  candidates?: Exercise[]
 }
 
 /**
@@ -293,9 +310,11 @@ export function applyGateToSession(
   opts: GateSessionOptions = {},
 ): { exercises: PlannedExercise[]; changes: string[] } {
   const g: GateResult = opts.extraAvoid?.length ? { ...gate, avoidTags: [...new Set([...gate.avoidTags, ...opts.extraAvoid])] } : gate
-  const pick = (exo: Exercise, lib: Exercise[]): Exercise | null =>
+  const pool = opts.candidates ?? library
+  // Same-unit preference: a `unit: 'sec'` entry counts as seconds whatever the exercise.
+  const pick = (exo: Exercise, secs: boolean, lib: Exercise[]): Exercise | null =>
     opts.convertUnits
-      ? findSubstitute(exo, g, lib.filter((e) => isTimedEx(e) === isTimedEx(exo))) ?? findSubstitute(exo, g, lib)
+      ? findSubstitute(exo, g, lib.filter((e) => isTimedEx(e) === secs)) ?? findSubstitute(exo, g, lib)
       : findSubstitute(exo, g, lib)
   const byId = new Map(library.map((e) => [e.id, e]))
   const work = cloneExercises(exercises) // mutable copies; the input (and templates) stay untouched
@@ -311,8 +330,9 @@ export function applyGateToSession(
     // A swap caused only by the programme's standing avoid tags is not about pain today: say so (useSetLogger keys off this prefix).
     const onlyProgramTags = exo.safetyTags.filter((t) => g.avoidTags.includes(t)).every((t) => !gate.avoidTags.includes(t))
     const why = onlyProgramTags ? `Programme path: ${check.reasons.join('; ')}` : check.reasons.join('; ')
-    const fresh = pe.role ? null : pick(exo, library.filter((e) => !used.has(e.id)))
-    const sub = fresh ?? pick(exo, library)
+    const secs = pe.unit === 'sec' || isTimedEx(exo)
+    const fresh = pe.role ? null : pick(exo, secs, pool.filter((e) => !used.has(e.id)))
+    const sub = fresh ?? pick(exo, secs, pool)
     if (!sub) {
       changes.push(`Removed ${exo.name} — no safe substitute today (${why})`)
       continue
@@ -320,7 +340,9 @@ export function applyGateToSession(
     if (fresh || pe.role) {
       if (!pe.role) used.add(sub.id)
       const units = opts.convertUnits ? convertRange(pe, exo, sub) : {}
-      out.push({ ...pe, ...units, exerciseId: sub.id, loadKg: null, substitutedFrom: pe.exerciseId, substitutionReason: why })
+      const next: PlannedExercise = { ...pe, ...units, exerciseId: sub.id, loadKg: null, substitutedFrom: pe.exerciseId, substitutionReason: why }
+      if (next.unit === 'sec' && isTimedEx(sub)) delete next.unit // seconds on a timed exercise need no marker
+      out.push(next)
       changes.push(`Swapped ${exo.name} → ${sub.name} (${why})`)
       continue
     }

@@ -108,6 +108,11 @@ export interface PlannedExercise {
   perSide?: boolean
   /** Bodyweight ladder slot this entry fills. */
   slot?: string
+  /**
+   * 'sec': repMin/repMax are seconds even though the exercise is not timed (e.g. a 30 s push-up circuit station).
+   * Log it as a timed set (countdown, durationSec). Absent: the exercise's own unit.
+   */
+  unit?: 'sec'
 }
 
 export type SessionType = 'strength' | 'conditioning' | 'swim' | 'mobility'

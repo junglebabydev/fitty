@@ -9,7 +9,7 @@ import * as repo from '../../db/repositories'
 import { ensureWeekPlanned } from '../../features/settings/onboarding'
 import { finishSession } from '../../features/workout/finish'
 import { applyTier } from '../../features/workout/plan'
-import { SESSION_TEMPLATES, applyGateToSession, buildWeek, estimateSessionMinutes, reflowWeek } from '../planner'
+import { SESSION_TEMPLATES, applyGateToSession, buildWeek, estimateSessionMinutes, isTimedTarget, reflowWeek } from '../planner'
 import { evaluateProgression } from '../progression'
 import { baselineAvoidTags, evaluateSymptomGate } from '../symptomGate'
 import { LIBRARY, TODAY, WEEK_START, mk, session, sym } from './fixtures'
@@ -104,6 +104,28 @@ describe('applyGateToSession options', () => {
     const short = applyGateToSession([pe('jump_rope', 4, 1, 2)], OK, LIB, { extraAvoid: ['impact'], convertUnits: true })
     expect(short.exercises[0]).toMatchObject({ repMin: 1, repMax: 1 })
   })
+
+  it('review #7: a unit "sec" entry stays in seconds: no conversion, and the marker goes once the substitute is timed', () => {
+    const plan = [pe('squat_jump', 3, 30, 30, 20, { unit: 'sec' })]
+    const out = applyGateToSession(plan, OK, LIB, { extraAvoid: ['impact'], convertUnits: true }).exercises[0]
+    expect(out).toMatchObject({ exerciseId: 'wall_sit', repMin: 30, repMax: 30 }) // same-unit (seconds) preferred
+    expect(out.unit).toBeUndefined()
+    const reps = applyGateToSession([pe('box_jump', 3, 30, 30, 20, { unit: 'sec' })], OK, LIB.filter((e) => e.id !== 'wall_hold').map((e) => (e.id === 'box_jump' ? { ...e, substitutions: ['step_up'] } : e)), { extraAvoid: ['impact'], convertUnits: true }).exercises[0]
+    expect(reps).toMatchObject({ exerciseId: 'step_up', repMin: 30, repMax: 30, unit: 'sec' })
+  })
+
+  it('review #1: candidates limit the substitutes, but every entry is checked against the full library', () => {
+    const dumbbell = { ...mk('db_jump', 'Dumbbell Jump', 'dumbbell', 'plyometric', ['impact'], ['bodyweight_squat'], false) }
+    const lib = [...LIB, dumbbell]
+    const candidates = lib.filter((e) => e.equipment === 'bodyweight')
+    const out = applyGateToSession([pe('db_jump', 3, 8, 12)], OK, lib, { extraAvoid: ['impact'], candidates })
+    expect(out.exercises[0]).toMatchObject({ exerciseId: 'bodyweight_squat', substitutedFrom: 'db_jump' })
+    // A blocked exercise whose only substitute is outside the candidates is removed, not kept.
+    const gym = mk('leg_press_x', 'Leg Press', 'machine', 'plyometric', [], [], false)
+    const onlyGym = { ...dumbbell, substitutions: ['leg_press_x'] }
+    const removed = applyGateToSession([pe('db_jump', 3, 8, 12)], OK, [...LIB, onlyGym, gym], { extraAvoid: ['impact'], candidates: LIB.filter((e) => e.id === 'easy_run') })
+    expect(removed.exercises).toEqual([])
+  })
 })
 
 describe('estimateSessionMinutes', () => {
@@ -126,6 +148,15 @@ describe('estimateSessionMinutes', () => {
     expect(estimateSessionMinutes([station('jumping_jack', { roundRestSec: 60 }), station('high_knees', { roundRestSec: 60 }), station('mountain_climber', { roundRestSec: 60 })])).toBe(16)
     // no round rest: the last station keeps its own rest
     expect(estimateSessionMinutes([station('jumping_jack'), station('high_knees'), station('mountain_climber')])).toBe(14)
+  })
+
+  it('review #7: honours unit "sec" on an exercise that is not timed', () => {
+    // 3 rounds × (30 s + 30 s rest) + 5 min = 480 s
+    expect(estimateSessionMinutes([pe('incline_push_up', 3, 30, 30, 30, { unit: 'sec' })])).toBe(8)
+    expect(estimateSessionMinutes([pe('incline_push_up', 3, 30, 30, 30)])).toBe(9) // 45 s a set when reps
+    expect(isTimedTarget({ exerciseId: 'incline_push_up', unit: 'sec' })).toBe(true)
+    expect(isTimedTarget({ exerciseId: 'incline_push_up' })).toBe(false)
+    expect(isTimedTarget({ exerciseId: 'x' }, { id: 'x', timed: true })).toBe(true)
   })
 })
 

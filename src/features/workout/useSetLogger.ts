@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Exercise, ExerciseSet, PlannedExercise, WorkoutSession } from '../../domain/types'
 import { useQuery } from '../../hooks'
 import { addSet, exerciseHistory, lastSetsForExercise, previousSetsForExercise, updateVoiceCommand } from '../../db/repositories'
-import { TIMED_IDS, type ProgressionResult } from '../../engine'
+import { isTimedTarget, type ProgressionResult } from '../../engine'
 import { nowIso } from '../../lib/util'
 import { evaluateProgressionWithPain } from './gate'
 import { bestE1RM, fmtSec } from './helpers'
@@ -56,7 +56,8 @@ export function buildSetRow(i: {
 }
 
 export function useSetLogger({ session, planned, exercise, sets, stopped, painNext }: SetLoggerInput) {
-  const timed = exercise.timed || TIMED_IDS.has(exercise.id)
+  // Timed exercise, or a seconds target on a reps exercise (planned.unit 'sec'): countdown, durationSec logged.
+  const timed = isTimedTarget(planned, exercise)
   const loadable = !NO_LOAD_EQUIPMENT.includes(exercise.equipment.toLowerCase())
 
   /** Comparable effort for PR detection: seconds when timed, e1RM when loaded, otherwise reps. */

@@ -2,8 +2,9 @@
 import { describe, expect, it } from 'vitest'
 import type { Block, Enrollment, Program, ProgramSession } from '../../../domain/programs'
 import { PROGRAM_KEY_PREFIX } from '../../../domain/programs'
-import { EXERCISE_BY_ID } from '../../exercises'
-import { PROGRAM_LIST } from '../index'
+import type { PlannedExercise } from '../../../domain/types'
+import { EXERCISES, EXERCISE_BY_ID } from '../../exercises'
+import { PROGRAM_LIST, getProgram } from '../index'
 import { expandSessions, programWeekSessions, sessionsForWeek, toPlannedExercises } from '../../../engine/programs'
 
 const READY = ['gym-strength', 'home-dumbbells', 'bodyweight']
@@ -24,16 +25,25 @@ function blockIds(b: Block): string[] {
 
 const weeks = (p: Program): number[] => Array.from({ length: p.weeks }, (_, i) => i + 1)
 
-/** Every session of every week on every path. */
-function allPathSessions(p: Program): { path: string; session: ProgramSession }[] {
-  return Object.keys(p.paths).flatMap((path) => weeks(p).flatMap((w) => sessionsForWeek(p, w, path).map((session) => ({ path, session }))))
+/** Rung index sets to test: the default (0), every ladder at rung 2 and every ladder at its top rung. */
+function rungSets(p: Program): Record<string, number>[] {
+  const at = (i: number) => Object.fromEntries((p.ladders ?? []).map((l) => [l.slot, Math.min(i, l.rungs.length - 1)]))
+  return p.ladders?.length ? [{}, at(1), at(99)] : [{}]
 }
 
-/** Rung index sets to test: the default (0) and every ladder at its top rung. */
-function rungSets(p: Program): Record<string, number>[] {
-  const top = Object.fromEntries((p.ladders ?? []).map((l) => [l.slot, l.rungs.length - 1]))
-  return p.ladders?.length ? [{}, top] : [{}]
+/** Each path alone, and every ordered pair of non-standard paths (a path plus a standing flag's path). */
+function pathLists(p: Program): string[][] {
+  const named = Object.keys(p.paths).filter((x) => x !== 'standard')
+  return [...Object.keys(p.paths).map((x) => [x]), ...named.flatMap((a) => named.filter((b) => b !== a).map((b) => [a, b]))]
 }
+
+/** Every session of every week on every path list, at every tested rung set (rungs resolved before the swaps). */
+function allPathSessions(p: Program): { path: string; session: ProgramSession }[] {
+  return pathLists(p).flatMap((paths) => rungSets(p).flatMap((rungs) =>
+    weeks(p).flatMap((w) => sessionsForWeek(p, w, paths, EXERCISES, rungs).map((session) => ({ path: paths.join('+'), session })))))
+}
+
+const swapIdOf = (t: unknown): string | null => (t == null ? null : typeof t === 'string' ? t : (t as { id: string }).id)
 
 describe.each(PROGRAM_LIST.map((p) => [p.id, p] as const))('programme %s', (_id, p) => {
   it('has the expected status', () => {
@@ -43,11 +53,12 @@ describe.each(PROGRAM_LIST.map((p) => [p.id, p] as const))('programme %s', (_id,
   it('uses only exercise ids that exist in the library', () => {
     const ids = new Set<string>()
     for (const s of p.sessions) for (const b of s.blocks) blockIds(b).forEach((id) => ids.add(id))
-    for (const spec of Object.values(p.paths)) for (const t of Object.values(spec.swaps ?? {})) if (t) ids.add(t)
+    for (const spec of Object.values(p.paths)) for (const t of Object.values(spec.swaps ?? {})) { const id = swapIdOf(t); if (id) ids.add(id) }
     for (const l of p.ladders ?? []) l.rungs.forEach((id) => ids.add(id))
+    for (const l of p.ladders ?? []) Object.keys(l.rungSpecs ?? {}).forEach((id) => ids.add(id))
     for (const { session } of allPathSessions(p)) {
       for (const b of session.blocks) blockIds(b).forEach((id) => ids.add(id))
-      for (const rungs of rungSets(p)) toPlannedExercises(p, session, { rungs }).forEach((e) => ids.add(e.exerciseId))
+      toPlannedExercises(p, session).forEach((e) => ids.add(e.exerciseId))
     }
     expect([...ids].filter((id) => !EXERCISE_BY_ID[id])).toEqual([])
   })
@@ -76,15 +87,13 @@ describe.each(PROGRAM_LIST.map((p) => [p.id, p] as const))('programme %s', (_id,
     const allowed = TIMED_REPEATS[p.id] ?? []
     const allowedHit = new Set<string>()
     for (const { path, session } of allPathSessions(p)) {
-      for (const rungs of rungSets(p)) {
-        const work = toPlannedExercises(p, session, { rungs }).filter((e) => !e.role).map((e) => e.exerciseId)
-        expect(work.length, `${path} ${session.key}`).toBeGreaterThan(0)
-        const seen = new Set<string>()
-        for (const id of work) {
-          if (seen.has(id) && allowed.includes(session.key) && EXERCISE_BY_ID[id]?.timed) allowedHit.add(session.key)
-          else if (seen.has(id)) dupes.push(`${path} ${session.key} ${id}`)
-          seen.add(id)
-        }
+      const work = toPlannedExercises(p, session).filter((e) => !e.role).map((e) => e.exerciseId)
+      expect(work.length, `${path} ${session.key}`).toBeGreaterThan(0)
+      const seen = new Set<string>()
+      for (const id of work) {
+        if (seen.has(id) && allowed.includes(session.key) && EXERCISE_BY_ID[id]?.timed) allowedHit.add(session.key)
+        else if (seen.has(id)) dupes.push(`${path} ${session.key} ${id}`)
+        seen.add(id)
       }
     }
     expect([...new Set(dupes)]).toEqual([])
@@ -106,10 +115,22 @@ describe.each(PROGRAM_LIST.map((p) => [p.id, p] as const))('programme %s', (_id,
     }
   })
 
-  it('gives every sets block exactly one of reps or seconds', () => {
+  it('gives every sets block exactly one of reps or seconds, on every path and rung', () => {
     for (const s of p.sessions) {
       for (const b of s.blocks) if (b.shape === 'sets') expect(!!b.reps !== !!b.seconds, `${s.key} ${b.exerciseId}`).toBe(true)
     }
+    for (const { path, session } of allPathSessions(p)) {
+      for (const b of session.blocks) if (b.shape === 'sets') expect(!!b.reps !== !!b.seconds, `${path} ${session.key} ${b.exerciseId}`).toBe(true)
+    }
+    const specs = [
+      ...(p.ladders ?? []).flatMap((l) => Object.entries(l.rungSpecs ?? {})),
+      ...Object.values(p.paths).flatMap((spec) => Object.entries(spec.swaps ?? {}).filter(([, t]) => t && typeof t === 'object')),
+    ] as [string, { reps?: unknown; seconds?: unknown }][]
+    for (const [id, spec] of specs) expect(!!spec.reps && !!spec.seconds, id).toBe(false)
+  })
+
+  it('names rung specs only for rungs of that ladder', () => {
+    for (const l of p.ladders ?? []) for (const id of Object.keys(l.rungSpecs ?? {})) expect(l.rungs, `${l.slot} ${id}`).toContain(id)
   })
 
   it('cites only sources that exist, and every source has an https URL', () => {
@@ -119,20 +140,38 @@ describe.each(PROGRAM_LIST.map((p) => [p.id, p] as const))('programme %s', (_id,
     for (const s of p.sources) expect(s.url, `source ${s.n}`).toMatch(/^https:\/\/\S+$/)
   })
 
-  it('keeps impact and deep knee flexion off the low-impact path (warm-ups and top rungs included)', () => {
+  it('keeps impact and deep knee flexion off the low-impact path (warm-ups, every rung and path order included)', () => {
     if (!p.paths['low-impact']) return
     const bad: string[] = []
-    for (const w of weeks(p)) {
-      for (const s of sessionsForWeek(p, w, 'low-impact')) {
-        for (const rungs of rungSets(p)) {
-          for (const e of toPlannedExercises(p, s, { rungs })) {
-            const tags = EXERCISE_BY_ID[e.exerciseId]?.safetyTags ?? []
-            if (tags.includes('impact') || tags.includes('deep_knee_flexion')) bad.push(`${s.key} ${e.exerciseId}`)
-          }
-        }
+    for (const { path, session } of allPathSessions(p)) {
+      if (!path.split('+').includes('low-impact')) continue
+      for (const e of toPlannedExercises(p, session)) {
+        const tags = EXERCISE_BY_ID[e.exerciseId]?.safetyTags ?? []
+        if (tags.includes('impact') || tags.includes('deep_knee_flexion')) bad.push(`${path} ${session.key} ${e.exerciseId}`)
       }
     }
     expect([...new Set(bad)]).toEqual([])
+  })
+
+  it('keeps overhead moves off the no-overhead path at every rung', () => {
+    if (!p.paths['no-overhead']) return
+    const bad: string[] = []
+    for (const { path, session } of allPathSessions(p)) {
+      if (!path.split('+').includes('no-overhead')) continue
+      for (const e of toPlannedExercises(p, session)) {
+        if (EXERCISE_BY_ID[e.exerciseId]?.safetyTags.includes('overhead')) bad.push(`${path} ${session.key} ${e.exerciseId}`)
+      }
+    }
+    expect([...new Set(bad)]).toEqual([])
+  })
+
+  it('marks a seconds target on an exercise that is not timed with unit "sec"', () => {
+    for (const { path, session } of allPathSessions(p)) {
+      for (const e of toPlannedExercises(p, session)) {
+        const ex = EXERCISE_BY_ID[e.exerciseId]
+        if (e.unit === 'sec') expect(ex?.timed, `${path} ${session.key} ${e.exerciseId}`).toBe(false)
+      }
+    }
   })
 
   it('has a screen of the right size, with the shared questions outside Postpartum', () => {
@@ -168,5 +207,80 @@ describe.each(PROGRAM_LIST.map((p) => [p.id, p] as const))('programme %s', (_id,
       expect(r.exercises.length).toBeGreaterThan(0)
       for (const e of r.exercises) expect(e.program).toBe(true)
     }
+  })
+})
+
+// --- per-series rules from the docs (review findings 2, 5, 6, 7) ------------------------------------------------
+
+describe('series rules', () => {
+  const bw = getProgram('bodyweight')!
+  const home = getProgram('home-dumbbells')!
+  const planned = (p: Program, key: string, paths: string[], rungs: Record<string, number> = {}): PlannedExercise[] => {
+    const week = Number(/^w(\d+)/.exec(key)![1])
+    const s = sessionsForWeek(p, week, paths, EXERCISES, rungs).find((x) => x.key === key)!
+    return toPlannedExercises(p, s).filter((e) => !e.role)
+  }
+  const pick = (list: PlannedExercise[], slot: string) => list.find((e) => e.slot === slot && !e.circuit)!
+
+  it('Bodyweight push-capped never serves decline or archer push-ups, at any push rung', () => {
+    for (const push of [2, 3]) {
+      const a = pick(planned(bw, 'w3d1', ['push-capped'], { push }), 'push')
+      expect(a).toMatchObject({ exerciseId: 'push_up', repMin: 6, repMax: 12 })
+      expect(a.perSide).toBeUndefined()
+      const circuit = planned(bw, 'w3d2', ['push-capped'], { push }).map((e) => e.exerciseId)
+      expect(circuit).not.toContain('decline_push_up')
+      expect(circuit).not.toContain('archer_push_up')
+    }
+    expect(pick(planned(bw, 'w3d1', ['standard'], { push: 3 }), 'push').exerciseId).toBe('archer_push_up')
+  })
+
+  it('Bodyweight: a knee flag path and a shoulder flag path both apply', () => {
+    const a = planned(bw, 'w3d1', ['standard', 'low-impact', 'push-capped'], { push: 3, squat: 2 })
+    expect(pick(a, 'squat')).toMatchObject({ exerciseId: 'sit_to_stand_chair', repMin: 10, repMax: 15 })
+    expect(pick(a, 'squat').perSide).toBeUndefined()
+    expect(pick(a, 'push').exerciseId).toBe('push_up')
+    const circuit = planned(bw, 'w3d2', ['standard', 'low-impact', 'push-capped'], { push: 3, squat: 2 }).map((e) => e.exerciseId)
+    expect(circuit).toEqual(['push_up', 'sit_to_stand_chair', 'towel_door_row', 'glute_bridge', 'dead_bug'])
+  })
+
+  it('Bodyweight: a new rung brings its own range and per-side flag; sets and rest stay as written', () => {
+    const a = planned(bw, 'w3d1', ['standard'], { squat: 1, push: 3, coreA: 1 })
+    expect(pick(a, 'squat')).toMatchObject({ exerciseId: 'bw_split_squat', sets: 3, repMin: 8, repMax: 12, restSec: 60, perSide: true })
+    expect(pick(a, 'push')).toMatchObject({ exerciseId: 'archer_push_up', repMin: 4, repMax: 8, perSide: true })
+    const plank = pick(a, 'coreA')
+    expect(plank).toMatchObject({ exerciseId: 'plank', sets: 2, repMin: 20, repMax: 45, restSec: 45 })
+    expect(plank.perSide).toBeUndefined()
+    const b = planned(bw, 'w3d3', ['standard'], { coreB: 1 })
+    expect(pick(b, 'coreB')).toMatchObject({ exerciseId: 'side_plank_reach', repMin: 6, repMax: 10, perSide: true })
+    expect(pick(b, 'coreB').unit).toBeUndefined()
+  })
+
+  it('Bodyweight circuits: a seconds station on a reps exercise is a seconds target', () => {
+    const c = planned(bw, 'w1d2', ['standard'])
+    expect(c[0]).toMatchObject({ exerciseId: 'incline_push_up', repMin: 30, repMax: 30, unit: 'sec' })
+    expect(c.find((e) => e.exerciseId === 'mountain_climber')!.unit).toBeUndefined() // timed already
+    expect(planned(bw, 'w1d2', ['push-capped']).find((e) => e.exerciseId === 'dead_bug')).toMatchObject({ repMin: 30, unit: 'sec' })
+  })
+
+  it('Home low-impact: goblet_squat becomes a 3 × 30–60 s wall sit (doc §4)', () => {
+    for (const squat of [0, 1, 2]) {
+      const a = planned(home, 'w1d1', ['low-impact'], { squat })
+      const leg = pick(a, 'squat')
+      expect(leg.exerciseId, `squat rung ${squat}`).not.toMatch(/bulgarian|deficit|goblet/)
+    }
+    expect(pick(planned(home, 'w1d1', ['low-impact']), 'squat')).toMatchObject({ exerciseId: 'wall_sit', sets: 3, repMin: 30, repMax: 60 })
+  })
+
+  it('Home no-overhead: the shoulder press becomes lateral raises 3 × 12–20 (doc §4), arnold_press too', () => {
+    for (const overhead_press of [0, 1]) {
+      const c = planned(home, 'w1d3', ['no-overhead'], { overhead_press })
+      expect(pick(c, 'overhead_press')).toMatchObject({ exerciseId: 'lateral_raise', sets: 3, repMin: 12, repMax: 20 })
+    }
+  })
+
+  it('Home: a unilateral rung is per side and keeps the session range (P4)', () => {
+    const a = planned(home, 'w3d1', ['standard'], { squat: 1, hinge: 1 })
+    expect(pick(a, 'squat')).toMatchObject({ exerciseId: 'bulgarian_split_squat', sets: 3, repMin: 8, repMax: 15, perSide: true })
+    expect(pick(a, 'hinge')).toMatchObject({ exerciseId: 'db_single_leg_rdl', perSide: true })
   })
 })

@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import type { Enrollment, Program, ProgramSession, ScreenQuestion } from '../../domain/programs'
 import type { ExerciseSet, PlannedExercise, WorkoutSession } from '../../domain/types'
 import {
-  closeWindow, defaultOffsets, expandSessions, kneeGuard, nextRungs, programAvoidTags, programLibrary, programWeekSessions,
-  reflowProgramWeek, screenResult, isScreenCurrent, sessionsForWeek, toPlannedExercises, windowDates, windowIndex,
+  closeWindow, defaultOffsets, effectivePaths, expandSessions, kneeGuard, nextRungs, programAvoidTags, programLibrary, programWeekSessions,
+  reflowProgramWeek, screenResult, isScreenCurrent, sessionOnPath, sessionsForWeek, toPlannedExercises, windowDates, windowIndex,
 } from '../programs'
 import { EXERCISES } from '../../data/exercises'
 
@@ -195,13 +195,71 @@ describe('toPlannedExercises', () => {
     expect([...d1, ...d2].every((e: PlannedExercise) => e.program === true)).toBe(true)
   })
 
-  it('a slot entry takes its ladder rung, unless a path swap moved it off the ladder', () => {
+  it('a slot entry takes its ladder rung (resolved by sessionOnPath before any swap)', () => {
     const p = homeProgram()
-    expect(toPlannedExercises(p, p.sessions[1], { rungs: { push_up: 2 } })[0].exerciseId).toBe('archer_push_up')
-    expect(toPlannedExercises(p, p.sessions[1], { rungs: { push_up: 9 } })[0].exerciseId).toBe('archer_push_up')
-    expect(toPlannedExercises(p, p.sessions[0], { rungs: { squat: 1 } })[0].exerciseId).toBe('bulgarian_split_squat')
-    const knee = sessionsForWeek(p, 1, 'low-impact')[0]
-    expect(toPlannedExercises(p, knee, { rungs: { squat: 1 } })[0].exerciseId).toBe('glute_bridge')
+    const first = (s: ProgramSession, path: string | string[], rungs: Record<string, number>) => toPlannedExercises(p, sessionOnPath(p, s, path, EXERCISES, rungs))[0].exerciseId
+    expect(first(p.sessions[1], 'standard', { push_up: 2 })).toBe('archer_push_up')
+    expect(first(p.sessions[1], 'standard', { push_up: 9 })).toBe('archer_push_up')
+    expect(first(p.sessions[0], 'standard', { squat: 1 })).toBe('bulgarian_split_squat')
+    // toPlannedExercises no longer resolves rungs: a resolved-and-swapped session is never re-laddered.
+    expect(toPlannedExercises(p, p.sessions[1], { rungs: { push_up: 2 } })[0].exerciseId).toBe('push_up')
+  })
+
+  it('review #2: the rung is resolved first, so a path swap catches a rung the path removes', () => {
+    const p = homeProgram()
+    p.paths.capped = { label: 'Push capped', swaps: { decline_push_up: 'push_up', archer_push_up: 'push_up' } }
+    for (const push_up of [1, 2]) {
+      const [s] = sessionsForWeek(p, 1, 'capped', EXERCISES, { push_up }).filter((x) => x.key === 'w1d2')
+      // Passing rungs again to toPlannedExercises must not re-ladder the swapped entry.
+      expect(toPlannedExercises(p, s, { rungs: { push_up } })[0].exerciseId).toBe('push_up')
+    }
+    // A swap target already in the session still walks the chain (wall_sit is in w1d1).
+    p.paths['low-impact'].swaps!.bulgarian_split_squat = 'wall_sit'
+    expect(toPlannedExercises(p, sessionsForWeek(p, 1, 'low-impact', EXERCISES, { squat: 1 })[0])[0].exerciseId).toBe('glute_bridge')
+  })
+
+  it('review #4: several paths apply in turn (rung first, then each path\'s swaps)', () => {
+    const p = homeProgram()
+    p.paths.capped = { label: 'Push capped', swaps: { decline_push_up: 'push_up' } }
+    const week = sessionsForWeek(p, 1, ['low-impact', 'capped'], EXERCISES, { push_up: 1 })
+    expect(ids(week[0])[0]).toBe('glute_bridge') // goblet_squat → wall_sit (taken) → chain
+    expect(ids(week[1])).toEqual(['push_up', 'step_jack+dead_bug'])
+    expect(effectivePaths(p, 'standard', ['knee_left', 'shoulder', 'hip'], true)).toEqual(['standard', 'low-impact'])
+    const bw = makeProgram({ paths: { ...p.paths, 'push-capped': { label: 'c' } }, flagPaths: { knee: 'low-impact', shoulder: 'push-capped' } })
+    expect(effectivePaths(bw, 'standard', ['knee_left', 'shoulder'], false)).toEqual(['standard', 'low-impact', 'push-capped'])
+    expect(effectivePaths(bw, 'push-capped', ['shoulder', 'back_lower'], false)).toEqual(['push-capped'])
+  })
+
+  it('review #5: a rung with rungSpecs brings its own range and per-side flag to sets blocks (sets, rest as written)', () => {
+    const p = homeProgram()
+    p.ladders![2].rungSpecs = { side_plank_reach: { reps: [6, 10] } }
+    p.ladders![0].rungSpecs = { bulgarian_split_squat: { perSide: true } }
+    const [s] = sessionsForWeek(p, 1, 'standard', EXERCISES, { side_plank: 1, squat: 1 })
+    const out = toPlannedExercises(p, s)
+    expect(out[2]).toMatchObject({ exerciseId: 'side_plank_reach', sets: 2, repMin: 6, repMax: 10, restSec: 30, perSide: true })
+    expect(out[2].unit).toBeUndefined()
+    expect(out[0]).toMatchObject({ exerciseId: 'bulgarian_split_squat', repMin: 8, repMax: 12, perSide: true })
+  })
+
+  it('review #6: a SwapTarget carries its prescription onto the sets block it lands on', () => {
+    const p = homeProgram()
+    p.sessions[0] = { ...p.sessions[0], blocks: [p.sessions[0].blocks[0], p.sessions[0].blocks[2]] } // no wall_sit already
+    p.paths['low-impact'].swaps!.goblet_squat = { id: 'wall_sit', sets: 3, seconds: [30, 60] }
+    const [s] = sessionsForWeek(p, 1, 'low-impact')
+    expect(toPlannedExercises(p, s)[0]).toEqual({ exerciseId: 'wall_sit', sets: 3, repMin: 30, repMax: 60, loadKg: null, restSec: 90, program: true, slot: 'squat' })
+  })
+
+  it('review #7: seconds on an exercise that is not timed carry unit "sec" (sets blocks and circuit stations)', () => {
+    const p = homeProgram()
+    const s: ProgramSession = { key: 'w1d9', week: 1, name: 'x', type: 'strength', minutes: 20, blocks: [
+      { shape: 'sets', exerciseId: 'push_up', sets: 2, seconds: [20, 30], restSec: 30 },
+      { shape: 'circuit', rounds: 2, restBetweenStationsSec: 20, restBetweenRoundsSec: 60, stations: [
+        { exerciseId: 'incline_push_up', seconds: 30 }, { exerciseId: 'mountain_climber', seconds: 30 }, { exerciseId: 'dead_bug', reps: [6, 8] },
+      ] },
+    ] }
+    const out = toPlannedExercises(p, s)
+    expect(out.map((e) => e.unit)).toEqual(['sec', 'sec', undefined, undefined])
+    expect(out[1]).toMatchObject({ exerciseId: 'incline_push_up', repMin: 30, repMax: 30 })
   })
 })
 
@@ -309,6 +367,11 @@ describe('closeWindow', () => {
     expect(closeWindow(two, enrol(), done(2), [], START).decision).toBe('advance')
   })
 
+  it('review #9: rows dated before the enrolment start never count', () => {
+    const early = done(3).map((r) => ({ ...r, scheduledDate: '2026-10-04' }))
+    expect(closeWindow(p, enrol(), early, [], START)).toMatchObject({ decision: 'repeat', reason: 'No sessions were done, so week 1 runs again.' })
+  })
+
   it('finishing the last week sets done', () => {
     expect(closeWindow(p, enrol({ week: 3 }), done(3, ['w3d1', 'w3d2', 'w3d3']), [], START)).toMatchObject({ decision: 'advance', nextWeek: 3, status: 'done' })
   })
@@ -353,6 +416,29 @@ describe('nextRungs', () => {
 
   it('ignores entries a path moved off the ladder', () => {
     expect(nextRungs(p, enrol(), done([pe('glute_bridge', 'squat', 10, 1)], [set('glute_bridge', 12)]))).toEqual({})
+  })
+
+  it('review #7: circuit entries never move a rung', () => {
+    const station = { ...pe('push_up', 'push_up', 30, 3), circuit: 'c1' }
+    expect(nextRungs(p, enrol(), done([station], [set('push_up', 30), set('push_up', 30), set('push_up', 30)]))).toEqual({})
+  })
+
+  it('review #8: a rung on loadable equipment never auto-advances, even when sets are logged with no weight', () => {
+    const top = [set('goblet_squat', 12), set('goblet_squat', 12), set('goblet_squat', 12)]
+    expect(nextRungs(p, enrol(), done([pe('goblet_squat', 'squat', 12)], top))).toEqual({})
+    // Pain still drops a loaded rung.
+    const e = enrol({ rungs: { squat: 1 } })
+    expect(nextRungs(p, e, done([pe('bulgarian_split_squat', 'squat')], [set('bulgarian_split_squat', 8, { painFlag: true })]))).toEqual({ squat: 0 })
+  })
+
+  it('review #2: never climbs to a rung that a swap on the active paths removes', () => {
+    const capped = homeProgram()
+    capped.paths.capped = { label: 'c', swaps: { archer_push_up: { id: 'push_up', reps: [6, 12] } } }
+    const e = enrol({ path: 'capped', rungs: { push_up: 1 } })
+    const top = done([pe('decline_push_up', 'push_up')], [set('decline_push_up', 10), set('decline_push_up', 10), set('decline_push_up', 10)])
+    expect(nextRungs(capped, e, top)).toEqual({ push_up: 1 })
+    expect(nextRungs(capped, enrol({ rungs: { push_up: 1 } }), top, { paths: ['standard', 'capped'] })).toEqual({ push_up: 1 })
+    expect(nextRungs(capped, enrol({ rungs: { push_up: 1 } }), top)).toEqual({ push_up: 2 })
   })
 })
 
@@ -433,6 +519,16 @@ describe('kneeGuard', () => {
     expect(kneeGuard([s('2026-10-08', 3), s('2026-10-06', 5)], ['knee_left'], START)).toBe(false)
     expect(kneeGuard([s('2026-10-06', 2), s('2026-10-08', 6, 'hip')], ['knee_left', 'hip'], START)).toBe(true)
   })
+  it('review #3: keeps the latest score per region; one region settling never clears another', () => {
+    expect(kneeGuard([s('2026-10-06', 5), s('2026-10-07', 1, 'hip')], ['knee_left', 'hip'], START)).toBe(true)
+    expect(kneeGuard([s('2026-10-07', 1, 'hip'), s('2026-10-06', 5)], ['knee_left', 'hip'], START)).toBe(true)
+    expect(kneeGuard([s('2026-10-06', 5), s('2026-10-07', 1, 'hip'), s('2026-10-08', 2)], ['knee_left', 'hip'], START)).toBe(false)
+    // Same day: ts then id decide.
+    const t = (ts: string, pain: number, id: number) => ({ date: '2026-10-06', region: 'knee_left' as const, pain, ts, id })
+    expect(kneeGuard([t('2026-10-06T09:00:00Z', 2, 2), t('2026-10-06T07:00:00Z', 6, 1)], ['knee_left'], START)).toBe(false)
+    expect(kneeGuard([t('2026-10-06T07:00:00Z', 2, 1), t('2026-10-06T07:00:00Z', 6, 2)], ['knee_left'], START)).toBe(true)
+  })
+
   it('ignores unflagged regions, other groups and old scores', () => {
     expect(kneeGuard([s('2026-10-06', 7)], ['knee_right'], START)).toBe(false)
     expect(kneeGuard([s('2026-10-06', 7, 'back_lower')], ['back_lower'], START)).toBe(false)

@@ -85,10 +85,27 @@ export interface ProgramSession {
 /** Week `week` copies the sessions of week `copyOf`, with keys rewritten to 'w<week>d<n>'. */
 export interface WeekRepeat { week: number; copyOf: number }
 
+/**
+ * A path swap that also changes the prescription (e.g. Home low-impact: goblet_squat → wall_sit, 3 × 30–60 s).
+ * Applied to sets blocks: `sets` replaces the block's sets, `reps` or `seconds` replaces its range (the other is
+ * cleared), `perSide` replaces its flag. Circuit stations keep their station prescription.
+ */
+export interface SwapTarget {
+  id: string
+  sets?: number
+  reps?: Range
+  seconds?: Range
+  perSide?: boolean
+}
+
 export interface PathSpec {
   label: string
-  /** exerciseId → replacement id, or null to drop the block. A swap that would duplicate an id walks the library substitution chain. */
-  swaps?: Record<string, string | null>
+  /**
+   * exerciseId → replacement id (or a SwapTarget carrying its own prescription), or null to drop the block. A swap
+   * that would duplicate an id walks the library substitution chain. Swaps apply after the ladder rung is resolved,
+   * so a rung id listed here is replaced (and `nextRungs` never climbs to it on this path).
+   */
+  swaps?: Record<string, string | SwapTarget | null>
   /** sessionKey → replacement sessionKey (e.g. HIIT's low-impact circuits). */
   replaceSessions?: Record<string, string>
 }
@@ -137,11 +154,23 @@ export interface AdvanceRule {
 }
 
 /** A progression ladder (Bodyweight, Home Dumbbells): rungs from easiest to hardest for one slot. */
+/** A rung's own prescription (Bodyweight ladders). Omitted fields keep the block's. */
+export interface RungSpec {
+  reps?: Range
+  seconds?: Range
+  perSide?: boolean
+}
+
 export interface Ladder {
   slot: string
   rungs: string[]
   /** Move up when every working set reached the top of the range (reps or seconds). */
   advanceWhen: string
+  /**
+   * rungId → its own range and per-side flag. Used for sets blocks when the user is on that rung: `reps` or `seconds`
+   * replaces the block's range, `perSide` its flag; sets and restSec stay as written. Circuit stations keep theirs.
+   */
+  rungSpecs?: Record<string, RungSpec>
 }
 
 export interface StandalonePick { sessionKey: string; name: string; fact: string }

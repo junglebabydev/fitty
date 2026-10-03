@@ -2,7 +2,7 @@
 // this file reads and writes settings 'train.program', 'train.screens', 'train.noImpact' and the session rows.
 import type { Enrollment, Feel, PathId, Program, ProgramId, ScreenAnswers } from '../../domain/programs'
 import {
-  NO_IMPACT_SETTING, PROGRAM_SETTING, SCREENS_SETTING, parseProgramKey, workoutTemplateKey,
+  NO_IMPACT_SETTING, PROGRAM_SETTING, SCREENS_SETTING, parseProgramKey, programTemplateKey, workoutTemplateKey,
 } from '../../domain/programs'
 import type { Exercise, Region, SafetyTag, WorkoutSession } from '../../domain/types'
 import { EXERCISES } from '../../data/exercises'
@@ -13,10 +13,10 @@ import {
   getSymptomChecks, setSetting, symptomsForDate,
 } from '../../db/repositories'
 import {
-  closeWindow, expandSessions, kneeGuard, nextRungs, programAvoidTags, programWeekSessions, screenResult, sessionOnPath,
-  toPlannedExercises, windowDates, windowIndex, type WindowClose,
+  closeWindow, effectivePaths, expandSessions, kneeGuard, nextRungs, programAvoidTags, programWeekSessions, screenResult,
+  sessionOnPath, sessionsForWeek, toPlannedExercises, windowDates, windowIndex, type WindowClose,
 } from '../../engine'
-import { addDays, dateOf, nowIso, startOfWeek } from '../../lib/util'
+import { addDays, dateOf, daysBetween, nowIso, startOfWeek } from '../../lib/util'
 
 /** Symptom contexts that count as week pain (§6.2): the gate before, the check after, and the next morning. */
 const PAIN_CONTEXTS = new Set(['pre_workout', 'post_workout', 'morning'])
@@ -42,6 +42,14 @@ function ownsRow(programId: ProgramId, s: WorkoutSession): boolean {
   const k = parseProgramKey(s.templateKey)
   return !!k && !k.standalone && k.programId === programId
 }
+
+/** The paths this user's sessions run on: the given path plus the standing flags' paths and the no-impact path. */
+function activePaths(program: Program, path: PathId): PathId[] {
+  return effectivePaths(program, path, flagRegions(), noImpactChosen())
+}
+
+/** History reason when a long absence (advance.longGapDays) restarts the last completed week. */
+export const LONG_GAP_REASON = 'Back after a break: repeating your last completed week'
 
 /** Planned programme rows of `programId` from `from` on, with nothing logged. */
 function deleteFutureRows(programId: ProgramId, from: string): number {
@@ -95,8 +103,12 @@ function windowPain(dates: string[]): number[] {
 }
 
 /**
- * Close every elapsed window in order (week rule + ladders), then write the current window when it has no programme
- * rows. Idempotent; one transaction. Returns the decisions taken and the number of rows created.
+ * Close every elapsed window in order (week rule + ladders), then write the current window's missing sessions.
+ * After a long absence (today minus the last completed session ≥ advance.longGapDays, measured from the enrolment
+ * start when nothing was completed) the windows after that session are not closed one by one: ONE 'repeat' entry
+ * resumes the last completed week (the last advanced-from week, at most the current one, at least 1). A gap that
+ * leaves no empty window to close (Home's 8-13 days) is not caught here. Idempotent; one
+ * transaction. Returns the decisions taken and the number of rows created.
  */
 export function ensureProgramWeek(today: string): { closed: WindowClose[]; created: number } {
   return db.transaction(() => {
@@ -106,13 +118,36 @@ export function ensureProgramWeek(today: string): { closed: WindowClose[]; creat
     let enrollment = active.enrollment
     const k = windowIndex(enrollment.startDate, today)
     const closed: WindowClose[] = []
+    const paths = activePaths(program, enrollment.path)
+    // Rows of this enrolment only: an earlier enrolment of the same series may have left rows in these dates.
+    const ownRows = (from: string, to: string) => getSessions(from, to).filter((s) => ownsRow(program.id, s) && s.scheduledDate >= enrollment.startDate)
+
+    const lastDone = k > enrollment.closedWindow + 1
+      ? ownRows(enrollment.startDate, today).filter((s) => s.status === 'completed').map((s) => s.scheduledDate).sort().pop() ?? null
+      : null
+    const longGap = k > enrollment.closedWindow + 1 && daysBetween(lastDone ?? enrollment.startDate, today) >= program.advance.longGapDays
+    const resumeAfterGap = (): void => {
+      const lastAdvance = [...enrollment.history].reverse().find((h) => h.decision === 'advance')
+      const week = Math.max(1, Math.min(enrollment.week, lastAdvance?.week ?? 1))
+      closed.push({ decision: 'repeat', nextWeek: week, status: enrollment.status, reason: LONG_GAP_REASON })
+      enrollment = {
+        ...enrollment,
+        week,
+        closedWindow: k - 1,
+        // Like any non-advance close: the left week's feel answers are consumed, so a stale "Too hard" cannot repeat it.
+        feel: enrollment.feel.filter((f) => f.week !== enrollment.week),
+        history: [...enrollment.history, { week: enrollment.week, decision: 'repeat', reason: LONG_GAP_REASON, at: today }],
+      }
+    }
 
     for (let w = enrollment.closedWindow + 1; w < k && enrollment.status === 'active'; w++) {
       const dates = windowDates(enrollment.startDate, w)
-      const rows = getSessions(dates[0], dates[6]).filter((s) => ownsRow(program.id, s))
+      // The windows after the last completed session collapse into one entry.
+      if (longGap && (lastDone == null || lastDone < dates[0])) { resumeAfterGap(); break }
+      const rows = ownRows(dates[0], dates[6])
       const done = rows.filter((s) => s.status === 'completed')
       const result = closeWindow(program, enrollment, rows, windowPain(dates), today)
-      const rungs = nextRungs(program, enrollment, done.map((session) => ({ session, sets: getSetsForSession(session.id) })))
+      const rungs = nextRungs(program, enrollment, done.map((session) => ({ session, sets: getSetsForSession(session.id) })), { paths, library: library() })
       // A non-advance decision consumes that week's feel answers, so a stale "Too hard" cannot repeat it again.
       const keys = new Set(rows.map((s) => parseProgramKey(s.templateKey)?.sessionKey))
       const feel = result.decision === 'advance' ? enrollment.feel : enrollment.feel.filter((f) => !(f.week === enrollment.week && keys.has(f.sessionKey)))
@@ -130,10 +165,13 @@ export function ensureProgramWeek(today: string): { closed: WindowClose[]; creat
     if (closed.length) setSetting(PROGRAM_SETTING, enrollment)
     if (enrollment.status !== 'active' || k < 0) return { closed, created: 0 }
 
+    // Written when any session expected for this week is missing from this enrolment's rows in the window.
     const dates = windowDates(enrollment.startDate, k)
     const inWindow = getSessions(dates[0], dates[6])
-    if (inWindow.some((s) => ownsRow(program.id, s))) return { closed, created: 0 }
-    const rows = programWeekSessions(program, enrollment, today, inWindow, library())
+    const expected = sessionsForWeek(program, enrollment.week, paths, library(), enrollment.rungs).map((s) => programTemplateKey(program.id, s.key))
+    const present = new Set(inWindow.filter((s) => ownsRow(program.id, s) && s.scheduledDate >= enrollment.startDate).map((s) => s.templateKey))
+    if (expected.every((key) => present.has(key))) return { closed, created: 0 }
+    const rows = programWeekSessions(program, enrollment, today, inWindow, library(), paths)
     for (const r of rows) createSession(r)
     return { closed, created: rows.length }
   })
@@ -194,7 +232,7 @@ export function programExtraAvoid(program: Program, today: string): SafetyTag[] 
   const since = addDays(today, -KNEE_GUARD_DAYS)
   const scores = getSymptomChecks(KNEE_GUARD_DAYS + 1)
     .filter((s) => s.context === 'morning')
-    .map((s) => ({ date: dateOf(s.ts), region: s.region, pain: s.painScore }))
+    .map((s) => ({ date: dateOf(s.ts), region: s.region, pain: s.painScore, ts: s.ts, id: s.id }))
   if (kneeGuard(scores, flags, since)) tags.add('impact')
   return [...tags]
 }
@@ -212,9 +250,9 @@ export function startStandaloneWorkout(programId: ProgramId, sessionKey: string,
   if (!base) throw new Error(`Unknown session ${programId}:${sessionKey}`)
   const saved = screenAnswersFor(programId)
   const path = screenResult(program, saved?.answers ?? {}, flagRegions(), noImpactChosen()).path
-  const session = sessionOnPath(program, base, path, library())
   const enrollment = currentEnrollment()
   const rungs = enrollment && enrollment.programId === programId ? enrollment.rungs : undefined
+  const session = sessionOnPath(program, base, activePaths(program, path), library(), rungs)
   const pick = program.standalone.find((s) => s.sessionKey === sessionKey)
   return createSession({
     templateKey: workoutTemplateKey(programId, sessionKey),
@@ -229,7 +267,7 @@ export function startStandaloneWorkout(programId: ProgramId, sessionKey: string,
     readiness: null,
     sessionRpe: null,
     notes: '',
-    exercises: toPlannedExercises(program, session, { rungs }),
+    exercises: toPlannedExercises(program, session, { library: library() }),
   })
 }
 

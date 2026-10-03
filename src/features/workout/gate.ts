@@ -86,8 +86,9 @@ function blockedIn(exercises: PlannedExercise[], gate: GateResult, library: Exer
 }
 
 /**
- * Programme and standalone-workout sessions (§6.3): swaps stay inside the series' equipment plus bodyweight, the
- * series' standing-flag tags and the no-impact choice are avoided, and reps ↔ seconds swaps convert. Others: as before.
+ * Programme and standalone-workout sessions (§6.3): every entry is checked against the full library, substitutes
+ * come only from the series' equipment plus bodyweight (`candidates`), the series' standing-flag tags and the
+ * no-impact choice are avoided, and reps ↔ seconds swaps convert. Others: as before.
  */
 function gateInputs(session: WorkoutSession, gate: GateResult, library: Exercise[]): { gate: GateResult; library: Exercise[]; opts?: GateSessionOptions } {
   const key = isProgramDerived(session) ? parseProgramKey(session.templateKey) : null
@@ -95,7 +96,7 @@ function gateInputs(session: WorkoutSession, gate: GateResult, library: Exercise
   if (!program) return { gate, library }
   const extraAvoid = programExtraAvoid(program, todayStr())
   const effective = extraAvoid.length ? { ...gate, avoidTags: [...new Set([...gate.avoidTags, ...extraAvoid])] } : gate
-  return { gate: effective, library: programLibrary(program, library), opts: { extraAvoid, convertUnits: true } }
+  return { gate: effective, library, opts: { extraAvoid, convertUnits: true, candidates: programLibrary(program, library) } }
 }
 
 /**

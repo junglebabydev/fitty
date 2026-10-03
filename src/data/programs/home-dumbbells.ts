@@ -84,7 +84,7 @@ export const program: Program = {
       id: 'joint_pain',
       text: 'Do you have pain in a knee, a hip, your back, your neck or a shoulder that changes how you move?',
       onYes: 'note',
-      yesCopy: 'Tap where it hurts. Knee or hip: the low-impact path. Back: the back path. Neck or shoulder: no overhead pressing.',
+      yesCopy: 'Your profile decides the swaps. Knee or hip: low-impact legs. Back: the back path. Neck or shoulder: no overhead pressing. Add a body area in Settings if it is missing.',
       fromFlags: ['knee_left', 'knee_right', 'hip', 'back_lower', 'back_mid', 'back_upper', 'neck', 'shoulder'],
     },
   ],
@@ -232,19 +232,30 @@ export const program: Program = {
   ],
 
   // §4 condition flags. Every swap is home-only: the library's own chains point at gym machines.
+  // Swaps apply after the ladder rung is resolved, so the rungs a path excludes are listed too (and never climbed to).
   paths: {
     standard: { label: 'Standard' },
     'low-impact': {
       label: 'Low impact (knee or hip)',
-      swaps: { goblet_squat: 'wall_sit', db_split_squat: 'db_step_up' },
+      swaps: {
+        goblet_squat: { id: 'wall_sit', sets: 3, seconds: [30, 60] }, // §4: 3 × 30–60 s, thighs above parallel
+        db_split_squat: 'db_step_up',
+        // §4: bulgarian_split_squat and deficit_reverse_lunge (deep_knee_flexion) are not on this path. One id map
+        // holds one target: bulgarian (squat and split-squat ladders) takes the split-squat swap.
+        bulgarian_split_squat: { id: 'db_step_up', perSide: true },
+        deficit_reverse_lunge: { id: 'wall_sit', sets: 3, seconds: [30, 60], perSide: false },
+      },
     },
     back: {
       label: 'Back-friendly',
-      swaps: { goblet_squat: 'db_step_up', suitcase_carry: 'side_plank' },
+      swaps: { goblet_squat: { id: 'db_step_up', perSide: true }, suitcase_carry: 'side_plank' },
     },
     'no-overhead': {
       label: 'No overhead (neck or shoulder)',
-      swaps: { db_shoulder_press: 'lateral_raise' },
+      swaps: {
+        db_shoulder_press: { id: 'lateral_raise', sets: 3, reps: [12, 20] }, // §4: 3 × 12–20
+        arnold_press: { id: 'lateral_raise', sets: 3, reps: [12, 20] }, // §4: "also excluded from the ladder"
+      },
     },
   },
   flagPaths: { knee: 'low-impact', hip: 'low-impact', back: 'back', neck: 'no-overhead', shoulder: 'no-overhead' },
@@ -259,16 +270,20 @@ export const program: Program = {
     longGapDays: 8, // P8: 8-13 days repeats the last completed week (14+ is in rulesText.P8)
   },
 
-  // §3 Regressions and progressions, ids only, start → harder. Rep and tempo steps between rungs are in rulesText.
+  // §3 Regressions and progressions, start → harder. Rep and tempo steps between rungs are in rulesText. A new rung
+  // keeps the session's normal range (P4), so rungSpecs carry only the per-side flag, plus side_plank_reach's reps.
   ladders: [
-    { slot: 'squat', rungs: ['goblet_squat', 'bulgarian_split_squat', 'deficit_reverse_lunge'], advanceWhen: 'Capped stage (P3): every set reaches 30 reps at heaviestDumbbellKg (P4).' },
-    { slot: 'split_squat', rungs: ['db_split_squat', 'bulgarian_split_squat'], advanceWhen: 'Capped stage (P3): every set reaches 30 reps at heaviestDumbbellKg (P4).' },
-    { slot: 'hinge', rungs: ['db_rdl', 'db_single_leg_rdl'], advanceWhen: 'Capped stage (P3): every set reaches 30 reps at heaviestDumbbellKg (P4).' },
-    { slot: 'hip_thrust', rungs: ['hip_thrust', 'db_single_leg_hip_thrust'], advanceWhen: 'Capped stage (P3): every set reaches 30 reps at heaviestDumbbellKg (P4).' },
+    { slot: 'squat', rungs: ['goblet_squat', 'bulgarian_split_squat', 'deficit_reverse_lunge'], rungSpecs: {
+      bulgarian_split_squat: { perSide: true }, deficit_reverse_lunge: { perSide: true },
+    }, advanceWhen: 'Capped stage (P3): every set reaches 30 reps at heaviestDumbbellKg (P4).' },
+    { slot: 'split_squat', rungs: ['db_split_squat', 'bulgarian_split_squat'], rungSpecs: { bulgarian_split_squat: { perSide: true } }, advanceWhen: 'Capped stage (P3): every set reaches 30 reps at heaviestDumbbellKg (P4).' },
+    { slot: 'hinge', rungs: ['db_rdl', 'db_single_leg_rdl'], rungSpecs: { db_single_leg_rdl: { perSide: true } }, advanceWhen: 'Capped stage (P3): every set reaches 30 reps at heaviestDumbbellKg (P4).' },
+    { slot: 'hip_thrust', rungs: ['hip_thrust', 'db_single_leg_hip_thrust'], rungSpecs: { db_single_leg_hip_thrust: { perSide: true } }, advanceWhen: 'Capped stage (P3): every set reaches 30 reps at heaviestDumbbellKg (P4).' },
     { slot: 'horizontal_press', rungs: ['db_floor_press', 'decline_push_up'], advanceWhen: 'Capped stage (P3): every set reaches 30 reps, then tempo 3-1-1 (pause on the floor) tops out (P4, P5).' },
-    { slot: 'push_up', rungs: ['push_up', 'decline_push_up', 'archer_push_up'], advanceWhen: 'Every working set reaches the top of the rep range (reps +2 per step, engine).' },
+    { slot: 'push_up', rungs: ['push_up', 'decline_push_up', 'archer_push_up'], rungSpecs: { archer_push_up: { perSide: true } }, advanceWhen: 'Every working set reaches the top of the rep range (reps +2 per step, engine).' },
     { slot: 'overhead_press', rungs: ['db_shoulder_press', 'arnold_press'], advanceWhen: 'Capped stage (P3): every set reaches 30 reps at heaviestDumbbellKg (P4).' },
-    { slot: 'side_plank', rungs: ['side_plank', 'side_plank_reach'], advanceWhen: 'Every working set reaches the top of the range.' },
+    // side_plank_reach: the home doc names the rung without a range; [6, 10] per side is bodyweight.md's coreB rung.
+    { slot: 'side_plank', rungs: ['side_plank', 'side_plank_reach'], rungSpecs: { side_plank_reach: { reps: [6, 10], perSide: true } }, advanceWhen: 'Every working set reaches the top of the range.' },
   ],
 
   standalone: [{ sessionKey: 'w3d1', name: 'Dumbbell full body A', fact: 'one pair of dumbbells' }],
@@ -336,10 +351,10 @@ export const program: Program = {
     _transcriptionNotes: [
       '1. Screen Q6 picks the path by the region tapped; ScreenQuestion has one onYes, and splitting Q6 into three would make 8 questions (limit 7). Kept as one question with onYes "note" and fromFlags for every region; the path must come from the standing flag it sets, via flagPaths. Contract gap.',
       '2. advance.maxPainToAdvance and dropBackPainAtLeast: the doc has no week-level pain rule (P6: a pain flag holds that exercise). Chose the house 3/10 ceiling (pain 4+ repeats the week) and no pain drop-back (11 = unreachable).',
-      '3. Knee or hip together with back: Enrollment.path holds one path. The doc result (Session A wall_sit) needs low-impact swaps applied before back swaps; applying back first would give db_step_up. See pathKneeAndBack.',
-      '4. Path swaps carry ids only: wall_sit 3 × 30-60 s (low-impact) and lateral_raise 3 × 12-20 (no-overhead) prescriptions are in pathLowImpact and pathNoOverhead, not in the data.',
+      '3. Knee or hip together with back: the engine applies the enrolment path, then each standing flag\'s path, in that order. The doc result (Session A wall_sit) needs low-impact swaps applied before back swaps; with back as the enrolment path and a knee flag, Session A gets db_step_up instead. See pathKneeAndBack.',
+      '4. Path swaps carry their prescription where the doc gives one: wall_sit 3 × 30-60 s (low-impact) and lateral_raise 3 × 12-20 (no-overhead). goblet_squat → db_step_up (back) is marked per side, as db_step_up is everywhere else.',
       '5. rir (per block in the doc) has no field; kept in rulesText.rir. tempo likewise (ladderSteps, P5).',
-      '6. Ladders list ids only, starting at the session exercise; regressions are in rulesText.regressions. Slots without a second id (step-up, row, lateral raise: tempo only) have no ladder. The doc gives no advance condition for the push-up and core ladders; used "every working set at the top of the range". side_plank is timed and side_plank_reach is reps.',
+      '6. Ladders list ids starting at the session exercise, with rungSpecs for the per-side flag (P4 keeps the normal range); regressions are in rulesText.regressions. Rungs on dumbbells never move up automatically: the "dumbbells maxed out" rule (P2-P4) needs heaviestDumbbellKg, not stored yet (TODO in engine nextRungs). Slots without a second id (step-up, row, lateral raise: tempo only) have no ladder. The doc gives no advance condition for the push-up and core ladders; used "every working set at the top of the range". side_plank is timed and side_plank_reach is reps.',
       '7. equipment is ["dumbbell"] only: band and bench are optional in the doc, so the gate must not swap to band_row or bench moves for someone who may not own them.',
       '8. A knee or hip flag no longer removes impact (owner decision 2026-10-02); the doc text predates it. No exercise in this series is tagged impact, so nothing changes.',
       '9. No honestLine: the intro copy (§5) has none. screenMaxAgeDays not stated: default.',

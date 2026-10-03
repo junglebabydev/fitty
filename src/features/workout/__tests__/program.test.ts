@@ -7,15 +7,16 @@ import type { WorkoutSession } from '../../../domain/types'
 import { EXERCISES } from '../../../data/exercises'
 import { db } from '../../../db/database'
 import {
-  addConditionFlag, addSet, addSymptomCheck, createSession, getSession, getSessions, getSetting, tableCounts, updateSession,
+  addConditionFlag, addSet, addSymptomCheck, createSession, deleteSession, getSession, getSessions, getSetting, setSetting, tableCounts, updateSession,
 } from '../../../db/repositories'
 import { isoAt, todayStr } from '../../../lib/util'
 import {
-  currentEnrollment, enrollInProgram, ensureProgramWeek, leaveProgram, noImpactChosen, recordFeel, saveScreenAnswers,
+  LONG_GAP_REASON, currentEnrollment, enrollInProgram, ensureProgramWeek, leaveProgram, noImpactChosen, recordFeel, saveScreenAnswers,
   screenAnswersFor, setNoImpact, startStandaloneWorkout,
 } from '../program'
 import { applyReflow, computeReflow } from '../plan'
 import { startSessionWithGate } from '../gate'
+import { setsLine } from '../PlanVisuals'
 
 const fixtures = vi.hoisted(() => {
   const run = (key: string, week: number): ProgramSession => ({
@@ -50,11 +51,18 @@ const fixtures = vi.hoisted(() => {
     ...base, id: 'bodyweight', title: 'Test Bodyweight', weeks: 4, sessionsPerWeek: 2, equipment: ['bodyweight'], screen: [],
     sessions: [1, 2].map((d): ProgramSession => ({
       key: `w1d${d}`, week: 1, name: `Day ${d}`, type: 'strength', minutes: 20,
-      blocks: [{ shape: 'sets', exerciseId: 'incline_push_up', sets: 2, reps: [6, 12], restSec: 60, slot: 'push' }],
+      blocks: [
+        { shape: 'sets', exerciseId: 'incline_push_up', sets: 2, reps: [6, 12], restSec: 60, slot: 'push' },
+        { shape: 'sets', exerciseId: 'bodyweight_squat', sets: 2, reps: [10, 20], restSec: 60 },
+      ],
     })),
     repeats: [{ week: 2, copyOf: 1 }, { week: 3, copyOf: 1 }, { week: 4, copyOf: 1 }],
-    paths: { standard: { label: 'Standard' } },
-    flagPaths: {},
+    paths: {
+      standard: { label: 'Standard' },
+      'low-impact': { label: 'Knee', swaps: { bodyweight_squat: { id: 'sit_to_stand_chair', reps: [10, 15] } } },
+      'push-capped': { label: 'Capped', swaps: { decline_push_up: { id: 'push_up', reps: [6, 12] } } },
+    },
+    flagPaths: { knee: 'low-impact', hip: 'low-impact', shoulder: 'push-capped' },
     advance: { minCompleted: 2, maxPainToAdvance: 3, dropBackPainAtLeast: 11, repeatIfFeltHard: true, longGapDays: 14 },
     ladders: [{ slot: 'push', rungs: ['incline_push_up', 'push_up', 'decline_push_up'], advanceWhen: '' }],
   }
@@ -184,12 +192,35 @@ describe('week close', () => {
     expect(currentEnrollment()!.week).toBe(2)
   })
 
-  it('closes every elapsed window in order after a long absence', () => {
+  it('closes every elapsed window in order after an absence shorter than longGapDays', () => {
     enrollInProgram('start-running', 'standard', START, { replaceTierWeek: false })
-    const r = ensureProgramWeek('2026-10-27') // window 3
-    expect(r.closed.map((c) => c.decision)).toEqual(['repeat', 'repeat', 'repeat'])
+    complete(programRows('2026-10-07', '2026-10-07'))
+    const r = ensureProgramWeek('2026-10-20') // window 2; 13 days since the last session
+    expect(r.closed.map((c) => c.decision)).toEqual(['repeat', 'repeat'])
+    expect(currentEnrollment()).toMatchObject({ week: 1, closedWindow: 1 })
+  })
+
+  it('review #10: never trained since enrolling, a long absence is ONE entry (gap measured from the start)', () => {
+    enrollInProgram('start-running', 'standard', START, { replaceTierWeek: false })
+    const r = ensureProgramWeek('2026-10-27') // window 3, 22 days
+    expect(r.closed).toEqual([{ decision: 'repeat', nextWeek: 1, status: 'active', reason: LONG_GAP_REASON }])
     expect(currentEnrollment()).toMatchObject({ week: 1, closedWindow: 2 })
+    expect(currentEnrollment()!.history).toEqual([{ week: 1, decision: 'repeat', reason: LONG_GAP_REASON, at: '2026-10-27' }])
     expect(programRows('2026-10-26', '2026-11-01').length).toBe(3)
+  })
+
+  it('review #10: after a long gap the user resumes the last completed week, with one history entry', () => {
+    enrollInProgram('start-running', 'standard', START, { replaceTierWeek: false })
+    complete(programRows(START, '2026-10-11')) // last session 10-09; week 1 advances
+    const r = ensureProgramWeek('2026-10-26') // window 3, 17 days later
+    expect(r.closed.map((c) => [c.decision, c.nextWeek])).toEqual([['advance', 2], ['repeat', 1]])
+    const e = currentEnrollment()!
+    expect(e).toMatchObject({ week: 1, closedWindow: 2, status: 'active' })
+    expect(e.history.map((h) => [h.week, h.decision, h.reason])).toEqual([
+      [1, 'advance', 'Week 1 done, so week 2 starts.'],
+      [2, 'repeat', 'Back after a break: repeating your last completed week'],
+    ])
+    expect(programRows('2026-10-26', '2026-11-01').map((s) => s.templateKey)[0]).toBe('prog:start-running:w1d1')
   })
 
   it('finishing the last week marks the programme done and writes nothing more', () => {
@@ -202,6 +233,30 @@ describe('week close', () => {
     expect(r.closed[0]).toMatchObject({ decision: 'advance', status: 'done' })
     expect(currentEnrollment()!.status).toBe('done')
     expect(programRows('2026-10-19', '2026-10-25')).toEqual([])
+  })
+
+  it('review #2/#4: a standing shoulder flag caps the ladder, and both flag paths shape the sessions', () => {
+    addConditionFlag({ region: 'shoulder', label: 'shoulder', baselineNotes: '' })
+    addConditionFlag({ region: 'knee_left', label: 'left knee', baselineNotes: '' })
+    enrollInProgram('bodyweight', 'standard', START, { replaceTierWeek: false })
+    // Start on rung 1 (push_up): rewrite the week with it.
+    setSetting(PROGRAM_SETTING, { ...currentEnrollment()!, rungs: { push: 1 } })
+    for (const r of programRows(START, '2026-10-11')) deleteSession(r.id)
+    ensureProgramWeek(START)
+    const rows = programRows(START, '2026-10-11')
+    expect(rows.map((r) => r.exercises.map((e) => e.exerciseId))).toEqual([['push_up', 'sit_to_stand_chair'], ['push_up', 'sit_to_stand_chair']])
+    expect(rows[0].exercises[1]).toMatchObject({ repMin: 10, repMax: 15 })
+    for (const r of rows) {
+      for (let i = 1; i <= 2; i++) {
+        addSet({ sessionId: r.id, exerciseId: 'push_up', setIndex: i, reps: 12, loadKg: null, rir: 2, rpe: null, durationSec: null, painFlag: false, loggedAt: isoAt(r.scheduledDate, 9) })
+      }
+    }
+    complete(rows)
+    ensureProgramWeek('2026-10-12')
+    expect(currentEnrollment()!.rungs).toEqual({ push: 1 }) // decline_push_up is capped on push-capped
+    // A rung already above the cap is served as the capped move.
+    setSetting(PROGRAM_SETTING, { ...currentEnrollment()!, rungs: { push: 2 } })
+    expect(getSession(startStandaloneWorkout('bodyweight', 'w1d1', START))!.exercises.map((e) => e.exerciseId)).toEqual(['push_up', 'sit_to_stand_chair'])
   })
 
   it('moves the ladder up when every set hit the top, and the next week uses the new rung', () => {
@@ -241,6 +296,17 @@ describe('feel, leaving, screens and the no-impact choice', () => {
     expect(getSession(b.id)).toBeNull()
     expect(getSession(c.id)).not.toBeNull()
     expect(ensureProgramWeek('2026-10-12')).toEqual({ closed: [], created: 0 })
+  })
+
+  it('review #9: leaving and re-enrolling the same day writes this week (an earlier enrolment\'s row does not block it)', () => {
+    enrollInProgram('bodyweight', 'standard', START, { replaceTierWeek: false })
+    const [first] = programRows(START, START)
+    updateSession(first.id, { status: 'completed' })
+    leaveProgram(START)
+    expect(programRows(START, '2026-10-11').map((s) => s.templateKey)).toEqual(['prog:bodyweight:w1d1'])
+    enrollInProgram('bodyweight', 'standard', START, { replaceTierWeek: false })
+    expect(programRows(START, '2026-10-11').map((s) => s.templateKey)).toEqual(['prog:bodyweight:w1d1', 'prog:bodyweight:w1d2'])
+    expect(ensureProgramWeek(START).created).toBe(0)
   })
 
   it('stores screen answers per series and the no-impact choice', () => {
@@ -311,11 +377,39 @@ describe('the gate on programme sessions', () => {
     expect(['bodyweight', 'bike']).toContain(EXERCISES.find((e) => e.id === id)!.equipment)
   })
 
+  it('review #3: a flagged knee at 5 keeps the guard on when a flagged hip scores 1 the next day', () => {
+    addConditionFlag({ region: 'knee_left', label: 'left knee', baselineNotes: '' })
+    addConditionFlag({ region: 'hip', label: 'hip', baselineNotes: '' })
+    addSymptomCheck({ ts: new Date(Date.now() - 3 * 86_400_000).toISOString(), region: 'knee_left', painScore: 5, redFlags: {}, notes: '', context: 'morning', sessionId: null })
+    addSymptomCheck({ ts: new Date(Date.now() - 2 * 86_400_000).toISOString(), region: 'hip', painScore: 1, redFlags: {}, notes: '', context: 'morning', sessionId: null })
+    expect(startSessionWithGate(runRow(), [], EXERCISES, null).exercises[0].exerciseId).not.toBe('easy_run')
+  })
+
+  it('review #1: an exercise outside the series equipment is still gated (Bodyweight rung bulgarian_split_squat, knee AMBER)', () => {
+    const id = createSession(plain({
+      templateKey: 'prog:bodyweight:w1d1', scheduledDate: todayStr(),
+      exercises: [{ exerciseId: 'bulgarian_split_squat', sets: 3, repMin: 6, repMax: 10, loadKg: null, restSec: 60, program: true, slot: 'squat', perSide: true }],
+    }))
+    const out = startSessionWithGate(getSession(id)!, [{ region: 'knee_left', painScore: 4, redFlags: {} }], EXERCISES, null)
+    const kept = out.exercises.some((e) => e.exerciseId === 'bulgarian_split_squat')
+    expect(!kept || out.blocked.some((b) => b.exerciseId === 'bulgarian_split_squat')).toBe(true)
+    expect(kept).toBe(false)
+    for (const e of out.exercises) expect(['bodyweight']).toContain(EXERCISES.find((x) => x.id === e.exerciseId)!.equipment)
+  })
+
   it('a flagged knee at 4/10 the next morning walks until a later score is back to 3', () => {
     addConditionFlag({ region: 'knee_left', label: 'left knee', baselineNotes: '' })
     addSymptomCheck({ ts: new Date(Date.now() - 3 * 86_400_000).toISOString(), region: 'knee_left', painScore: 4, redFlags: {}, notes: '', context: 'morning', sessionId: null })
     expect(startSessionWithGate(runRow(), [], EXERCISES, null).exercises[0].exerciseId).not.toBe('easy_run')
     addSymptomCheck({ ts: new Date().toISOString(), region: 'knee_left', painScore: 2, redFlags: {}, notes: '', context: 'morning', sessionId: null })
     expect(startSessionWithGate(runRow(), [], EXERCISES, null).exercises[0].exerciseId).toBe('easy_run')
+  })
+})
+
+describe('review #7: seconds targets on reps exercises in the plan line', () => {
+  it('setsLine shows seconds when the entry says unit "sec"', () => {
+    const ex = EXERCISES.find((e) => e.id === 'incline_push_up')!
+    expect(setsLine({ exerciseId: ex.id, sets: 3, repMin: 30, repMax: 40, unit: 'sec' }, ex)).toBe('3 × 30–40 s')
+    expect(setsLine({ exerciseId: ex.id, sets: 3, repMin: 30, repMax: 40 }, ex)).toBe('3 × 30–40')
   })
 })

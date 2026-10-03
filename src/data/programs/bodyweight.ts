@@ -244,21 +244,23 @@ export const program: Program = {
   ],
   paths: {
     standard: { label: 'Full ladder' },
-    // Knee and hip path: the squat slot runs the squatKneePath ladder from rung 1 (P4).
+    // Knee and hip path: the squat slot runs the squatKneePath ladder from rung 1 (P4), at that rung's range.
+    // Swaps apply after the rung is resolved, so every squat rung is listed.
     'low-impact': {
       label: 'Knee and hip path',
       swaps: {
-        bodyweight_squat: 'sit_to_stand_chair',
-        bw_split_squat: 'sit_to_stand_chair',
-        bulgarian_split_squat: 'sit_to_stand_chair',
+        bodyweight_squat: { id: 'sit_to_stand_chair', reps: [10, 15], perSide: false },
+        bw_split_squat: { id: 'sit_to_stand_chair', reps: [10, 15], perSide: false },
+        bulgarian_split_squat: { id: 'sit_to_stand_chair', reps: [10, 15], perSide: false },
       },
     },
-    // Screen Q5 (shoulder or wrist pain under the hands): push ladder capped at push_up, no mountain climbers.
+    // Screen Q5 (shoulder or wrist pain under the hands): push ladder capped at push_up (push_up's range), no mountain
+    // climbers. nextRungs never climbs past push_up on this path.
     'push-capped': {
       label: 'Push ladder capped',
       swaps: {
-        decline_push_up: 'push_up',
-        archer_push_up: 'push_up',
+        decline_push_up: { id: 'push_up', reps: [6, 12], perSide: false },
+        archer_push_up: { id: 'push_up', reps: [6, 12], perSide: false },
         mountain_climber: 'dead_bug',
       },
     },
@@ -271,18 +273,38 @@ export const program: Program = {
     repeatIfFeltHard: true,
     longGapDays: 14,
   },
+  // rungSpecs: each rung's range and per-side flag from the doc's `ladders` YAML and `unilateral` list (sets blocks
+  // only; circuit stations keep their seconds, P7).
   ladders: [
-    { slot: 'push', rungs: ['incline_push_up', 'push_up', 'decline_push_up', 'archer_push_up'], advanceWhen: 'Every working set at the top of the range, last set 1-2 or 3+ reps left, no form break or pain tap (P1); or the first set 8+ over the top (P2).' },
-    { slot: 'squat', rungs: ['bodyweight_squat', 'bw_split_squat', 'bulgarian_split_squat'], advanceWhen: 'Every working set at the top of the range, last set 1-2 or 3+ reps left, no form break or pain tap (P1); or the first set 8+ over the top (P2).' },
-    { slot: 'squatKneePath', rungs: ['sit_to_stand_chair', 'step_up_bw'], advanceWhen: 'Every working set at the top of the range, last set 1-2 or 3+ reps left, no form break or pain tap (P1); or the first set 8+ over the top (P2).' },
-    { slot: 'squatKneeRed', rungs: ['side_lying_hip_abduction'], advanceWhen: 'Knee RED day only; single rung, never advances.' },
-    { slot: 'pull', rungs: ['towel_door_row', 'table_inverted_row', 'inverted_row'], advanceWhen: 'Every working set at the top of the range, last set 1-2 or 3+ reps left, no form break or pain tap (P1); or the first set 8+ over the top (P2). inverted_row only if the user has a bar.' },
-    { slot: 'pullFallback', rungs: ['prone_y_t_raise'], advanceWhen: 'No table and no door only; single rung, not equivalent to a row.' },
-    { slot: 'hinge', rungs: ['glute_bridge', 'single_leg_glute_bridge', 'single_leg_hip_thrust'], advanceWhen: 'Every working set at the top of the range, last set 1-2 or 3+ reps left, no form break or pain tap (P1); or the first set 8+ over the top (P2).' },
-    { slot: 'hingeStanding', rungs: ['single_leg_rdl_bw'], advanceWhen: 'Single rung; progress by reps then 3-s lowering.' },
-    { slot: 'coreA', rungs: ['dead_bug', 'plank'], advanceWhen: 'Every working set at the top of the range (reps, or seconds for plank, P9), no form break or pain tap (P1).' },
-    { slot: 'coreB', rungs: ['side_plank', 'side_plank_reach'], advanceWhen: 'Every working set at the top of the range (seconds for side_plank, P9), no form break or pain tap (P1).' },
-    { slot: 'conditioning', rungs: ['mountain_climber'], advanceWhen: 'Circuit only; single rung.' },
+    { slot: 'push', rungs: ['incline_push_up', 'push_up', 'decline_push_up', 'archer_push_up'], rungSpecs: {
+      incline_push_up: { reps: [6, 12], perSide: false }, push_up: { reps: [6, 12], perSide: false },
+      decline_push_up: { reps: [6, 12], perSide: false }, archer_push_up: { reps: [4, 8], perSide: true },
+    }, advanceWhen: 'Every working set at the top of the range, last set 1-2 or 3+ reps left, no form break or pain tap (P1); or the first set 8+ over the top (P2).' },
+    { slot: 'squat', rungs: ['bodyweight_squat', 'bw_split_squat', 'bulgarian_split_squat'], rungSpecs: {
+      bodyweight_squat: { reps: [10, 20], perSide: false }, bw_split_squat: { reps: [8, 12], perSide: true },
+      bulgarian_split_squat: { reps: [6, 10], perSide: true },
+    }, advanceWhen: 'Every working set at the top of the range, last set 1-2 or 3+ reps left, no form break or pain tap (P1); or the first set 8+ over the top (P2).' },
+    { slot: 'squatKneePath', rungs: ['sit_to_stand_chair', 'step_up_bw'], rungSpecs: {
+      sit_to_stand_chair: { reps: [10, 15], perSide: false }, step_up_bw: { reps: [8, 12], perSide: true },
+    }, advanceWhen: 'Every working set at the top of the range, last set 1-2 or 3+ reps left, no form break or pain tap (P1); or the first set 8+ over the top (P2).' },
+    { slot: 'squatKneeRed', rungs: ['side_lying_hip_abduction'], rungSpecs: { side_lying_hip_abduction: { reps: [12, 20], perSide: true } }, advanceWhen: 'Knee RED day only; single rung, never advances.' },
+    { slot: 'pull', rungs: ['towel_door_row', 'table_inverted_row', 'inverted_row'], rungSpecs: {
+      towel_door_row: { reps: [8, 15], perSide: false }, table_inverted_row: { reps: [6, 12], perSide: false },
+      inverted_row: { reps: [6, 12], perSide: false },
+    }, advanceWhen: 'Every working set at the top of the range, last set 1-2 or 3+ reps left, no form break or pain tap (P1); or the first set 8+ over the top (P2). inverted_row only if the user has a bar.' },
+    { slot: 'pullFallback', rungs: ['prone_y_t_raise'], rungSpecs: { prone_y_t_raise: { reps: [8, 12], perSide: false } }, advanceWhen: 'No table and no door only; single rung, not equivalent to a row.' },
+    { slot: 'hinge', rungs: ['glute_bridge', 'single_leg_glute_bridge', 'single_leg_hip_thrust'], rungSpecs: {
+      glute_bridge: { reps: [10, 20], perSide: false }, single_leg_glute_bridge: { reps: [8, 12], perSide: true },
+      single_leg_hip_thrust: { reps: [8, 12], perSide: true },
+    }, advanceWhen: 'Every working set at the top of the range, last set 1-2 or 3+ reps left, no form break or pain tap (P1); or the first set 8+ over the top (P2).' },
+    { slot: 'hingeStanding', rungs: ['single_leg_rdl_bw'], rungSpecs: { single_leg_rdl_bw: { reps: [8, 12], perSide: true } }, advanceWhen: 'Single rung; progress by reps then 3-s lowering.' },
+    { slot: 'coreA', rungs: ['dead_bug', 'plank'], rungSpecs: {
+      dead_bug: { reps: [6, 10], perSide: true }, plank: { seconds: [20, 45], perSide: false },
+    }, advanceWhen: 'Every working set at the top of the range (reps, or seconds for plank, P9), no form break or pain tap (P1).' },
+    { slot: 'coreB', rungs: ['side_plank', 'side_plank_reach'], rungSpecs: {
+      side_plank: { seconds: [20, 40], perSide: true }, side_plank_reach: { reps: [6, 10], perSide: true },
+    }, advanceWhen: 'Every working set at the top of the range (seconds for side_plank, P9), no form break or pain tap (P1).' },
+    { slot: 'conditioning', rungs: ['mountain_climber'], rungSpecs: { mountain_climber: { seconds: [30, 40], perSide: false } }, advanceWhen: 'Circuit only; single rung.' },
   ],
   standalone: [{ sessionKey: 'w3d2', name: 'Bodyweight circuit', fact: '20 min, no equipment' }],
   cues: {
@@ -313,10 +335,10 @@ export const program: Program = {
   rulesText: {
     _transcriptionNotes: [
       'Week 5: the doc copies w3d1 and w3d3 and adds its own w5d2; w5d1 and w5d3 are written out as copies of w3d1 and w3d3 so weeks 6-8 can repeat week 5 whole.',
-      'Ladder rungs carry their own reps or seconds and per-side flag in the doc; the Ladder type holds ids only, so the ranges are kept in rulesText.ladderRanges and the per-side list in rulesText.unilateral. perSide is set on blocks only where the starting rung is unilateral (dead_bug, single_leg_rdl_bw, side_plank); no starting circuit station is unilateral.',
-      'low-impact path: all three deep-flexion squat rungs swap to sit_to_stand_chair (rung 1 of squatKneePath, per P4). A swap map cannot say "this slot climbs squatKneePath"; the engine must resolve the rung first and then apply the swap, or read slot squat as squatKneePath on this path.',
+      'Ladder rungs carry their own reps or seconds and per-side flag in the doc: transcribed into each ladder\'s rungSpecs (sets blocks use them; circuit stations keep their station seconds). rulesText.ladderRanges and rulesText.unilateral keep the doc text. perSide is set on blocks only where the starting rung is unilateral (dead_bug, single_leg_rdl_bw, side_plank); no starting circuit station is unilateral.',
+      'low-impact path: all three deep-flexion squat rungs swap to sit_to_stand_chair at its squatKneePath range (rung 1, per P4). The engine resolves the rung first and then applies the swap. A swap map cannot say "this slot climbs squatKneePath", so the knee path stays on rung 1 (step_up_bw is not reached yet).',
       'push-capped path is series-specific (screen Q5). A standing shoulder flag pre-answers Q5 yes and selects it: the conservative reading, since the doc does not name shoulder flags. The push cap (no rung above push_up) and "start push at rung 1 in placement week" are ladder rules, kept in rulesText.Q5.',
-      'Q4 and Q5 can both be yes, but an enrolment holds one path. The doc does not define a combined path; none was invented.',
+      'Q4 and Q5 can both be yes. The enrolment holds one path, and the engine also applies each standing flag\'s path in turn (effectivePaths), so a knee flag plus a shoulder flag gets both the squat knee path and the push cap.',
       'No back or no-overhead path: the doc says no exercise here carries back or neck tags, so the gate removes nothing. flagPaths leaves back and neck out; flagAvoid is omitted (no extra tags; per the 2026-10-02 owner decision, knee and hip do not add impact).',
       'advance: minCompleted 2 (P10) and longGapDays 14 (P11) are from the doc. The doc has no week-level pain threshold (pain drops a rung, P4), so maxPainToAdvance 3 is borrowed from the shared 3/10 knee-checked convention and dropBackPainAtLeast 7 is a conservative placeholder. P11 also drops every slot one rung, which AdvanceRule cannot express.',
       'honestLine sources [6][8]: the verdict sentence "Heavy loads still build more maximal strength than light loads [6][8], and the app says so".',
