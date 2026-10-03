@@ -97,12 +97,13 @@ async function recognizeInto(image: MealImage, seq: number): Promise<void> {
 /**
  * A photo has been picked (from a <PhotoInput> or `pickImageFile`): open the review
  * screen straight away with a 'recognizing' draft, then downscale, then recognise.
+ * `ts` defaults to now; the Eat screen passes the viewed day's timestamp.
  */
-export async function captureMealFromFile(navigate: NavigateFunction, file: File): Promise<void> {
+export async function captureMealFromFile(navigate: NavigateFunction, file: File, ts: string = nowIso()): Promise<void> {
   captureSeq += 1
   const seq = captureSeq
   inFlight = true
-  saveDraft(newDraft({ status: 'recognizing', ts: nowIso(), source: 'photo' }))
+  saveDraft(newDraft({ status: 'recognizing', ts, source: 'photo' }))
   navigate(REVIEW_PATH)
 
   let img: PickedImage

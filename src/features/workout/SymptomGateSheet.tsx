@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Check, Plus, ShieldAlert, ShieldCheck, TriangleAlert } from 'lucide-react'
+import { Check, Plus, ShieldAlert, TriangleAlert } from 'lucide-react'
 import type { RedFlags, Region } from '../../domain/types'
 import { Button, Sheet, Slider } from '../../components'
 import { cx } from '../../lib/util'
@@ -70,16 +70,24 @@ export function RedFlagToggles({ keys, active, onToggle }: { keys: (keyof RedFla
 }
 
 /**
- * Pre-workout symptom gate (PRD §7.2): knees, back and neck pain 0–10 plus red-flag symptoms.
- * Shown before a planned session starts; the answers become 'pre_workout' symptom checks.
+ * Pre-workout symptom gate (PRD §7.2), one question first: "Anything hurting today?"
+ * "All good" starts in one tap (every gate region at 0, no flags). "Something hurts" asks where,
+ * then pain 0–10 and red flags for just those areas. Answers become 'pre_workout' symptom checks.
  */
 export function SymptomGateSheet({ open, sessionName, initial, onStart, onDismiss, onClose, starting = false }: SymptomGateSheetProps) {
-  const [rows, setRows] = useState<RegionState[]>(() => buildInitial(initial))
+  const [rows, setRows] = useState<RegionState[]>([])
+  const [earlier, setEarlier] = useState<RegionState[]>([])
+  const [detail, setDetail] = useState(false)
   const [showExtra, setShowExtra] = useState(false)
 
-  // Re-prefill whenever the sheet (re)opens.
+  // Re-prefill whenever the sheet (re)opens. Areas reported earlier today can be reused in one tap.
   useEffect(() => {
-    if (open) { setRows(buildInitial(initial)); setShowExtra(false) }
+    if (!open) return
+    const reported = buildInitial(initial).filter((r) => r.pain > 0 || r.flags.size)
+    setEarlier(reported)
+    setRows(reported)
+    setDetail(false)
+    setShowExtra(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
@@ -95,104 +103,121 @@ export function SymptomGateSheet({ open, sessionName, initial, onStart, onDismis
     }))
   }
 
-  const addRegion = (region: Region) => {
-    setRows((prev) => (prev.some((r) => r.region === region) ? prev : [...prev, { region, pain: 0, flags: new Set() }]))
-    setShowExtra(false)
-  }
+  const toggleRegion = (region: Region) =>
+    setRows((prev) => (prev.some((r) => r.region === region) ? prev.filter((r) => r.region !== region) : [...prev, { region, pain: 3, flags: new Set() }]))
 
   const summary = useMemo(() => {
-    const hot = rows.filter((r) => r.pain > 0 || r.flags.size)
     const worst = Math.max(0, ...rows.map((r) => r.pain))
     const anyFlag = rows.some((r) => [...r.flags].some((f) => f !== 'swelling'))
-    if (anyFlag || worst >= 6) return { tone: 'red' as const, text: 'Red-flag symptoms or high pain — provocative exercises will be blocked.' }
-    if (worst >= 3 || rows.some((r) => r.flags.has('swelling'))) return { tone: 'amber' as const, text: 'Moderate symptoms — the plan will swap in gentler options.' }
-    if (hot.length) return { tone: 'green' as const, text: 'Mild soreness only — proceed while monitoring.' }
-    return { tone: 'green' as const, text: 'Nothing flagged — run the plan as written.' }
+    if (anyFlag || worst >= 6) return { tone: 'red' as const, text: 'Provocative exercises will be blocked today.' }
+    if (worst >= 3 || rows.some((r) => r.flags.has('swelling'))) return { tone: 'amber' as const, text: 'Gentler options will be swapped in.' }
+    return null
   }, [rows])
 
-  const available = EXTRA_REGIONS.filter((r) => !rows.some((x) => x.region === r))
-
-  const submit = () => {
-    onStart(rows.map((r) => {
+  // Every gate region is always reported (0 when not picked), plus any extra area picked.
+  const submit = (picked: RegionState[]) => {
+    const all = [...GATE_REGIONS.map((region) => picked.find((r) => r.region === region) ?? { region, pain: 0, flags: new Set<keyof RedFlags>() }),
+      ...picked.filter((r) => !GATE_REGIONS.includes(r.region))]
+    onStart(all.map((r) => {
       const redFlags: RedFlags = {}
       for (const f of r.flags) redFlags[f] = true
       return { region: r.region, painScore: r.pain, redFlags }
     }))
   }
 
-  const SummaryIcon = summary.tone === 'red' ? ShieldAlert : summary.tone === 'amber' ? TriangleAlert : ShieldCheck
+  const areaChoices = showExtra ? [...GATE_REGIONS, ...EXTRA_REGIONS] : GATE_REGIONS
+  const SummaryIcon = summary?.tone === 'red' ? ShieldAlert : TriangleAlert
 
   return (
     <Sheet
       open={open}
       onClose={onClose ?? onDismiss}
-      title="Quick symptom check"
+      title={detail ? 'Where does it hurt?' : earlier.length > 0 ? 'How is it now?' : 'Anything hurting today?'}
       footer={
-        <div className="flex flex-col gap-2">
-          <Button variant="primary" size="lg" full onClick={submit} loading={starting} icon={<ShieldCheck size={20} />}>
-            Start {sessionName}
-          </Button>
-          <Button variant="ghost" full onClick={onDismiss}>Not today</Button>
-        </div>
+        detail ? (
+          <div className="flex flex-col gap-1">
+            <Button variant="primary" size="lg" full onClick={() => submit(rows)} loading={starting}>
+              {rows.length === 0 ? 'Nothing hurts, start' : `Start ${sessionName}`}
+            </Button>
+            <Button variant="ghost" full onClick={() => { setDetail(false); setRows(earlier) }}>Back</Button>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {earlier.length > 0 ? (
+              <>
+                <Button variant="primary" size="lg" full onClick={() => submit(earlier)} loading={starting} icon={<Check size={20} />}>
+                  Same as earlier, start
+                </Button>
+                <Button variant="secondary" size="lg" full onClick={() => setDetail(true)}>It's changed</Button>
+              </>
+            ) : (
+              <>
+                <Button variant="primary" size="lg" full onClick={() => submit([])} loading={starting} icon={<Check size={20} />}>
+                  All good, start
+                </Button>
+                <Button variant="secondary" size="lg" full onClick={() => { setRows([]); setDetail(true) }}>Something hurts</Button>
+              </>
+            )}
+            <Button variant="ghost" full onClick={onDismiss}>Not today</Button>
+          </div>
+        )
       }
     >
-      <div data-pillar="train" className="flex flex-col gap-4">
-        <div>
-          <p className="voice text-xl text-app">How are the knees, back and neck right now?</p>
-          <p className="text-sm text-muted mt-1.5 leading-snug">
-            Thirty seconds. Your answers only shape today's exercise choices — this check never diagnoses anything.
+      <div data-pillar="train" className="flex flex-col gap-5">
+        {!detail ? (
+          <p className="text-[15px] text-muted leading-snug">
+            {earlier.length > 0
+              ? `Earlier today: ${earlier.map((r) => `${REGION_LABELS[r.region].toLowerCase()} ${r.pain}/10`).join(', ')}.`
+              : "Knees, back or neck. It only shapes today's exercises."}
           </p>
-        </div>
-
-        <div
-          aria-live="polite"
-          className={cx(
-            'rounded-xl border px-3 py-2.5 text-sm font-medium leading-snug flex items-start gap-2.5',
-            summary.tone === 'red' && 'border-stop/40 bg-stop/10 text-stop',
-            summary.tone === 'amber' && 'border-warn/40 bg-warn/10 text-warn',
-            summary.tone === 'green' && 'border-ok/40 bg-ok/10 text-ok',
-          )}
-        >
-          <SummaryIcon size={17} className="shrink-0 mt-px" aria-hidden />
-          <span>{summary.text}</span>
-        </div>
-
-        {rows.map((r) => (
-          <div key={r.region} className="rounded-[1.25rem] border border-line bg-surface-2 px-3.5 py-3.5">
-            <Slider
-              label={REGION_LABELS[r.region]}
-              value={r.pain}
-              onChange={(n) => update(r.region, { pain: n })}
-              min={0}
-              max={10}
-              tone="auto"
-              suffix="/10"
-              labels={['No pain', 'Worst']}
-            />
-            <div className="eyebrow text-muted mt-3 mb-2">Any of these?</div>
-            <RedFlagToggles keys={flagsForRegion(r.region)} active={r.flags} onToggle={(k) => update(r.region, { toggle: k })} />
-          </div>
-        ))}
-
-        {available.length > 0 && (
-          showExtra ? (
-            <div className="flex flex-wrap gap-2">
-              {available.map((r) => (
-                <button key={r} type="button" onClick={() => addRegion(r)} className="press inline-flex items-center gap-1.5 h-11 px-3.5 rounded-xl border border-line bg-surface text-sm font-medium">
-                  <Plus size={15} aria-hidden />{REGION_LABELS[r]}
+        ) : (
+          <>
+            <div className="flex flex-wrap gap-2" role="group" aria-label="Areas that hurt">
+              {areaChoices.map((region) => {
+                const on = rows.some((r) => r.region === region)
+                return (
+                  <button
+                    key={region}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() => toggleRegion(region)}
+                    className={cx('press h-11 px-4 rounded-full text-[15px] font-medium', on ? 'bg-accent text-accent-fg' : 'bg-surface-2 text-app')}
+                  >
+                    {REGION_LABELS[region]}
+                  </button>
+                )
+              })}
+              {!showExtra && (
+                <button type="button" onClick={() => setShowExtra(true)} className="press h-11 px-3 inline-flex items-center gap-1 text-[15px] font-medium text-muted">
+                  <Plus size={16} aria-hidden />More
                 </button>
-              ))}
+              )}
             </div>
-          ) : (
-            <Button variant="ghost" icon={<Plus size={16} />} onClick={() => setShowExtra(true)}>
-              Another area
-            </Button>
-          )
-        )}
 
-        <p className="text-[13px] text-muted leading-snug">
-          If something gets flagged, the plan swaps in gentler options and lists each substitution with its reason before you start.
-        </p>
+            {rows.map((r) => (
+              <div key={r.region} className="flex flex-col gap-3">
+                <Slider
+                  label={REGION_LABELS[r.region]}
+                  value={r.pain}
+                  onChange={(n) => update(r.region, { pain: n })}
+                  min={0}
+                  max={10}
+                  tone="auto"
+                  suffix="/10"
+                  labels={['Mild', 'Worst']}
+                />
+                <RedFlagToggles keys={flagsForRegion(r.region)} active={r.flags} onToggle={(k) => update(r.region, { toggle: k })} />
+              </div>
+            ))}
+
+            {summary && (
+              <div aria-live="polite" className={cx('flex items-start gap-2 text-sm font-medium leading-snug', summary.tone === 'red' ? 'text-stop' : 'text-warn')}>
+                <SummaryIcon size={16} className="shrink-0 mt-px" aria-hidden />
+                <span>{summary.text}</span>
+              </div>
+            )}
+          </>
+        )}
       </div>
     </Sheet>
   )

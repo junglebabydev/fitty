@@ -8,7 +8,7 @@ import { getSessions } from '../db/repositories'
 import { useQuery } from '../hooks'
 import { PLAN_FOCUSES, estimateSessionMinutes, windowDates, windowIndex, type PlanFocus } from '../engine'
 import { useSetupGate } from '../features/onboarding/SetupGate'
-import { dayName, fmtDate, startOfWeek, todayStr } from '../lib/util'
+import { dayName, startOfWeek, todayStr } from '../lib/util'
 import { exerciseMap, libraryExercises, weekSessions } from '../features/workout'
 import { PlanSheet } from '../features/workout/PlanSheet'
 import { MuscleSummary } from '../features/workout/PlanVisuals'
@@ -126,7 +126,7 @@ function TrainRoot() {
   )
 
   return (
-    <Screen pillar="train" large title="Train" eyebrow={`Week of ${fmtDate(weekStart)}`}>
+    <Screen pillar="train" large title="Train">
       {/* Bottom padding keeps the last block clear of the fixed Composer. */}
       <div className="flex flex-col gap-3" style={{ paddingBottom: COMPOSER_CLEARANCE }}>
         {enrolled ? (
@@ -136,7 +136,7 @@ function TrainRoot() {
             {/* 2 · start now */}
             {startNow(1)}
             {/* 3 · quiet links */}
-            <div className="anim-rise mt-2 grid grid-cols-2 gap-2" style={rise(2)}>
+            <div className="anim-rise mt-1 flex items-center justify-center gap-6" style={rise(2)}>
               <QuietLink to="/train?view=programs" icon={<LayoutGrid size={16} />} label="Programmes" />
               <QuietLink to="/train?view=library" icon={<BookOpen size={16} />} label="Exercises" />
             </div>
@@ -173,7 +173,7 @@ function TrainRoot() {
             </section>
             {/* 3 · start now */}
             {startNow(2)}
-            <div className="anim-rise mt-2 grid" style={rise(3)}>
+            <div className="anim-rise mt-1 flex items-center justify-center gap-6" style={rise(3)}>
               <QuietLink to="/train?view=library" icon={<BookOpen size={16} />} label="Exercises" />
             </div>
           </>
@@ -192,8 +192,8 @@ function TrainRoot() {
 
 function QuietLink({ to, icon, label }: { to: string; icon: React.ReactNode; label: string }) {
   return (
-    <Link to={to} className="press h-11 rounded-xl border border-line bg-surface text-sm font-semibold text-app inline-flex items-center justify-center gap-1.5">
-      <span className="text-muted" aria-hidden>{icon}</span>{label}
+    <Link to={to} className="press h-11 px-2 text-sm font-medium text-muted inline-flex items-center justify-center gap-1.5">
+      <span aria-hidden>{icon}</span>{label}
     </Link>
   )
 }

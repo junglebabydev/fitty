@@ -1,34 +1,34 @@
-// Today — the decision hub, v3 (DESIGN §10.1): ≤ 1.6 screens, ≤ 110 words, 5 blocks.
-//   1 header · 2 Pillar Dial + readiness · 3 one coach sentence + one action · 4 pillar tiles · Composer.
+// Today — the decision hub, v4 Apple minimal (DESIGN §10.1, §11): ≤ 1300 px, ≤ 110 words, 5 blocks.
+//   1 header · 2 Pillar Dial + one reason line · 3 one coach sentence + one primary action · 4 summary rows · Composer.
 // Everything else is one tap away: reasons + check-in (dial sheet), directives + evidence + proposals
-// (Why sheet), full session / plan (Train tile), sleep log (Rest tile), weight (Progress icon or Composer).
+// (Why sheet), plan (Train row), meals (Eat row), weight (Progress icon or Composer). AI status lives in
+// Settings; Today shows a quiet "Connect AI" link only when no model is connected.
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   ChartLine, ChevronRight, ClipboardCheck, Clock, Inbox, Moon, Play, Settings, Smile, StretchHorizontal, Utensils, type LucideIcon,
 } from 'lucide-react'
-import type { WorkoutSession } from '../domain/types'
 import { isProgramDerived } from '../domain/programs'
 import { addDays, dateOf, dayName, fmtDate, toDateStr } from '../lib/util'
-import { AIStatusChip, Button, IconButton, PillarDial, Screen, Sheet } from '../components'
+import { Button, IconButton, PillarDial, Screen, Sheet } from '../components'
 import { useNow, useQuery, useToast } from '../hooks'
 import { getCheckIn, getMealsForDate, getPendingDecisions, getSessions, getSetting, lastNightSleep, moodLogsForDate, updateSession } from '../db/repositories'
 import { isStaleSession } from '../features/workout/stale'
 import { startedLabel } from '../features/workout/StaleSessionSheet'
-import { EXERCISE_BY_ID } from '../data'
-import { SESSION_TEMPLATES, VALENCE_WORDS, computeDailyPriority, estimateSessionMinutes, shortenedVersion } from '../engine'
+import { computeDailyPriority, shortenedVersion } from '../engine'
 import { getHealthBridge } from '../native'
 import { SetupPrompt, useSetupGate } from '../features/onboarding/SetupGate'
 import { buildCoachFacts, buildPillars } from '../features/coach/facts'
 import { syncProposals } from '../features/coach/apply'
 import { ensureProgramWeek } from '../features/workout/program'
-import { Composer } from '../features/composer'
+import { COMPOSER_CLEARANCE, Composer } from '../features/composer'
+import { useAIStatus } from '../features/ai/config'
 import { importHealthData } from '../features/settings/healthImport'
 import { KEYS, readHealthPermissions } from '../features/settings/keys'
 import { nextAction, type NextActionKind } from '../features/today/nextAction'
-import { ReadinessCenter, ReadinessSheet, ReasonChips } from '../features/today/readiness'
+import { ReadinessCenter, ReadinessSheet, ReasonLine } from '../features/today/readiness'
 import { FEATURES } from '../config/features'
-import { EatTile, MindTile, RestTile, TrainTile } from '../features/today/tiles'
+import { SummaryList, type SummaryRow } from '../features/today/tiles'
 import { BulletList, Rise, greeting } from '../features/today/ui'
 
 const PILLAR_ROUTE = { train: '/train', eat: '/eat', rest: '/sleep', mind: '/mind' } as const
@@ -44,11 +44,6 @@ const ACTION_ICON: Record<NextActionKind, LucideIcon> = {
   wind_down: Moon,
   log_meal: Utensils,
   mood_check_in: Smile,
-}
-
-function sessionMinutes(s: WorkoutSession): number {
-  const t = SESSION_TEMPLATES[s.templateKey]
-  return t && t.exercises.length === s.exercises.length ? t.estMin : estimateSessionMinutes(s.exercises)
 }
 
 function appendNote(notes: string, line: string): string {
@@ -71,6 +66,7 @@ export default function TodayScreen() {
   const pillars = useQuery(() => buildPillars(), [today, hour])
   const moodToday = useQuery(() => moodLogsForDate(today).reduce<{ ts: string; valence: number } | null>((a, m) => (!a || m.ts > a.ts ? m : a), null), [today])
 
+  const ai = useAIStatus()
   const [reasonsOpen, setReasonsOpen] = useState(false)
   const [whyOpen, setWhyOpen] = useState(false)
   // Training is locked until the intake is done (features/onboarding/setup.ts).
@@ -156,12 +152,6 @@ export default function TodayScreen() {
     }
   }
 
-  // Train tile: today's session, else the next planned one this week.
-  const nextSession = session
-    ?? [...facts.sessionsThisWeek].filter((s) => s.status === 'planned' && s.scheduledDate > today).sort((a, b) => a.scheduledDate.localeCompare(b.scheduledDate))[0]
-    ?? null
-  const firstExercise = nextSession?.exercises[0] ? EXERCISE_BY_ID[nextSession.exercises[0].exerciseId] ?? null : null
-
   const dial = PILLAR_ORDER.map((key) => ({
     key,
     label: PILLAR_LABEL[key],
@@ -169,6 +159,21 @@ export default function TodayScreen() {
     caption: pillars[key].caption,
     onClick: () => navigate(PILLAR_ROUTE[key]),
   }))
+
+  // Summary rows = the dial's legend: same caption as the arc. Rows with nothing to show are hidden
+  // when the pillar has a tab (Train, Eat, Mind); Rest has no tab, so its row stays and opens the log.
+  const shown: Record<(typeof PILLAR_ORDER)[number], boolean> = {
+    train: pillars.train.value > 0 || facts.sessionsThisWeek.length > 0,
+    eat: pillars.eat.value > 0,
+    rest: FEATURES.sleepTile,
+    mind: FEATURES.mind && pillars.mind.value > 0,
+  }
+  const rows: SummaryRow[] = PILLAR_ORDER.filter((key) => shown[key]).map((key) => ({
+    key,
+    value: pillars[key].caption,
+    onClick: key === 'rest' && !lastNight ? () => navigate('/sleep', { state: { log: true } }) : () => navigate(PILLAR_ROUTE[key]),
+  }))
+
   const goCheckIn = () => { setReasonsOpen(false); navigate('/checkin') }
   const go = (to: string) => { setWhyOpen(false); navigate(to) }
 
@@ -178,7 +183,12 @@ export default function TodayScreen() {
       large
       eyebrow={`${dayName(today, false)} · ${fmtDate(today)}`}
       title={greeting(hour)}
-      subtitle={<AIStatusChip onClick={() => navigate('/settings#ai')} />}
+      subtitle={!ai.connected && !ai.checking ? (
+        <button type="button" onClick={() => navigate('/settings#ai')} className="press -my-2.5 inline-flex min-h-11 items-center gap-0.5 text-[15px] text-muted">
+          Connect AI
+          <ChevronRight size={16} className="text-faint" aria-hidden />
+        </button>
+      ) : undefined}
       right={
         <>
           <IconButton icon={<ChartLine size={22} />} label="Progress" onClick={() => navigate('/progress')} />
@@ -186,19 +196,19 @@ export default function TodayScreen() {
         </>
       }
     >
-      <div className="flex flex-col gap-4 pb-24">
-        {/* 1. Unfinished intake: the way back into setup is always in reach. */}
+      <div className="flex flex-col gap-5" style={{ paddingBottom: COMPOSER_CLEARANCE + 16 }}>
+        {/* Unfinished intake: the way back into setup is always in reach. */}
         <SetupPrompt />
 
-        {/* 2. Hero: the Pillar Dial around the readiness decision. The tiles below are its legend. */}
-        <Rise i={0} className="flex flex-col gap-4">
+        {/* 1. Hero: the Pillar Dial around the readiness decision, one quiet reason line. */}
+        <Rise i={0} className="flex flex-col gap-2">
           <PillarDial
             hideLegend
-            size={248}
+            size={232}
             pillars={dial}
             center={<ReadinessCenter readiness={facts.readiness} onClick={() => setReasonsOpen(true)} />}
           />
-          <ReasonChips reasons={facts.readiness.reasons} onOpen={() => setReasonsOpen(true)} />
+          <ReasonLine reasons={facts.readiness.reasons} onOpen={() => setReasonsOpen(true)} />
         </Rise>
 
         {staleSession && staleSession.id !== session?.id && (
@@ -215,72 +225,32 @@ export default function TodayScreen() {
           </button>
         )}
 
-        {/* 3. One coach sentence, one action. */}
+        {/* 2. What to do now: one coach sentence, one primary action, one quiet "Why". */}
         <Rise i={1}>
-          <section className="relative rounded-[1.25rem] border border-line bg-surface p-4" aria-label="Coach">
-            {pending.length > 0 && (
-              <button
-                type="button"
-                onClick={() => navigate('/coach')}
-                aria-label={`${pending.length} coach proposal${pending.length === 1 ? '' : 's'} waiting. Open Coach`}
-                className="press absolute right-1.5 top-1.5 inline-flex h-11 min-w-11 items-center justify-center gap-1 rounded-full px-2 text-muted"
-              >
-                <Inbox size={16} aria-hidden />
-                <span className="num text-base text-app">{pending.length}</span>
-                <span className="absolute right-2 top-2.5 h-1.5 w-1.5 rounded-full bg-accent" aria-hidden />
-              </button>
-            )}
-            <p className={`voice m-0 text-xl leading-snug text-balance ${pending.length > 0 ? 'pr-12' : ''}`}>{priority.headline}</p>
-            <div className="mt-3.5 flex items-center gap-1">
+          <section className="rounded-[1.25rem] border border-line bg-surface p-4" aria-label="Next">
+            <p className="m-0 text-[17px] font-semibold leading-snug text-app text-balance">{priority.headline}</p>
+            <div className="mt-4">
               <Button full size="lg" icon={<ActionIcon size={20} />} onClick={doAction}>{action.kind === 'continue_workout' && session && staleSession?.id === session.id ? 'Wrap up your workout' : action.label}</Button>
-              <button
-                type="button"
-                onClick={() => setWhyOpen(true)}
-                aria-haspopup="dialog"
-                className="press inline-flex min-h-11 shrink-0 items-center gap-0.5 pl-3 pr-1 text-sm font-semibold text-muted"
-              >
-                Why
-                <ChevronRight size={16} aria-hidden />
-              </button>
             </div>
+            <button
+              type="button"
+              onClick={() => setWhyOpen(true)}
+              aria-haspopup="dialog"
+              aria-label={pending.length > 0 ? `Why this. ${pending.length} coach proposal${pending.length === 1 ? '' : 's'} waiting` : 'Why this'}
+              className="press -mb-2 mt-1 flex min-h-11 w-full items-center justify-center gap-1.5 text-[15px] text-muted"
+            >
+              Why this
+              {pending.length > 0 && (
+                <span className="num inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1.5 text-[12px] text-accent-fg" aria-hidden>{pending.length}</span>
+              )}
+            </button>
           </section>
         </Rise>
 
-        {/* 4. Pillar tiles. */}
-        <div className="grid grid-cols-2 gap-3">
-          <Rise i={2} className="grid min-w-0">
-            <TrainTile
-              name={nextSession?.name ?? null}
-              minutes={nextSession ? sessionMinutes(nextSession) : null}
-              when={nextSession && nextSession.scheduledDate !== today ? dayName(nextSession.scheduledDate, true) : null}
-              exercise={firstExercise}
-              onClick={() => { if (!session) return navigate('/train'); if (setup.require('workout')) navigate(`/train/session/${session.id}`) }}
-            />
-          </Rise>
-          <Rise i={3} className="grid min-w-0">
-            <EatTile
-              proteinG={facts.intakeToday.proteinG}
-              proteinTarget={facts.target.proteinG}
-              kcal={facts.intakeToday.kcal}
-              kcalTarget={facts.target.kcal}
-              onClick={() => navigate('/eat')}
-            />
-          </Rise>
-          {FEATURES.sleepTile && <Rise i={4} className="grid min-w-0">
-            <RestTile
-              lastMin={lastNight?.durationMin ?? null}
-              avgMin={facts.sleepAvg7Min}
-              onClick={() => (lastNight ? navigate('/sleep') : navigate('/sleep', { state: { log: true } }))}
-            />
-          </Rise>}
-          {FEATURES.mind && <Rise i={5} className="grid min-w-0">
-            <MindTile
-              valence={moodToday?.valence ?? null}
-              word={moodToday ? VALENCE_WORDS[moodToday.valence] ?? 'Logged' : null}
-              onClick={() => navigate(moodToday ? '/mind' : '/mind?checkin=1')}
-            />
-          </Rise>}
-        </div>
+        {/* 3. Summary: one row per pillar, each opens its screen. */}
+        <Rise i={2}>
+          <SummaryList rows={rows} />
+        </Rise>
       </div>
 
       <ReadinessSheet

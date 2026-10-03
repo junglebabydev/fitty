@@ -16,13 +16,13 @@ import { isSpeechAvailable, startListening, type ListenHandle } from '../native/
 import { useAIStatus } from '../features/ai/config'
 import { cx, dateOf, fmtDate, todayStr } from '../lib/util'
 import {
-  MEAL_TYPE_LABELS, applyCorrections, clearDraft, diffItems, draftTotals, fmtG, getDraftSnapshot, loadDraft, normalizeDraft,
+  applyCorrections, clearDraft, diffItems, draftTotals, fmtG, getDraftSnapshot, loadDraft, normalizeDraft,
   saveDraft, scaleItem, setItemMacros, subscribeDraft, suggestSavedName, timeValue, toNewItems, updateDraft, withTime,
-  type DraftItem, type MealDraft, type MealType,
+  type DraftItem, type MealDraft,
 } from '../features/meal/draft'
 import { cancelRecognition, isRecognitionInFlight, retryRecognition, startMealCapture } from '../features/meal/captureMeal'
 import { refineItemsWithAI } from '../features/meal/refine'
-import { ConfidencePill, MealTypeSelect, PortionChips } from '../features/meal/ui'
+import { ConfidencePill, PortionControl } from '../features/meal/ui'
 
 const rise = (i: number): { className: string; style: CSSProperties } => ({ className: 'anim-rise', style: { '--i': i } as CSSProperties })
 
@@ -136,17 +136,16 @@ function ItemRow({ item, open, onToggle, onChange, onRemove }: {
           <p className="text-[16px] font-medium leading-snug line-clamp-2">{label}</p>
           {item.confidence != null
             ? <div className="mt-1"><ConfidencePill confidence={item.confidence} reason={item.uncertaintyReason} /></div>
-            : <p className="tnum text-[13px] text-muted mt-0.5 truncate">{item.servingDescription || fmtG(item.quantityG)}</p>}
+            : (item.servingDescription || item.quantityG > 0) && <p className="tnum text-[13px] text-muted mt-0.5 truncate">{item.servingDescription || fmtG(item.quantityG)}</p>}
         </div>
-        <div className="shrink-0 text-right leading-none" aria-live="polite">
+        <div className="shrink-0 text-right leading-tight" aria-live="polite">
           <span className="block whitespace-nowrap">
-            <span className="num text-[24px]">{approx}{fmtInt(item.kcal)}</span>
+            <span className="num text-[20px]">{approx}{fmtInt(item.kcal)}</span>
             <span className="text-[12px] text-muted ml-1">kcal</span>
           </span>
-          <span className="block whitespace-nowrap text-protein mt-1">
-            <span className="num text-[24px]">{fmtInt(item.proteinG)}</span>
-            <span className="text-[12px] font-semibold ml-1">g protein</span>
-          </span>
+          {Math.round(item.proteinG) > 0 && (
+            <span className="block whitespace-nowrap text-[13px] font-medium text-protein">{fmtInt(item.proteinG)} g protein</span>
+          )}
         </div>
         <button
           type="button"
@@ -159,7 +158,10 @@ function ItemRow({ item, open, onToggle, onChange, onRemove }: {
         </button>
       </div>
 
-      <PortionChips name={label} baseG={item.baseQuantityG} grams={item.quantityG} onChange={(g) => onChange(scaleItem(item, g))} />
+      {/* Quick-add rows have no weight, so there is nothing to scale. */}
+      {item.baseQuantityG > 0 && (
+        <PortionControl name={label} baseG={item.baseQuantityG} grams={item.quantityG} onChange={(g) => onChange(scaleItem(item, g ?? 0))} />
+      )}
 
       {open && (
         <div className="flex flex-col gap-3 border-t border-line pt-3">
@@ -167,8 +169,7 @@ function ItemRow({ item, open, onToggle, onChange, onRemove }: {
             <TextInput id={`name-${item.key}`} value={item.foodName} onChange={(e) => onChange({ ...item, foodName: e.target.value })} placeholder="Food name" />
           </Field>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Amount"><NumberInput value={item.quantityG} unit="g" min={0} step={10} onChange={(n) => onChange(scaleItem(item, n ?? 0))} /></Field>
-            <Field label="Serving" htmlFor={`serv-${item.key}`}>
+            <Field label="Serving" className="col-span-2" htmlFor={`serv-${item.key}`}>
               <TextInput id={`serv-${item.key}`} value={item.servingDescription} onChange={(e) => onChange({ ...item, servingDescription: e.target.value })} placeholder="1 plate" />
             </Field>
             <Field label="Calories"><NumberInput value={item.kcal} unit="kcal" min={0} step={1} onChange={(n) => macroPatch({ kcal: n ?? 0 })} /></Field>
@@ -211,7 +212,6 @@ export default function MealReviewScreen() {
   const [refining, setRefining] = useState(false)
   const [lastChanges, setLastChanges] = useState<ChangeSummary | null>(null)
   const [saveAsFav, setSaveAsFav] = useState(false)
-  const [typeTouched, setTypeTouched] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const handleRef = useRef<ListenHandle | null>(null)
 
@@ -302,15 +302,11 @@ export default function MealReviewScreen() {
     if (openKey === key) setOpenKey(null)
   }
 
-  /** The meal type follows the time of day until the user picks one. */
+  /** The Eat sections come from the time, so the stored meal type follows it. */
   const setTime = (hhmm: string) => patch((d) => {
     const ts = withTime(d.ts, hhmm)
-    return { ...d, ts, mealType: typeTouched || editing ? d.mealType : inferMealType(ts) }
+    return { ...d, ts, mealType: inferMealType(ts) }
   })
-  const setMealType = (v: MealType) => {
-    setTypeTouched(true)
-    patch((d) => ({ ...d, mealType: v }))
-  }
 
   const goSearch = () => navigate('/eat/search', { state: { returnTo: '/eat/review' } })
 
@@ -461,7 +457,7 @@ export default function MealReviewScreen() {
           <div {...rise(0)}>
             <PhotoHero src={draft.photoDataUrl}>
               <figcaption className={HERO_CAPTION}>
-                {estimated ? <><AIBadge />Estimates — edit anything</> : notConnected ? 'Not read by AI' : 'Your photo'}
+                {estimated ? <><AIBadge />Estimates are editable</> : notConnected ? 'Not read by AI' : 'Your photo'}
               </figcaption>
             </PhotoHero>
           </div>
@@ -474,7 +470,7 @@ export default function MealReviewScreen() {
         ) : null}
 
         {!draft.photoDataUrl && estimated && (
-          <div className="flex items-center gap-2 px-1 text-[13px] font-medium text-muted"><AIBadge />Estimates — edit anything</div>
+          <div className="flex items-center gap-2 px-1 text-[13px] font-medium text-muted"><AIBadge />Estimates are editable</div>
         )}
 
         {items.map((item, i) => (
@@ -495,14 +491,7 @@ export default function MealReviewScreen() {
 
         {/* the not-connected banner already carries "Add item" while the plate is empty */}
         {!(notConnected && items.length === 0) && (
-          <button
-            type="button"
-            onClick={goSearch}
-            className="press inline-flex items-center justify-center gap-2 h-[52px] rounded-[1.25rem] border border-dashed border-line-strong text-[16px] font-medium"
-          >
-            <Plus size={18} aria-hidden />
-            Add item
-          </button>
+          <Button variant="ghost" icon={<Plus size={18} />} onClick={goSearch} className="self-start -ml-2">Add item</Button>
         )}
 
         {canDescribe && (
@@ -587,20 +576,15 @@ export default function MealReviewScreen() {
           >
             <span className="eyebrow text-muted">Details</span>
             <span className="flex items-center gap-2 tnum text-[14px] text-muted">
-              {timeValue(draft.ts)} · {MEAL_TYPE_LABELS[draft.mealType]}
+              {timeValue(draft.ts)}
               <ChevronDown size={16} className={cx('transition-transform', detailsOpen && 'rotate-180')} aria-hidden />
             </span>
           </button>
           {detailsOpen && (
             <div className="flex flex-col gap-3 border-t border-line p-4">
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Time" htmlFor="meal-time">
-                  <TextInput id="meal-time" type="time" value={timeValue(draft.ts)} onChange={(e) => setTime(e.target.value)} />
-                </Field>
-                <Field label="Type" htmlFor="meal-type">
-                  <MealTypeSelect id="meal-type" value={draft.mealType} onChange={setMealType} />
-                </Field>
-              </div>
+              <Field label="Time" htmlFor="meal-time">
+                <TextInput id="meal-time" type="time" value={timeValue(draft.ts)} onChange={(e) => setTime(e.target.value)} />
+              </Field>
               <Field label="Notes" htmlFor="meal-notes">
                 <TextInput id="meal-notes" multiline rows={2} value={draft.notes} onChange={(e) => patch((d) => ({ ...d, notes: e.target.value }))} placeholder="Optional" />
               </Field>
@@ -631,15 +615,17 @@ export default function MealReviewScreen() {
         style={{ bottom: `calc(${TAB_BAR_HEIGHT + 4}px + env(safe-area-inset-bottom, 0px))` }}
       >
         <div className="pointer-events-auto glass shadow-float border border-line rounded-[1.5rem] flex items-center gap-3 py-2.5 pr-2.5 pl-4">
-          <div className="min-w-0 flex-1 flex items-baseline gap-x-3 flex-wrap leading-none" aria-live="polite" aria-label={`Meal total ${estimated ? 'about ' : ''}${fmtInt(totals.kcal)} kcal, ${fmtG(totals.proteinG)} protein`}>
+          <div className="min-w-0 flex-1 flex items-baseline gap-x-3 flex-wrap leading-none" aria-live="polite" aria-label={`Meal total ${estimated ? 'about ' : ''}${fmtInt(totals.kcal)} kcal${Math.round(totals.proteinG) > 0 ? `, ${fmtG(totals.proteinG)} protein` : ''}`}>
             <span className="whitespace-nowrap">
               <span className="num text-[30px]">{estimated ? '≈' : ''}{fmtInt(totals.kcal)}</span>
               <span className="text-[12px] text-muted ml-1">kcal</span>
             </span>
-            <span className="whitespace-nowrap text-protein">
-              <span className="num text-[30px]">{fmtInt(totals.proteinG)}</span>
-              <span className="text-[12px] font-semibold ml-1">g protein</span>
-            </span>
+            {Math.round(totals.proteinG) > 0 && (
+              <span className="whitespace-nowrap text-protein">
+                <span className="num text-[30px]">{fmtInt(totals.proteinG)}</span>
+                <span className="text-[12px] font-semibold ml-1">g protein</span>
+              </span>
+            )}
           </div>
           <Button size="lg" onClick={onConfirm} disabled={items.length === 0}>
             {editing ? 'Save' : 'Log'}

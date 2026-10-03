@@ -1,24 +1,25 @@
-// Readiness hero pieces for Today: the dial centre, at most two reason chips and the "why" sheet
+// Readiness hero pieces for Today: the dial centre, one reason line and the "why" sheet
 // (full reasons, symptom-gate advice, link to the check-in). Display only.
-import { Activity, ClipboardCheck, HeartPulse, Info, Moon, type LucideIcon } from 'lucide-react'
+import { Activity, ChevronRight, ClipboardCheck, HeartPulse, Info, Moon, type LucideIcon } from 'lucide-react'
 import type { DailyCheckIn } from '../../domain/types'
 import type { GateResult, ReadinessResult } from '../../engine'
 import { Button, Sheet } from '../../components'
 import { cx } from '../../lib/util'
 import { BulletList, GATE_UI, READINESS_UI } from './ui'
 
-/** Centre of the PillarDial: status icon + READY / MODIFY / RECOVER. Tapping opens the reasons. */
+/** Centre of the PillarDial: status icon + Ready / Modify / Recover. Tapping opens the reasons. */
 export function ReadinessCenter({ readiness, onClick }: { readiness: ReadinessResult; onClick: () => void }) {
   const ui = READINESS_UI[readiness.state]
   return (
     <button
       type="button"
       onClick={onClick}
+      aria-haspopup="dialog"
       aria-label={`Readiness: ${ui.word}. ${ui.sentence} Show reasons`}
-      className="press flex flex-col items-center justify-center gap-1 rounded-full min-h-24 min-w-24"
+      className="press flex min-h-11 min-w-11 flex-col items-center justify-center gap-0.5 rounded-full"
     >
-      <ui.Icon size={26} className={ui.text} aria-hidden />
-      <span className="display text-[1.75rem] text-app">{ui.word}</span>
+      <ui.Icon size={22} className={ui.text} aria-hidden />
+      <span className="display text-[22px] leading-tight text-app">{ui.word}</span>
       <span className="eyebrow text-muted">Readiness</span>
     </button>
   )
@@ -32,40 +33,23 @@ function reasonIcon(text: string): LucideIcon {
   return Info
 }
 
-// 36px pill with an invisible 44px hit area, so chips stay light but easy to hit.
-const CHIP =
-  'press relative inline-flex items-center gap-1.5 h-9 max-w-full px-3 rounded-full border border-line bg-surface text-sm font-medium ' +
-  'after:absolute after:inset-x-0 after:-inset-y-1 after:content-[""]'
-
-/** At most two chips (DESIGN §10.1). Everything else — all reasons, the gate, the check-in — is one tap away in the sheet. */
-export function ReasonChips({ reasons, onOpen }: { reasons: string[]; onOpen: () => void }) {
-  const shown = reasons.slice(0, 2)
-  const more = reasons.length - shown.length
+/** One quiet line under the dial: the main reason (or "Nothing holding you back"). All reasons, the gate and the check-in live in the sheet. */
+export function ReasonLine({ reasons, onOpen }: { reasons: string[]; onOpen: () => void }) {
+  const text = reasons[0] ?? 'Nothing holding you back'
+  const more = Math.max(0, reasons.length - 1)
+  const Icon = reasons[0] ? reasonIcon(reasons[0]) : Info
   return (
-    <div className="flex flex-wrap justify-center gap-x-2 gap-y-3">
-      {shown.map((r, i) => {
-        const Icon = reasonIcon(r)
-        return (
-          <button
-            key={i}
-            type="button"
-            onClick={onOpen}
-            className={CHIP}
-            aria-haspopup="dialog"
-            aria-label={i === shown.length - 1 && more > 0 ? `${r}. ${more} more — show all` : undefined}
-          >
-            <Icon size={15} className="shrink-0 text-muted" aria-hidden />
-            <span className="truncate">{r}</span>
-          </button>
-        )
-      })}
-      {shown.length === 0 && (
-        <button type="button" onClick={onOpen} className={CHIP} aria-haspopup="dialog">
-          <Info size={15} className="shrink-0 text-muted" aria-hidden />
-          <span>Nothing holding you back</span>
-        </button>
-      )}
-    </div>
+    <button
+      type="button"
+      onClick={onOpen}
+      aria-haspopup="dialog"
+      aria-label={`${text}${more > 0 ? `. ${more} more` : ''}. Show all reasons`}
+      className="press mx-auto flex min-h-11 max-w-full items-center gap-1.5 px-2 text-[15px] text-muted"
+    >
+      <Icon size={16} className="shrink-0" aria-hidden />
+      <span className="truncate">{text}</span>
+      <ChevronRight size={16} className="shrink-0 text-faint" aria-hidden />
+    </button>
   )
 }
 

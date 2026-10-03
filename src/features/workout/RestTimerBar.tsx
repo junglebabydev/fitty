@@ -9,7 +9,7 @@ export interface RestTimerBarProps {
   aboveTabs?: boolean
 }
 
-const ADJUST = 'press inline-flex items-center justify-center gap-0.5 h-11 min-w-[52px] px-2 rounded-xl bg-surface-2 text-app text-sm font-semibold tnum'
+const ADJUST = 'press inline-flex items-center justify-center gap-0.5 h-11 min-w-[44px] px-1.5 text-muted text-[15px] font-medium tnum'
 
 /** Sticky rest countdown on the bottom edge while a rest is running; hidden when idle. Time comes from timestamps. */
 export function RestTimerBar({ timer, aboveTabs = true }: RestTimerBarProps) {

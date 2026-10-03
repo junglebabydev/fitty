@@ -63,25 +63,19 @@ export function MoodSlider({ value, onChange }: MoodSliderProps) {
   const layer = (i: number): CSSProperties => ({
     borderRadius: radius,
     transform: `rotate(${(i - 1) * spread}deg) scaleX(${squeeze})`,
-    background:
-      'radial-gradient(circle at 40% 32%, color-mix(in oklab, var(--mood) 80%, var(--c-fg)) 0%, var(--mood) 45%, color-mix(in oklab, var(--mood) 55%, transparent) 100%)',
-    opacity: 0.62,
+    background: 'var(--mood)',
+    opacity: 0.4,
     transition: 'transform 600ms var(--ease-out-soft), border-radius 600ms var(--ease-out-soft), background 600ms linear',
   })
 
   return (
     <div className="flex w-full flex-col items-center" style={root}>
       <div className="flex h-52 w-full items-center justify-center" aria-hidden>
-        <div className="anim-drift">
+        <div>
           <div
             className="relative h-36 w-36"
             style={{ transform: `scale(${scale})`, transition: 'transform 600ms var(--ease-out-soft)' }}
           >
-            {/* Glow as a gradient, not a filter: it fades to nothing and never shows a clipped box. */}
-            <span
-              className="absolute -inset-[18%] rounded-full"
-              style={{ background: 'radial-gradient(closest-side, color-mix(in oklab, var(--mood) 50%, transparent), transparent)' }}
-            />
             {[0, 1, 2].map((i) => (
               <span key={i} className="absolute inset-0" style={layer(i)} />
             ))}

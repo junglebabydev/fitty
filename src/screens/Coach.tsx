@@ -1,16 +1,15 @@
-// Coach screen (DESIGN §10, v3): a conversation, not a dashboard. The root holds one brief (a single `voice` sentence),
-// one compact proposals card and the chat. Directives, evidence, the weekly rings and the decision history live in the
+// Coach screen (DESIGN §10, §11 v4): a conversation, not a dashboard. The root holds one brief row (readiness word +
+// one line), one quiet proposals row and the chat as plain bubbles. Directives, evidence, the weekly rings and the decision history live in the
 // Details sheet; proposals open a decision sheet (Why · Evidence · Impact · Accept / Keep current).
 // The coach never mutates data silently - every plan change goes through Accept.
 // Privacy: only chat turns, CoachFacts, the onboarding baseline and (when `ai.shareReports` is on) report summaries reach
 // the provider. Journal text and mood notes are never read here.
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
-import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
-import { Check, ChevronRight, CircleAlert, Eraser, Lightbulb, RotateCcw, TriangleAlert, Undo2, X } from 'lucide-react'
+import { Link, useLocation, useSearchParams } from 'react-router-dom'
+import { Check, ChevronDown, ChevronRight, CircleAlert, Eraser, Lightbulb, RotateCcw, TriangleAlert, Undo2, X } from 'lucide-react'
 import type { CoachDecision, CoachMessage, Evidence } from '../domain/types'
 import {
-  AIBadge, AIStatusChip, Button, Card, Chip, CoachQuote, IconButton, Illustration, PILLARS, ReadinessBadge, Ring, Screen, Sheet,
-  Skeleton, StatusPill,
+  AIBadge, Button, Chip, IconButton, PILLARS, ReadinessBadge, Ring, Screen, Sheet, Skeleton, StatusPill,
   type Tone,
 } from '../components'
 import { useNow, useOnline, useQuery, useToast } from '../hooks'
@@ -271,43 +270,72 @@ function UserBubble({ m }: { m: CoachMessage }) {
   return (
     <div className="flex flex-col items-end">
       <span className="sr-only">You</span>
-      <div className="max-w-[85%] whitespace-pre-wrap break-words rounded-[1.25rem] rounded-br-md border border-line bg-surface-2 px-3.5 py-2.5 text-base leading-snug">
+      <div className="max-w-[80%] whitespace-pre-wrap break-words rounded-[1.25rem] rounded-br-md bg-accent px-3.5 py-2 text-base leading-snug text-accent-fg">
         {m.content}
       </div>
     </div>
   )
 }
 
-/** Coach reply in the serif voice: at most three evidence chips, long replies clamp, and a tag says who wrote it. */
+/** Evidence behind a reply: a small "Based on" toggle that opens quiet label · value lines. Closed by default. */
+function QuietEvidence({ evidence }: { evidence: Evidence[] }) {
+  const [open, setOpen] = useState(false)
+  if (!evidence.length) return null
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="press -my-2 -ml-2 inline-flex h-11 items-center gap-1 rounded-xl px-2 text-xs font-medium text-muted"
+      >
+        Based on {evidence.length} {evidence.length === 1 ? 'fact' : 'facts'}
+        <ChevronDown size={14} className={cx('transition-transform duration-150', open && 'rotate-180')} aria-hidden />
+      </button>
+      {open && (
+        <dl className="m-0 mt-1 space-y-0.5 text-xs leading-snug" aria-label="Evidence">
+          {evidence.map((e, i) => (
+            <div key={`${e.label}-${i}`} className="flex gap-1.5">
+              <dt className="shrink-0 text-muted">{e.label}</dt>
+              <dd className="m-0 min-w-0 break-words text-app tnum">{e.value}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+    </div>
+  )
+}
+
+/** Coach reply as a plain surface bubble: long replies clamp, evidence folds away, a tiny line says who wrote it. */
 function CoachReply({ m, onSupport }: { m: CoachMessage; onSupport: () => void }) {
   const [open, setOpen] = useState(false)
   const { source, evidence } = readSource(m.evidence)
   const safety = readSafety(m.evidence) !== null
   const long = isLongReply(m.content)
   return (
-    <div className="max-w-[94%]">
-      <CoachQuote
-        compact
-        evidence={evidence.length > 0 && (!long || open) ? evidence : undefined}
-        actions={safety ? (
-          <Button variant="secondary" onClick={onSupport}>Open support</Button>
-        ) : long ? (
+    <div className="flex max-w-[88%] flex-col items-start gap-1">
+      <span className="sr-only">Coach</span>
+      <div className="rounded-[1.25rem] rounded-bl-md bg-surface px-3.5 py-2 text-base leading-snug text-app">
+        <span className={cx('whitespace-pre-wrap break-words', long && !open ? 'line-clamp-4' : 'block')}>{m.content}</span>
+        {long && !safety && (
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
             aria-expanded={open}
-            className="press -my-2 -ml-2 inline-flex h-11 items-center rounded-xl px-2 text-sm font-semibold text-app"
+            className="press -mb-2 -ml-2 inline-flex h-11 items-center rounded-xl px-2 text-sm font-semibold text-app"
           >
             {open ? 'Show less' : 'Read more'}
           </button>
-        ) : undefined}
-      >
-        <span className={cx('whitespace-pre-wrap break-words', long && !open ? 'line-clamp-3' : 'block')}>{m.content}</span>
-      </CoachQuote>
-      <div className="mt-1.5 flex items-center gap-2 pl-4 text-[11px] text-faint tnum">
-        {source === 'ai' && <AIBadge />}
-        {source === 'local' && <span className="eyebrow text-[0.625rem] text-muted">Local answer</span>}
-        <span>{fmtTime(m.ts)}</span>
+        )}
+      </div>
+      {safety && <Button variant="secondary" onClick={onSupport} className="mt-1">Open support</Button>}
+      <div className="flex flex-wrap items-center gap-x-2 pl-1">
+        <span className="flex items-center gap-2 text-[11px] text-faint tnum">
+          {source === 'ai' && <AIBadge />}
+          {source === 'local' && <span>From your data</span>}
+          <span>{fmtTime(m.ts)}</span>
+        </span>
+        <QuietEvidence evidence={evidence} />
       </div>
     </div>
   )
@@ -315,11 +343,10 @@ function CoachReply({ m, onSupport }: { m: CoachMessage; onSupport: () => void }
 
 function TypingSkeleton() {
   return (
-    <div className="max-w-[94%] border-l border-accent/60 pl-3.5" role="status" aria-label="Coach is thinking">
-      <div className="mt-1 space-y-2">
-        <Skeleton className="h-4 w-56" />
-        <Skeleton className="h-4 w-64" />
-        <Skeleton className="h-4 w-36" />
+    <div className="w-fit rounded-[1.25rem] rounded-bl-md bg-surface px-3.5 py-3" role="status" aria-label="Coach is thinking">
+      <div className="space-y-2">
+        <Skeleton className="h-3.5 w-48" />
+        <Skeleton className="h-3.5 w-32" />
       </div>
     </div>
   )
@@ -385,7 +412,6 @@ function DetailsSheet({ open, onClose, facts, priority, extras, mindPct, history
 
 export default function CoachScreen() {
   const toast = useToast()
-  const navigate = useNavigate()
   const online = useOnline()
   const ai = useAIStatus()
   const now = useNow(60_000)
@@ -588,38 +614,30 @@ export default function CoachScreen() {
   const visible = showEarlier ? messages : messages.slice(-RECENT_MESSAGES)
   const earlier = messages.length - visible.length
 
+  const empty = messages.length === 0 && !thinking
+
   return (
-    <Screen pillar="coach" large title="Coach" right={<AIStatusChip onClick={() => navigate('/settings#ai')} />}>
+    <Screen pillar="coach" large title="Coach">
       {/* Bottom padding keeps the last chat line clear of the fixed Composer. */}
-      <div className="flex flex-col gap-3" style={{ paddingBottom: COMPOSER_CLEARANCE }}>
+      <div className="flex flex-col gap-2" style={{ paddingBottom: COMPOSER_CLEARANCE }}>
         {!facts || !priority ? (
-          <Card className="anim-rise" {...rise(0)}>
-            <p className="voice m-0 text-xl text-pretty">I need your profile and targets before I can coach from your data.</p>
+          <div className="anim-rise rounded-[1.25rem] bg-surface p-4" {...rise(0)}>
+            <p className="m-0 text-[17px] font-semibold leading-snug text-pretty">I need your profile and targets before I can coach from your data.</p>
             <Link to="/onboarding" className="mt-4 block"><Button variant="primary" full>Finish setup</Button></Link>
-          </Card>
-        ) : (
-          <div className="anim-rise" {...rise(0)}>
-            <Card>
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <span className="eyebrow text-muted">Today</span>
-                <ReadinessBadge state={facts.readiness.state} compact />
-              </div>
-              <CoachQuote
-                actions={
-                  <button
-                    type="button"
-                    onClick={() => setDetailsOpen(true)}
-                    aria-haspopup="dialog"
-                    className="press -my-2 -ml-2 inline-flex h-11 items-center gap-0.5 rounded-xl px-2 text-sm font-semibold text-app"
-                  >
-                    Details <ChevronRight size={16} aria-hidden />
-                  </button>
-                }
-              >
-                {firstSentence(priority.headline)}
-              </CoachQuote>
-            </Card>
           </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setDetailsOpen(true)}
+            aria-haspopup="dialog"
+            aria-label={`Today's brief: ${firstSentence(priority.headline)} Details`}
+            {...rise(0)}
+            className="anim-rise press flex min-h-14 w-full items-center gap-3 rounded-[1.25rem] bg-surface px-4 py-3 text-left active:bg-surface-2"
+          >
+            <ReadinessBadge state={facts.readiness.state} compact className="shrink-0" />
+            <span className="line-clamp-2 min-w-0 flex-1 text-[15px] leading-snug text-app">{firstSentence(priority.headline)}</span>
+            <ChevronRight size={18} className="shrink-0 text-faint" aria-hidden />
+          </button>
         )}
 
         {proposals && (
@@ -629,25 +647,23 @@ export default function CoachScreen() {
             aria-haspopup="dialog"
             aria-label={`${proposals.count}: ${proposals.title}. Review`}
             {...rise(1)}
-            className="anim-rise press flex min-h-[64px] w-full items-center gap-3 rounded-[1.25rem] border border-pillar-line bg-surface px-4 py-3 text-left active:bg-surface-2"
+            className="anim-rise press flex min-h-11 w-full items-center gap-2 rounded-xl px-1 text-left text-[15px]"
           >
-            <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-pillar-soft text-pillar" aria-hidden><Lightbulb size={20} /></span>
-            <span className="min-w-0 flex-1">
-              <span className="eyebrow block text-pillar">{proposals.count}</span>
-              <span className="mt-0.5 block truncate text-base font-semibold leading-snug">{proposals.title}</span>
-            </span>
-            <ChevronRight size={18} className="shrink-0 text-muted" aria-hidden />
+            <Lightbulb size={16} className="shrink-0 text-muted" aria-hidden />
+            <span className="shrink-0 font-semibold">{proposals.count}</span>
+            <span className="min-w-0 flex-1 truncate text-muted">{proposals.title}</span>
+            <ChevronRight size={16} className="shrink-0 text-faint" aria-hidden />
           </button>
         )}
 
-        <section aria-label="Conversation" {...rise(2)} className="anim-rise mt-3">
+        <section aria-label="Conversation" {...rise(2)} className="anim-rise mt-2">
           {messages.length > 0 && (
-            <div className="mb-2 flex min-h-11 items-center justify-between gap-3">
+            <div className="mb-1 flex min-h-11 items-center justify-between gap-3">
               {earlier > 0 ? (
-                <button type="button" onClick={() => setShowEarlier(true)} className="press -ml-2 inline-flex h-11 items-center rounded-xl px-2 text-sm font-semibold text-muted">
+                <button type="button" onClick={() => setShowEarlier(true)} className="press -ml-2 inline-flex h-11 items-center rounded-xl px-2 text-sm font-medium text-muted">
                   Earlier messages · {earlier}
                 </button>
-              ) : <span className="eyebrow text-muted">Conversation</span>}
+              ) : <span aria-hidden />}
               {confirmClear ? (
                 <span className="flex shrink-0 items-center gap-1.5">
                   <Button variant="ghost" onClick={() => setConfirmClear(false)} className="text-app">Cancel</Button>
@@ -659,13 +675,8 @@ export default function CoachScreen() {
             </div>
           )}
 
-          <div className="flex flex-col gap-5" aria-live="polite">
-            {messages.length === 0 && !thinking && (
-              <div className="flex flex-col items-center gap-2 py-3 text-center text-muted">
-                <Illustration name="chat" size={96} />
-                <p className="m-0 text-[15px]">Ask about training, food, sleep or symptoms.</p>
-              </div>
-            )}
+          <div className="flex flex-col gap-3" aria-live="polite">
+            {empty && <p className="m-0 py-2 text-[15px] text-muted">Ask about training, food, sleep or symptoms.</p>}
             {visible.map((m) => (m.role === 'user' ? <UserBubble key={m.id} m={m} /> : <CoachReply key={m.id} m={m} onSupport={() => setSupportOpen(true)} />))}
             {thinking && <TypingSkeleton />}
             {notice && (
@@ -677,10 +688,10 @@ export default function CoachScreen() {
             <div ref={endRef} className="scroll-mb-44" aria-hidden />
           </div>
 
-          {facts && (
-            <div className="no-scrollbar -mx-4 mt-4 flex gap-2 overflow-x-auto px-4" role="group" aria-label="Suggested questions">
+          {facts && empty && (
+            <div className="mt-1 flex flex-wrap gap-2" role="group" aria-label="Suggested questions">
               {SUGGESTIONS.map((s) => (
-                <Chip key={s} onClick={() => void send(s)} disabled={thinking} className="h-11 shrink-0">{s}</Chip>
+                <Chip key={s} onClick={() => void send(s)} disabled={thinking}>{s}</Chip>
               ))}
             </div>
           )}

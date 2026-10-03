@@ -29,10 +29,10 @@
   --c-shadow: rgba(16, 18, 24, 0.10);
 
   /* Pillars (light) */
-  --c-train: #c2410c;
-  --c-eat: #4d7c0f;
-  --c-rest: #2f55d4;
-  --c-mind: #7c3aed;
+  --c-train: #c93400;
+  --c-eat: #248a3d;
+  --c-rest: #3634a3;
+  --c-mind: #8944ab;
   --c-coach: #14161a;
 
   /* Macros (light) */
@@ -41,48 +41,49 @@
   --c-fat: #a16207;
 
   /* Status (light) — always paired with icon + label, never colour alone */
-  --c-ok: #047857;
-  --c-warn: #b45309;
-  --c-stop: #be123c;
+  --c-ok: #248a3d;
+  --c-warn: #b25000;
+  --c-stop: #d70015;
 
   /* Active pillar for the current screen; Screen sets data-pillar. */
   --pillar: var(--c-fg);
 
-  --grain-opacity: 0.015;
+  --grain-opacity: 0;
 }
 
 :root[data-theme="dark"] {
   color-scheme: dark;
 
-  --c-bg: #0a0b0d;
-  --c-fg: #f3efe7;              /* bone */
-  --c-surface: #131519;
-  --c-surface-2: #1c1f25;
-  --c-surface-3: #272b33;
-  --c-line: rgba(243, 239, 231, 0.09);
-  --c-line-strong: rgba(243, 239, 231, 0.18);
-  --c-muted: #a4a9b2;
-  --c-faint: #7d838e;
-  --c-accent: #f3efe7;
-  --c-accent-fg: #0a0b0d;
-  --c-accent-soft: rgba(243, 239, 231, 0.10);
-  --c-shadow: rgba(0, 0, 0, 0.55);
+  /* iOS system dark: true black, elevated greys, white type */
+  --c-bg: #000000;
+  --c-fg: #ffffff;
+  --c-surface: #1c1c1e;
+  --c-surface-2: #2c2c2e;
+  --c-surface-3: #3a3a3c;
+  --c-line: rgba(255, 255, 255, 0.07);
+  --c-line-strong: rgba(255, 255, 255, 0.15);
+  --c-muted: #aeaeb2;
+  --c-faint: #8e8e93;
+  --c-accent: #ffffff;
+  --c-accent-fg: #000000;
+  --c-accent-soft: rgba(255, 255, 255, 0.10);
+  --c-shadow: rgba(0, 0, 0, 0.6);
 
-  --c-train: #ff7a45;           /* ember */
-  --c-eat: #b5e550;             /* lime */
-  --c-rest: #86a8ff;            /* moon blue */
-  --c-mind: #c4a8ff;            /* lavender */
-  --c-coach: #f3efe7;
+  --c-train: #ff9f0a;           /* system orange */
+  --c-eat: #30d158;             /* system green */
+  --c-rest: #7d7aff;            /* indigo (accessible) */
+  --c-mind: #bf5af2;            /* system purple */
+  --c-coach: #ffffff;
 
-  --c-protein: #6cb8ff;
-  --c-carbs: #ffb072;
-  --c-fat: #f2d66b;
+  --c-protein: #64d2ff;
+  --c-carbs: #ff9f0a;
+  --c-fat: #ffd60a;
 
-  --c-ok: #3ddc97;
-  --c-warn: #ffc53d;
-  --c-stop: #ff6b81;
+  --c-ok: #30d158;
+  --c-warn: #ffd60a;
+  --c-stop: #ff453a;
 
-  --grain-opacity: 0.05;
+  --grain-opacity: 0;
 }
 
 [data-pillar="train"] { --pillar: var(--c-train); }
@@ -93,17 +94,20 @@
 [data-pillar="today"], [data-pillar="neutral"] { --pillar: var(--c-fg); }
 
 @theme {
-  --font-sans: "Barlow", -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
-  --font-display: "Barlow Condensed", "Barlow", -apple-system, "Helvetica Neue", Arial, sans-serif;
-  --font-serif: "Lora Variable", "Lora", "Iowan Old Style", Georgia, serif;
+  /* San Francisco on Apple devices; the platform UI font elsewhere. */
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  /* SF Pro Rounded for numbers, as in Apple Fitness and Health. */
+  --font-rounded: ui-rounded, "SF Pro Rounded", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --font-serif: var(--font-sans);
 
   --radius-card: 1.25rem;
   /* Frame behind exercise animations: the GIFs are drawn on white, so it stays white in both themes. */
   --color-media: #ffffff;
   /* Focus Mode (BFT-style): ink on the white media area, and a dark data panel, the same in both themes. */
   --color-media-fg: #1c1c1e;
-  --color-panel: #0a0b0d;
-  --color-panel-fg: #f3efe7;
+  --color-panel: #000000;
+  --color-panel-fg: #ffffff;
   --ease-out-soft: cubic-bezier(0.2, 0.8, 0.2, 1);
   --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
 }
@@ -122,7 +126,7 @@
 
   --color-pillar: var(--pillar);
   --color-pillar-soft: color-mix(in oklab, var(--pillar) 14%, transparent);
-  --color-pillar-line: color-mix(in oklab, var(--pillar) 32%, transparent);
+  --color-pillar-line: color-mix(in oklab, var(--pillar) 20%, transparent);
 
   --color-train: var(--c-train);
   --color-eat: var(--c-eat);
@@ -159,57 +163,45 @@
 /* ---- Type roles -------------------------------------------------- */
 /* Big condensed numerals: the signature of every data card. */
 @utility num {
-  font-family: var(--font-display);
+  font-family: var(--font-rounded);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.01em;
-  line-height: 0.95;
+  letter-spacing: -0.02em;
+  line-height: 1;
 }
 /* Tiny uppercase tracked label above numbers and sections. */
 @utility eyebrow {
   font-family: var(--font-sans);
-  font-size: 0.6875rem;
+  font-size: 0.8125rem;
   font-weight: 600;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  line-height: 1.2;
+  letter-spacing: -0.005em;
+  line-height: 1.25;
 }
 /* Display headline (screen titles, hero statements). */
 @utility display {
   font-family: var(--font-display);
-  font-weight: 600;
-  letter-spacing: -0.005em;
-  line-height: 1.02;
-  text-transform: uppercase;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.1;
 }
 /* The coach's voice and reflective moments (Mind, journal). */
 @utility voice {
-  font-family: var(--font-serif);
-  font-style: italic;
-  font-weight: 450;
-  letter-spacing: -0.005em;
-  line-height: 1.28;
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
 }
 
 /* ---- Atmosphere --------------------------------------------------- */
 /* A soft pillar-tinted glow at the top of a screen. Set data-pillar on an ancestor. */
-@utility atmo {
-  background-image:
-    radial-gradient(120% 420px at 50% -120px, color-mix(in oklab, var(--pillar) 20%, transparent), transparent 70%);
-  background-repeat: no-repeat;
-}
-/* Calmer, taller wash for Mind / Rest. */
-@utility atmo-calm {
-  background-image:
-    radial-gradient(90% 520px at 20% -140px, color-mix(in oklab, var(--pillar) 22%, transparent), transparent 70%),
-    radial-gradient(80% 460px at 95% -60px, color-mix(in oklab, var(--c-rest) 14%, transparent), transparent 70%);
-  background-repeat: no-repeat;
-}
-/* Frosted chrome (tab bar, sticky headers). */
+/* Flat backgrounds: colour belongs to data, not to the page. Kept as no-ops so screens need no edits. */
+@utility atmo { background-image: none; }
+@utility atmo-calm { background-image: none; }
+/* Frosted chrome (tab bar, sticky headers), iOS "regular material". */
 @utility glass {
-  background-color: color-mix(in oklab, var(--c-surface) 78%, transparent);
-  -webkit-backdrop-filter: saturate(160%) blur(18px);
-  backdrop-filter: saturate(160%) blur(18px);
+  background-color: color-mix(in oklab, var(--c-bg) 72%, transparent);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(180%) blur(20px);
 }
 @utility press {
   transition: transform 150ms var(--ease-out-soft), opacity 150ms var(--ease-out-soft), background-color 150ms var(--ease-out-soft);
@@ -233,14 +225,13 @@
     font-family: var(--font-sans);
     font-size: 1rem;
     line-height: 1.45;
-    font-feature-settings: "ss01", "cv11";
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     -webkit-tap-highlight-color: transparent;
     touch-action: manipulation;
   }
 
-  /* Film grain: keeps large dark surfaces from looking flat. */
+  /* Film grain, off in both themes (opacity 0). */
   body::before {
     content: "";
     position: fixed;
@@ -314,7 +305,7 @@
     height: 30px;
     margin-top: -11px;
     border-radius: 999px;
-    background: #fffdf8;
+    background: #ffffff;
     border: 1px solid rgba(20, 22, 26, 0.14);
     box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35);
   }
@@ -322,7 +313,7 @@
     width: 30px;
     height: 30px;
     border-radius: 999px;
-    background: #fffdf8;
+    background: #ffffff;
     border: 1px solid rgba(20, 22, 26, 0.14);
     box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35);
   }
