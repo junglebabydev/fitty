@@ -3,6 +3,7 @@
 import type { Exercise, ExerciseSet, Region, WorkoutSession } from '../../domain/types'
 import { db } from '../../db/database'
 import { addCardio, addSymptomCheck, exerciseHistory, getSetting, updateSession } from '../../db/repositories'
+import { parseProgramKey } from '../../domain/programs'
 import { getHealthBridge } from '../../native'
 import { estimate1RM } from '../../engine'
 import { clamp, nowIso } from '../../lib/util'
@@ -49,6 +50,9 @@ export function computeDurationMin(session: WorkoutSession, now: Date = new Date
 
 function cardioModality(session: WorkoutSession): string {
   if (session.type === 'swim') return 'swim'
+  const programId = parseProgramKey(session.templateKey)?.programId
+  if (programId === 'start-running') return 'run'
+  if (programId === 'hiit') return 'hiit'
   if (session.templateKey.includes('bike')) return 'bike'
   return session.type
 }

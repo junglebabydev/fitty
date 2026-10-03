@@ -76,6 +76,11 @@ export function evaluateProgression(
   const kind = equipmentKind(exercise.equipment)
   const last = workingSets(lastSets, timed)
 
+  // Programme weeks set timed and bodyweight targets themselves (PRD §6.4); loaded moves keep double progression.
+  if (planned.program && (timed || kind === 'bodyweight')) {
+    return { nextLoadKg: planned.loadKg, repMin, repMax, action: 'hold', reason: 'Your programme sets this target.', stalled: false }
+  }
+
   if (!last.length) {
     return {
       nextLoadKg: planned.loadKg,
@@ -90,6 +95,10 @@ export function evaluateProgression(
 
   const loads = last.map((s) => s.loadKg).filter((l): l is number => l != null)
   const lastLoad = loads.length ? Math.max(...loads) : null
+  // A programme move logged without load (bands, unrecognised equipment) is unloaded too: the plan sets the target.
+  if (planned.program && lastLoad == null && planned.loadKg == null) {
+    return { nextLoadKg: null, repMin, repMax, action: 'hold', reason: 'Your programme sets this target.', stalled: false }
+  }
   const efforts = last.map((s) => effort(s, timed) as number)
   const hold = (reason: string): ProgressionResult => ({ nextLoadKg: lastLoad ?? planned.loadKg, repMin, repMax, action: 'hold', reason, stalled: false })
 

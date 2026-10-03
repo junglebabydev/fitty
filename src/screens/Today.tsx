@@ -8,6 +8,7 @@ import {
   ChartLine, ChevronRight, ClipboardCheck, Clock, Inbox, Moon, Play, Settings, Smile, StretchHorizontal, Utensils, type LucideIcon,
 } from 'lucide-react'
 import type { WorkoutSession } from '../domain/types'
+import { isProgramDerived } from '../domain/programs'
 import { addDays, dateOf, dayName, fmtDate, toDateStr } from '../lib/util'
 import { AIStatusChip, Button, IconButton, PillarDial, Screen, Sheet } from '../components'
 import { useNow, useQuery, useToast } from '../hooks'
@@ -105,7 +106,8 @@ export default function TodayScreen() {
   // A workout started and never finished gets a nudge to wrap it up. The window runs a week ahead too: a
   // session can be started early, before its scheduled date.
   const staleSession = useQuery(() => getSessions(addDays(today, -14), addDays(today, 7)).find((s) => isStaleSession(s)) ?? null, [today, hour])
-  const short = useMemo(() => (session ? shortenedVersion(session.exercises) : []), [session])
+  // Programme sessions are never shortened (PRD §6.5), so canShorten stays false for them.
+  const short = useMemo(() => (session && !isProgramDerived(session) ? shortenedVersion(session.exercises) : []), [session])
   const blocked = facts.readiness.state === 'RED' || facts.gate.overall === 'RED'
 
   const action = nextAction({

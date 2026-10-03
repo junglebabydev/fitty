@@ -5,6 +5,7 @@ import {
   SkipForward, TriangleAlert, Trophy, Weight,
 } from 'lucide-react'
 import type { Exercise, ExerciseSet, PlannedExercise, Readiness, Region, WorkoutSession } from '../domain/types'
+import { isProgramDerived } from '../domain/programs'
 import {
   Button, Card, Celebrate, EmptyState, ExerciseVisual, IconButton, ListRow, ReadinessBadge, Screen, Sheet, StatTile, useToast,
 } from '../components'
@@ -209,7 +210,7 @@ export default function WorkoutScreen() {
   }
 
   const applyShortened = () => {
-    if (!session) return
+    if (!session || isProgramDerived(session)) return
     const short = shortenedVersion(session.exercises)
     const keep = session.exercises.filter((e) => (setsFor.get(e.exerciseId)?.length ?? 0) > 0 && !short.some((s) => s.exerciseId === e.exerciseId))
     const next: PlannedExercise[] = [...keep, ...short]
@@ -557,12 +558,14 @@ export default function WorkoutScreen() {
 
       <Sheet open={moreOpen} onClose={() => setMoreOpen(false)} title="Session options">
         <div className="flex flex-col -mx-4">
-          <ListRow
-            icon={<Scissors size={18} />}
-            title="Shortened version (25–35 min)"
-            subtitle="Keep the first four compounds, two sets each"
-            onClick={applyShortened}
-          />
+          {!isProgramDerived(session) && (
+            <ListRow
+              icon={<Scissors size={18} />}
+              title="Shortened version (25–35 min)"
+              subtitle="Keep the first four compounds, two sets each"
+              onClick={applyShortened}
+            />
+          )}
           <ListRow
             icon={<SkipForward size={18} />}
             title="Mark session skipped"

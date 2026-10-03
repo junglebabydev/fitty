@@ -1,6 +1,8 @@
 // Rolling weekly planner: Minimum / Target / Stretch tiers, reflow, shortened sessions, gate substitution.
 // Pure functions; exercise IDs are the canonical strings from docs/CONTRACTS.md.
-import type { Exercise, PlannedExercise, SessionType, WorkoutSession } from '../domain/types'
+import type { Exercise, PlannedExercise, SafetyTag, SessionType, WorkoutSession } from '../domain/types'
+import { isProgramDerived } from '../domain/programs'
+import { EXERCISE_BY_ID } from '../data/exercises'
 import { addDays, dayName, startOfWeek } from '../lib/util'
 import { findSubstitute, isExerciseAllowed, type GateResult } from './symptomGate'
 
@@ -172,12 +174,14 @@ function priority(s: WorkoutSession): number {
  * one session per day. Strength sessions are placed first and may displace a planned
  * stretch/target session when that is the only way to keep 3 strength sessions in the week.
  * Completed, skipped and in-progress sessions are never moved.
+ * Programme and standalone-workout rows (PRD §6.5) are never moved, displaced or counted toward the
+ * strength minimum; they still hold their day, so nothing is moved on top of them.
  */
 export function reflowWeek(sessions: WorkoutSession[], today: string): ReflowMove[] {
   const weekStart = startOfWeek(today)
   const weekEnd = addDays(weekStart, 6)
   const inWeek = sessions.filter((s) => s.scheduledDate >= weekStart && s.scheduledDate <= weekEnd)
-  const missed = inWeek.filter((s) => s.status === 'planned' && s.scheduledDate < today)
+  const missed = inWeek.filter((s) => s.status === 'planned' && s.scheduledDate < today && !isProgramDerived(s))
   if (!missed.length) return []
 
   const fixed = inWeek.filter((s) => !missed.includes(s))
@@ -186,7 +190,7 @@ export function reflowWeek(sessions: WorkoutSession[], today: string): ReflowMov
   for (let d = today; d <= weekEnd; d = addDays(d, 1)) if (!occupied.has(d)) freeDays.push(d)
 
   let strengthCommitted = fixed.filter((s) =>
-    s.type === 'strength' && (s.status === 'completed' || s.status === 'in_progress' || (s.status === 'planned' && s.scheduledDate >= today)),
+    !isProgramDerived(s) && s.type === 'strength' && (s.status === 'completed' || s.status === 'in_progress' || (s.status === 'planned' && s.scheduledDate >= today)),
   ).length
 
   missed.sort((a, b) => priority(a) - priority(b) || a.scheduledDate.localeCompare(b.scheduledDate))
@@ -196,7 +200,7 @@ export function reflowWeek(sessions: WorkoutSession[], today: string): ReflowMov
   const victimsNeeded = Math.min(strengthWithoutSlot, strengthStillNeeded)
 
   const displaceable = fixed
-    .filter((s) => s.status === 'planned' && s.scheduledDate >= today && s.type !== 'strength')
+    .filter((s) => s.status === 'planned' && s.scheduledDate >= today && s.type !== 'strength' && !isProgramDerived(s))
     .sort((a, b) => priority(b) - priority(a) || b.scheduledDate.localeCompare(a.scheduledDate))
   const victims = displaceable.slice(0, victimsNeeded)
   const slots = [...freeDays, ...victims.map((v) => v.scheduledDate)].sort()
@@ -218,12 +222,26 @@ export function reflowWeek(sessions: WorkoutSession[], today: string): ReflowMov
   return moves
 }
 
-/** Rough duration: 5 min warm-up + per-set work and rest. */
+/** repMin/repMax are seconds: the fixed list, or any library exercise marked timed (treadmill, jump rope, walks). */
+function isTimedId(id: string): boolean {
+  return TIMED_IDS.has(id) || !!EXERCISE_BY_ID[id]?.timed
+}
+
+/**
+ * Rough duration: 5 min warm-up + per-set work and rest. Intervals carry their rest bout in `restSec`;
+ * a circuit's `roundRestSec` replaces its last station's rest, once per round.
+ */
 export function estimateSessionMinutes(exercises: PlannedExercise[]): number {
+  const lastStation = new Map<string, PlannedExercise>()
+  for (const e of exercises) if (e.circuit) lastStation.set(e.circuit, e)
   let sec = 5 * 60
   for (const e of exercises) {
-    const work = TIMED_IDS.has(e.exerciseId) ? (e.repMin + e.repMax) / 2 : 45
-    sec += e.sets * (work + e.restSec)
+    const work = isTimedId(e.exerciseId) ? (e.repMin + e.repMax) / 2 : 45
+    let rest = e.restSec
+    if (e.circuit && lastStation.get(e.circuit) === e) {
+      rest = exercises.find((x) => x.circuit === e.circuit && x.roundRestSec != null)?.roundRestSec ?? rest
+    }
+    sec += e.sets * (work + rest)
   }
   return Math.round(sec / 60)
 }
@@ -240,42 +258,74 @@ export function shortenedVersion(exercises: PlannedExercise[]): PlannedExercise[
 
 export const MERGED_SETS_CAP = 4
 
+/** Seconds per rep when a swap changes unit (PRD §6.3; a coaching convention). */
+export const SEC_PER_REP = 3
+
+const isTimedEx = (e: Exercise): boolean => e.timed || TIMED_IDS.has(e.id)
+
+/** reps → seconds (3 s a rep, nearest 5 s, at least 10 s) or seconds → reps (at least 1); {} when the unit is unchanged. */
+function convertRange(pe: PlannedExercise, from: Exercise, to: Exercise): Partial<PlannedExercise> {
+  if (isTimedEx(from) === isTimedEx(to)) return {}
+  const f = isTimedEx(to)
+    ? (reps: number) => Math.max(10, Math.round((reps * SEC_PER_REP) / 5) * 5)
+    : (sec: number) => Math.max(1, Math.round(sec / SEC_PER_REP))
+  return { repMin: f(pe.repMin), repMax: f(pe.repMax) }
+}
+
+export interface GateSessionOptions {
+  /** Avoided on top of today's gate, e.g. a programme's standing-flag tags or the no-impact choice (PRD §6.3). */
+  extraAvoid?: SafetyTag[]
+  /** Prefer substitutes in the same unit; when the swap changes reps ↔ seconds, convert the range. */
+  convertUnits?: boolean
+}
+
 /**
  * Replace any exercise the gate disallows with a safer substitute; drop it if none exists.
  * A substitute not yet in the session is preferred; when the only safe option is already
  * programmed, its sets are merged into that entry (capped) instead of duplicating the exercise.
+ * Entries with a `role` (warm-up, cool-down, rest) may repeat an id: they never reserve one,
+ * never take merged sets, and are swapped in place.
  */
 export function applyGateToSession(
   exercises: PlannedExercise[],
   gate: GateResult,
   library: Exercise[],
+  opts: GateSessionOptions = {},
 ): { exercises: PlannedExercise[]; changes: string[] } {
+  const g: GateResult = opts.extraAvoid?.length ? { ...gate, avoidTags: [...new Set([...gate.avoidTags, ...opts.extraAvoid])] } : gate
+  const pick = (exo: Exercise, lib: Exercise[]): Exercise | null =>
+    opts.convertUnits
+      ? findSubstitute(exo, g, lib.filter((e) => isTimedEx(e) === isTimedEx(exo))) ?? findSubstitute(exo, g, lib)
+      : findSubstitute(exo, g, lib)
   const byId = new Map(library.map((e) => [e.id, e]))
   const work = cloneExercises(exercises) // mutable copies; the input (and templates) stay untouched
   const out: PlannedExercise[] = []
   const changes: string[] = []
-  const used = new Set(work.map((e) => e.exerciseId))
+  const used = new Set(work.filter((e) => !e.role).map((e) => e.exerciseId))
   for (let i = 0; i < work.length; i++) {
     const pe = work[i]
     const exo = byId.get(pe.exerciseId)
     if (!exo) { out.push(pe); continue }
-    const check = isExerciseAllowed(exo, gate)
+    const check = isExerciseAllowed(exo, g)
     if (check.allowed) { out.push(pe); continue }
-    const why = check.reasons.join('; ')
-    const fresh = findSubstitute(exo, gate, library.filter((e) => !used.has(e.id)))
-    const sub = fresh ?? findSubstitute(exo, gate, library)
+    // A swap caused only by the programme's standing avoid tags is not about pain today: say so (useSetLogger keys off this prefix).
+    const onlyProgramTags = exo.safetyTags.filter((t) => g.avoidTags.includes(t)).every((t) => !gate.avoidTags.includes(t))
+    const why = onlyProgramTags ? `Programme path: ${check.reasons.join('; ')}` : check.reasons.join('; ')
+    const fresh = pe.role ? null : pick(exo, library.filter((e) => !used.has(e.id)))
+    const sub = fresh ?? pick(exo, library)
     if (!sub) {
       changes.push(`Removed ${exo.name} — no safe substitute today (${why})`)
       continue
     }
-    if (fresh) {
-      used.add(sub.id)
-      out.push({ ...pe, exerciseId: sub.id, loadKg: null, substitutedFrom: pe.exerciseId, substitutionReason: why })
+    if (fresh || pe.role) {
+      if (!pe.role) used.add(sub.id)
+      const units = opts.convertUnits ? convertRange(pe, exo, sub) : {}
+      out.push({ ...pe, ...units, exerciseId: sub.id, loadKg: null, substitutedFrom: pe.exerciseId, substitutionReason: why })
       changes.push(`Swapped ${exo.name} → ${sub.name} (${why})`)
       continue
     }
     // Only safe option is already programmed (earlier in `out`, or later in `work`): merge sets into it.
-    const target = out.find((e) => e.exerciseId === sub.id) ?? work.slice(i + 1).find((e) => e.exerciseId === sub.id)
+    const target = out.find((e) => e.exerciseId === sub.id && !e.role) ?? work.slice(i + 1).find((e) => e.exerciseId === sub.id && !e.role)
     if (target) {
       target.sets = Math.min(MERGED_SETS_CAP, target.sets + pe.sets)
       changes.push(`Swapped ${exo.name} → ${sub.name} (${why}); merged into the existing ${sub.name} (${target.sets} sets)`)

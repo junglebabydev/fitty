@@ -34,7 +34,7 @@ export interface SetLoggerInput {
 export const NO_LOAD_EQUIPMENT = ['bodyweight', 'bike', 'treadmill', 'elliptical', 'pool', 'none']
 
 /** Substitution reasons that are not pain-driven (SubstituteSheet quick reasons) — progression may still advance. */
-const NON_PAIN_SUBSTITUTION = /^(equipment busy|preference)\b/i
+const NON_PAIN_SUBSTITUTION = /^(equipment busy|preference|programme path)\b/i
 
 /** The exercise_sets row for the next set. Pure, so the list view and Focus Mode provably write the same thing. */
 export function buildSetRow(i: {
@@ -123,16 +123,19 @@ export function useSetLogger({ session, planned, exercise, sets, stopped, painNe
       return
     }
     const seed = history.last[0]
+    // Programme timed / unloaded entries: reps and seconds come from the plan, not last session (PRD §6.4).
+    const unloaded = !loadable || (seed?.loadKg == null && planned.loadKg == null)
+    const target = planned.program && (timed || unloaded) ? undefined : seed
     setLoad(effective.nextLoadKg ?? planned.loadKg ?? seed?.loadKg ?? null)
     if (timed) {
-      setDuration(seed?.durationSec ?? effective.repMin)
+      setDuration(target?.durationSec ?? effective.repMin)
       setReps(null)
     } else {
-      setReps(seed?.reps ?? effective.repMin)
+      setReps(target?.reps ?? effective.repMin)
       setDuration(null)
     }
     setRir(seed?.rir ?? 2)
-  }, [sets, history.last, effective, planned.loadKg, timed])
+  }, [sets, history.last, effective, planned.loadKg, planned.program, timed, loadable])
 
   // Drop the prefilled load when the plan is reduced mid-session, or pain is reported before the first set.
   useEffect(() => {
