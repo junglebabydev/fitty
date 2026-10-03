@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { EXERCISES, EXERCISE_BY_ID } from '../exercises'
-import { EXERCISE_ANIMATION_BASE, EXERCISE_ANIMATION_IDS, EXERCISE_MEDIA_BASE, EXERCISE_PHOTO_IDS, exerciseMedia } from '../exerciseMedia'
+import {
+  EXERCISE_ANIMATION_BASE, EXERCISE_ANIMATION_IDS, EXERCISE_ART_BASE, EXERCISE_ART_FRAMES, EXERCISE_MEDIA_BASE, EXERCISE_PHOTO_IDS,
+  exerciseMedia,
+} from '../exerciseMedia'
 import { SESSION_TEMPLATES } from '../../engine/planner'
 
 describe('exerciseMedia', () => {
@@ -56,7 +59,7 @@ describe('exerciseMedia', () => {
     expect(exerciseMedia('not_a_real_exercise').animation).toBeNull()
   })
 
-  it('never animates a move whose knee- or back-friendly range a stock full-range clip would contradict', () => {
+  it('never animates or illustrates a move whose knee- or back-friendly range a stock full-range clip would contradict', () => {
     const rangeLimited = [
       'hack_squat', 'leg_press', 'single_leg_press', 'goblet_squat', 'db_split_squat', 'db_step_up', 'bb_back_squat',
       'pistol_squat_box', 'deficit_reverse_lunge', 'bench_dip', 'ab_wheel',
@@ -64,6 +67,25 @@ describe('exerciseMedia', () => {
     for (const id of rangeLimited) {
       expect(EXERCISE_BY_ID[id], id).toBeDefined()
       expect(EXERCISE_ANIMATION_IDS[id], id).toBeUndefined()
+      expect(EXERCISE_ART_FRAMES[id], id).toBeUndefined()
+    }
+  })
+
+  it('maps illustrations only for library exercises, to one Workout Guide frame at a pinned commit', () => {
+    expect(EXERCISE_ART_BASE).toMatch(/^https:\/\/raw\.githubusercontent\.com\/bryllim\/workout-guide\/[0-9a-f]{40}\/packages\/workout-guide\/assets$/)
+    for (const [id, frame] of Object.entries(EXERCISE_ART_FRAMES)) {
+      expect(EXERCISE_BY_ID[id], id).toBeDefined()
+      expect(frame, id).toMatch(/^[a-z0-9]+(-[a-z0-9]+)*\/frame-[123]$/)
+    }
+    expect(exerciseMedia('bird_dog').art).toBe(`${EXERCISE_ART_BASE}/bird-dog/frame-1.svg`)
+    expect(exerciseMedia('db_bench_press').art).toBeNull()
+    expect(exerciseMedia('not_a_real_exercise').art).toBeNull()
+  })
+
+  it('only illustrates exercises that have neither an animation nor a photo', () => {
+    for (const id of Object.keys(EXERCISE_ART_FRAMES)) {
+      expect(EXERCISE_ANIMATION_IDS[id], id).toBeUndefined()
+      expect(EXERCISE_PHOTO_IDS[id], id).toBeUndefined()
     }
   })
 })
