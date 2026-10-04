@@ -160,7 +160,8 @@ function KindArt({ kind, className }: { kind: DayKind; className?: string }) {
   const meta = KIND_META[kind]
   return (
     <span aria-hidden className={cx('flex items-center justify-center overflow-hidden', className)} style={{ background: meta.color }}>
-      <img src={meta.art} alt="" draggable={false} decoding="async" className="h-[86%] w-auto object-contain" />
+      {/* Offline before the drawing was ever cached: the colour alone, not a broken-image icon. */}
+      <img src={meta.art} alt="" draggable={false} decoding="async" className="h-[86%] w-auto object-contain" onError={(e) => { e.currentTarget.style.visibility = 'hidden' }} />
     </span>
   )
 }
