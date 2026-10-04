@@ -16,8 +16,8 @@ export interface TabItem {
 
 export const TABS: TabItem[] = [
   { to: '/', label: 'Today', icon: Sun, end: true, pillar: 'today' },
-  { to: '/train', label: 'Train', icon: Dumbbell, pillar: 'train' },
-  { to: '/eat', label: 'Eat', icon: Utensils, pillar: 'eat' },
+  ...(FEATURES.train ? [{ to: '/train', label: 'Train', icon: Dumbbell, pillar: 'train' } as TabItem] : []),
+  ...(FEATURES.eat ? [{ to: '/eat', label: 'Eat', icon: Utensils, pillar: 'eat' } as TabItem] : []),
   ...(FEATURES.mind ? [{ to: '/mind', label: 'Mind', icon: Brain, pillar: 'mind' } as TabItem] : []),
   { to: '/coach', label: 'Coach', icon: MessageSquare, pillar: 'coach' },
 ]

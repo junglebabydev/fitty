@@ -14,11 +14,13 @@ import { isOnboarded, onboardingSkipped } from './features/onboarding/setup'
 import { applyOwnerProfile } from './features/settings/ownerBootstrap'
 // Not lazy: OnboardingGate renders it outside the Suspense boundary.
 import OwnerUnlockScreen from './screens/OwnerUnlock'
+import { FEATURES } from './config/features'
 
 // --- screens (route table in docs/CONTRACTS.md) -------------------------------------
 
 const OnboardingScreen = lazy(() => import('./screens/Onboarding'))
 const TodayScreen = lazy(() => import('./screens/Today'))
+const BlueprintScreen = lazy(() => import('./screens/Blueprint'))
 const SleepScreen = lazy(() => import('./screens/Sleep'))
 const CheckInScreen = lazy(() => import('./screens/CheckIn'))
 const TrainScreen = lazy(() => import('./screens/Train'))
@@ -251,10 +253,10 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/onboarding" element={<OnboardingScreen />} />
-      <Route path="/" element={<TodayScreen />} />
+      <Route path="/" element={FEATURES.blueprint ? <BlueprintScreen /> : <TodayScreen />} />
       <Route path="/sleep" element={<SleepScreen />} />
       <Route path="/checkin" element={<CheckInScreen />} />
-      <Route path="/train" element={<TrainScreen />} />
+      <Route path="/train" element={FEATURES.train ? <TrainScreen /> : <Navigate to="/" replace />} />
       <Route path="/train/program/:id" element={<ProgramIntroScreen />} />
       <Route path="/train/session/:id" element={<RequireSetup action="workout"><WorkoutScreen /></RequireSetup>} />
       <Route path="/train/exercise/:id" element={<ExerciseDetailScreen />} />

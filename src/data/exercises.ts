@@ -566,7 +566,7 @@ const CORE_AND_CARDIO: Exercise[] = [
     id: 'bike_intervals', name: 'Bike Intervals (low impact)', equipment: 'bike',
     primaryMuscles: ['quads', 'glutes'], secondaryMuscles: ['hamstrings', 'cardiovascular'], pattern: 'cardio',
     safetyTags: [], substitutions: ['stationary_bike', 'swim_freestyle', 'elliptical'],
-    instructions: 'After a 5-minute easy spin, alternate 30–60 seconds hard with 60–90 seconds easy for 6–10 rounds. Keep the seat height correct and increase cadence before resistance so the knees are not grinding. This is the default HIIT option — no impact, no running required.',
+    instructions: 'After an easy spin, alternate hard and easy efforts for the times and rounds the session sets. Keep the seat height correct and increase cadence before resistance so the knees are not grinding. This is the default HIIT option — no impact, no running required.',
     timed: true,
   },
   {
@@ -1502,8 +1502,126 @@ const PROGRAMS: Exercise[] = [
   },
 ]
 
+// ── Blueprint (src/data/programs/blueprint.ts) ──────────────────────────────
+// Bryan Johnson's warm-up drills, yoga poses and static stretches, plus the
+// open-choice blocks of his week: zone 2 cardio, play and meditation.
+const BLUEPRINT: Exercise[] = [
+  {
+    id: 'arm_circles', name: 'Arm Circles', equipment: 'bodyweight',
+    primaryMuscles: ['shoulders'], secondaryMuscles: ['upper back'], pattern: 'mobility',
+    safetyTags: [], substitutions: ['band_pull_apart'],
+    instructions: 'Stand tall with your arms out to the sides at shoulder height. Draw small circles and let them grow bigger, about ten forwards and then ten backwards. Keep the shoulders away from the ears and the neck relaxed.',
+    timed: true,
+  },
+  {
+    id: 'leg_swings', name: 'Leg Swings', equipment: 'bodyweight',
+    primaryMuscles: ['hip flexors', 'hamstrings'], secondaryMuscles: ['glutes', 'adductors'], pattern: 'mobility',
+    safetyTags: [], substitutions: ['march_in_place'],
+    instructions: 'Hold a wall or a post and swing one leg forwards and back like a pendulum, letting the range grow with each swing, then side to side across the body. Stand tall and keep it loose, not forced. Switch legs halfway.',
+    timed: true,
+  },
+  {
+    id: 'hip_circles', name: 'Hip Circles', equipment: 'bodyweight',
+    primaryMuscles: ['hip flexors', 'glutes'], secondaryMuscles: ['core'], pattern: 'mobility',
+    safetyTags: [], substitutions: ['leg_swings'],
+    instructions: 'Stand with your feet hip-width apart and your hands on your hips. Draw slow, wide circles with the hips, as if tracing a hula hoop, then reverse. Keep the knees soft and the upper body quiet.',
+    timed: true,
+  },
+  {
+    id: 'wall_slide', name: 'Wall Slides', equipment: 'bodyweight',
+    primaryMuscles: ['shoulders'], secondaryMuscles: ['upper back'], pattern: 'mobility',
+    safetyTags: ['overhead'], substitutions: ['arm_circles', 'band_pull_apart'],
+    instructions: 'Stand with your back, head and forearms against a wall, elbows bent like goalposts. Slide the arms up only as far as they stay in contact, then back down. Keep the ribs down and the chin tucked so the head and neck rest on the wall without strain.',
+    timed: true,
+  },
+  {
+    id: 'thread_the_needle', name: 'Thread the Needle', equipment: 'bodyweight',
+    primaryMuscles: ['upper back'], secondaryMuscles: ['shoulders', 'obliques'], pattern: 'mobility',
+    safetyTags: [], substitutions: ['cat_cow'],
+    instructions: 'Start on hands and knees. Slide one arm under the other along the floor until that shoulder and the side of your head rest down, pause and breathe, then open the arm up towards the ceiling. Switch sides halfway, and pad the knees if the floor is hard.',
+    timed: true,
+  },
+  {
+    id: 'cat_cow', name: 'Cat-Cow', equipment: 'bodyweight',
+    primaryMuscles: ['lower back', 'upper back'], secondaryMuscles: ['abs'], pattern: 'mobility',
+    safetyTags: [], substitutions: ['thread_the_needle'],
+    instructions: 'On hands and knees, breathe in as you let the belly drop and lift the chest, then breathe out as you round the back towards the ceiling. Move slowly with the breath. Stay in a range that feels easy on the spine.',
+    timed: true,
+  },
+  {
+    id: 'butterfly_stretch', name: "Cobbler's Pose", equipment: 'bodyweight',
+    primaryMuscles: ['adductors'], secondaryMuscles: ['hip flexors', 'lower back'], pattern: 'mobility',
+    safetyTags: [], substitutions: ['hamstring_stretch'],
+    instructions: 'Sit tall with the soles of your feet together and let the knees fall out to the sides. Hold your feet and, keeping the back long, lean forward from the hips only as far as feels comfortable. Sit on a folded towel if the lower back rounds.',
+    timed: true,
+  },
+  {
+    id: 'tree_pose', name: 'Tree Pose', equipment: 'bodyweight',
+    primaryMuscles: ['glute medius'], secondaryMuscles: ['core', 'calves'], pattern: 'balance',
+    safetyTags: [], substitutions: ['single_leg_balance'],
+    instructions: 'Stand on one leg and rest the other foot on the inner calf or thigh, never on the side of the knee. Bring the hands together at the chest and fix your eyes on a point ahead. Touch a wall whenever you need to, then switch sides.',
+    timed: true,
+  },
+  {
+    id: 'cobra_pose', name: 'Cobra Pose', equipment: 'bodyweight',
+    primaryMuscles: ['lower back'], secondaryMuscles: ['abs', 'chest'], pattern: 'mobility',
+    safetyTags: [], substitutions: ['cat_cow'],
+    instructions: 'Lie face down with your hands under your shoulders. Press up gently to lift the chest while the hips stay on the floor and the elbows stay soft. Stop where the lower back feels comfortable, keep the neck long, and lower slowly.',
+    timed: true,
+  },
+  {
+    id: 'childs_pose', name: "Child's Pose", equipment: 'bodyweight',
+    primaryMuscles: ['lower back'], secondaryMuscles: ['lats', 'glutes'], pattern: 'mobility',
+    safetyTags: ['deep_knee_flexion'], substitutions: ['cat_cow'],
+    instructions: 'Kneel, sit your hips back towards your heels and walk your hands forward until your forehead rests on the floor. Breathe slowly into the back. Put a pillow between hips and heels if your knees complain, or skip it on a sore-knee day.',
+    timed: true,
+  },
+  {
+    id: 'hamstring_stretch', name: 'Hamstring Stretch', equipment: 'bodyweight',
+    primaryMuscles: ['hamstrings'], secondaryMuscles: ['calves'], pattern: 'mobility',
+    safetyTags: [], substitutions: ['butterfly_stretch'],
+    instructions: 'Rest one heel on a low step or bench with the leg straight and the toes up. Keep the back long and hinge forward from the hips until you feel a stretch behind the thigh, then hold and breathe. Switch legs halfway.',
+    timed: true,
+  },
+  {
+    id: 'single_leg_toe_touch', name: 'Single-Leg Toe Touch', equipment: 'bodyweight',
+    primaryMuscles: ['glutes', 'hamstrings'], secondaryMuscles: ['core', 'calves'], pattern: 'balance',
+    safetyTags: [], substitutions: ['single_leg_balance'],
+    instructions: 'Stand on one leg with a soft knee. Hinge at the hips and reach the opposite hand towards your toes or shin, keeping the back long, then stand tall again. Go slowly and touch a wall if you wobble.',
+    timed: false,
+  },
+  {
+    id: 'plank_shoulder_tap', name: 'Plank Shoulder Taps', equipment: 'bodyweight',
+    primaryMuscles: ['core'], secondaryMuscles: ['shoulders', 'obliques'], pattern: 'core',
+    safetyTags: [], substitutions: ['plank'],
+    instructions: 'Hold a high plank with your feet a little wider than your hips. Lift one hand to tap the opposite shoulder without letting the hips rock, then switch. Drop to your knees if the lower back starts to sag.',
+    timed: false,
+  },
+  {
+    id: 'meditation', name: 'Meditation', equipment: 'bodyweight',
+    primaryMuscles: ['deep core'], secondaryMuscles: [], pattern: 'breathing',
+    safetyTags: [], substitutions: ['breathing_360'],
+    instructions: 'Sit comfortably, with your back supported if you like, and close your eyes or soften your gaze. Breathe through the nose and rest your attention on the breath. When the mind wanders, notice it and come back, without judging yourself.',
+    timed: true,
+  },
+  {
+    id: 'zone2_cardio', name: 'Zone 2 Cardio', equipment: 'bodyweight',
+    primaryMuscles: ['legs'], secondaryMuscles: ['cardiovascular'], pattern: 'cardio',
+    safetyTags: [], substitutions: ['brisk_walk', 'stationary_bike'],
+    instructions: 'Brisk walk, easy jog, bike, swim or elliptical: pick whatever you enjoy. Keep the effort where you can still talk in sentences but feel you are working, about 60 to 70 percent of your maximum heart rate. On a sore-knee day choose the bike or the pool.',
+    timed: true,
+  },
+  {
+    id: 'play', name: 'Play', equipment: 'bodyweight',
+    primaryMuscles: ['full body'], secondaryMuscles: ['cardiovascular'], pattern: 'cardio',
+    safetyTags: [], substitutions: ['zone2_cardio'],
+    instructions: 'Do something active and fun with friends: a hike, a bike ride, a swim, a game of basketball or pickleball. Keep it social; it all counts. Ease into fast, twisting sports, and pick biking or swimming on a sore-knee day.',
+    timed: true,
+  },
+]
+
 export const EXERCISES: Exercise[] = [
-  ...UPPER, ...LOWER, ...CORE_AND_CARDIO, ...BARBELL_AND_KETTLEBELL, ...EXPANSION, ...PROGRAMS,
+  ...UPPER, ...LOWER, ...CORE_AND_CARDIO, ...BARBELL_AND_KETTLEBELL, ...EXPANSION, ...PROGRAMS, ...BLUEPRINT,
 ]
 
 export const EXERCISE_BY_ID: Record<string, Exercise> = Object.fromEntries(EXERCISES.map(e => [e.id, e]))
@@ -1730,6 +1848,23 @@ export const EXERCISE_ALIASES: Record<string, string[]> = {
   db_single_leg_hip_thrust: ['single leg dumbbell hip thrust', 'dumbbell single leg hip thrust'],
   single_leg_hip_thrust: ['single leg hip thrust', 'single leg hip thrusts', 'one leg hip thrust'],
   dowel_hip_hinge: ['dowel hip hinge', 'dowel hinge', 'hip hinge drill', 'broomstick hinge'],
+  // Blueprint
+  arm_circles: ['arm circles', 'arm circle'],
+  leg_swings: ['leg swings', 'leg swing'],
+  hip_circles: ['hip circles', 'hip circle', 'hip rotations'],
+  wall_slide: ['wall slides', 'wall slide', 'wall angels'],
+  thread_the_needle: ['thread the needle'],
+  cat_cow: ['cat cow', 'cat cows', 'cat camel'],
+  butterfly_stretch: ['butterfly stretch', 'cobblers pose', 'cobbler pose', "cobbler's pose", 'bound angle'],
+  tree_pose: ['tree pose'],
+  cobra_pose: ['cobra pose', 'cobra'],
+  childs_pose: ['childs pose', "child's pose", 'child pose'],
+  hamstring_stretch: ['hamstring stretch'],
+  single_leg_toe_touch: ['single leg toe touch', 'toe touch', 'toe touches'],
+  plank_shoulder_tap: ['shoulder taps', 'plank shoulder taps', 'plank taps'],
+  meditation: ['meditation', 'meditate', 'meditating'],
+  zone2_cardio: ['zone 2', 'zone two', 'zone 2 cardio'],
+  play: ['play day', 'pickleball', 'basketball', 'hiking'],
 }
 
 function normalizeText(s: string): string {

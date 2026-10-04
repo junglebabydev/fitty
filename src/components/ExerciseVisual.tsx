@@ -46,29 +46,38 @@ function usePrefersReducedMotion(): boolean {
 
 /**
  * Best available picture of the movement: the looping animation, then the verified photos, then the line
- * illustration, then (or on load error) a tinted MuscleMap tile. Reduced motion skips the animation.
+ * illustration, then (or on load error) a tinted MuscleMap tile. Reduced motion skips the animation. A drawing
+ * with several frames flips through them on cards and heroes; thumbs and reduced motion show the first.
  */
 export function ExerciseVisual({ exercise, size = 'card', className }: ExerciseVisualProps) {
-  const { animation, images, art } = exerciseMedia(exercise.id)
+  const { animation, images, art, artFrames } = exerciseMedia(exercise.id)
   const [animFailed, setAnimFailed] = useState(false)
   const [failed, setFailed] = useState(false)
   const [artFailed, setArtFailed] = useState(false)
   const [frame, setFrame] = useState(0)
+  const [step, setStep] = useState(0)
   const reduced = usePrefersReducedMotion()
 
   // A new exercise gets a fresh chance to load its media.
-  useEffect(() => { setAnimFailed(false); setFailed(false); setArtFailed(false); setFrame(0) }, [exercise.id])
+  useEffect(() => { setAnimFailed(false); setFailed(false); setArtFailed(false); setFrame(0); setStep(0) }, [exercise.id])
 
   const showAnim = !!animation && !animFailed && !reduced
   const showPhoto = !showAnim && images.length > 0 && !failed
   const showArt = !showAnim && !showPhoto && !!art && !artFailed
   const crossfade = showPhoto && size === 'hero' && images.length > 1 && !reduced
+  const flip = showArt && size !== 'thumb' && artFrames.length > 1 && !reduced
 
   useEffect(() => {
     if (!crossfade) { setFrame(0); return }
     const t = window.setInterval(() => setFrame((f) => (f + 1) % 2), 1600)
     return () => window.clearInterval(t)
   }, [crossfade])
+
+  useEffect(() => {
+    if (!flip) { setStep(0); return }
+    const t = window.setInterval(() => setStep((i) => (i + 1) % artFrames.length), 650)
+    return () => window.clearInterval(t)
+  }, [flip, artFrames.length])
 
   const map = (h: number, view: 'both' | 'front' | 'back' = 'both') => (
     <MuscleMap primary={exercise.primaryMuscles} secondary={exercise.secondaryMuscles} size={h} view={view} ariaLabel="" />
@@ -81,16 +90,24 @@ export function ExerciseVisual({ exercise, size = 'card', className }: ExerciseV
         aria-label={exercise.name}
         className={cx('relative overflow-hidden border border-line bg-media', FRAME[size], className)}
       >
-        {/* The illustration is white line art: inverted to near-black ink (#1c1c1c) on the white media tile. */}
-        <img
-          src={showAnim ? animation! : art!}
-          alt=""
-          loading="lazy"
-          decoding="async"
-          draggable={false}
-          onError={() => (showAnim ? setAnimFailed(true) : setArtFailed(true))}
-          className={cx('absolute inset-0 h-full w-full object-contain', showArt && 'opacity-[0.89] invert')}
-        />
+        {/* The illustration is white line art: inverted to near-black ink (#1c1c1c) on the white media tile. A loop
+            stacks its frames and shows one at a time, so every frame is loaded before it is needed. */}
+        {(flip ? artFrames : [showAnim ? animation! : art!]).map((src, i) => (
+          <img
+            key={`${i}-${src}`}
+            src={src}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            draggable={false}
+            onError={() => (showAnim ? setAnimFailed(true) : setArtFailed(true))}
+            className={cx(
+              'absolute inset-0 h-full w-full object-contain',
+              showArt && 'invert',
+              showArt && (!flip || i === step ? 'opacity-[0.89]' : 'opacity-0'),
+            )}
+          />
+        ))}
       </div>
     )
   }
