@@ -539,7 +539,8 @@ export default function CoachScreen() {
       const agent = outcome.agent
       const evidence = computeDailyPriority(f).evidence
       addMessage({ ts: nowIso(), role: 'coach', content: reply, evidence: tagSource(tagAgent(evidence, agent), 'ai') })
-      const proposal = extractProposalLine(reply)
+      // Proposals are hidden in this build (FEATURES.coachBrief), so a reply never queues one there.
+      const proposal = FEATURES.coachBrief ? extractProposalLine(reply) : null
       if (proposal) {
         // A suggestion only: it becomes a pending proposal the user can Accept or keep current.
         addDecision({

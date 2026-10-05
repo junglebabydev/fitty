@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { PlannedExercise } from '../../../domain/types'
 import { EXERCISE_BY_ID } from '../../../data/exercises'
-import { parseWorkoutReply } from '../parse'
+import { parseGateReply, parseWorkoutReply } from '../parse'
 import { currentStep, describeStep, progress, stepLine } from '../step'
 
 const byId = new Map(Object.entries(EXERCISE_BY_ID))
@@ -51,6 +51,21 @@ describe('parseWorkoutReply', () => {
   it('leaves questions for the coach', () => {
     expect(parseWorkoutReply('why am I doing wall sits?', 'hold')).toEqual({ kind: 'other' })
     expect(parseWorkoutReply('what should I eat after this', 'reps')).toEqual({ kind: 'other' })
+  })
+})
+
+describe('parseGateReply', () => {
+  it('starts only on a whole, short all-clear', () => {
+    for (const t of ['All good', 'no', 'Nope.', 'fine', 'ok', "I'm good", 'no pain', 'nothing hurts']) expect(parseGateReply(t), t).toBe('all_good')
+  })
+
+  it('treats any pain word as a report, whatever comes first', () => {
+    for (const t of ['no, but my knee hurts', 'fine but my back aches', "good question, knee's sore", 'a bit sore']) expect(parseGateReply(t), t).toBe('hurts')
+  })
+
+  it('leaves anything else for the coach', () => {
+    expect(parseGateReply('what are we doing today?')).toBe('other')
+    expect(parseGateReply('fine, what is first?')).toBe('other')
   })
 })
 

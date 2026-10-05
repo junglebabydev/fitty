@@ -23,16 +23,16 @@ import { runCoachTool } from '../features/coach/tools'
 import { SupportSheet } from '../features/mind/SupportSheet'
 import { SafetyCheckSheet, previewSafety } from '../features/programs'
 import {
-  GATE_REGIONS, GateResultSheet, PainSheet, REGION_LABELS, SymptomGateSheet, computeDurationMin, defaultPostPain, evaluateProgressionWithPain,
+  GATE_REGIONS, GateResultSheet, PainSheet, REGION_LABELS, SubstituteSheet, SymptomGateSheet, computeDurationMin, defaultPostPain, evaluateProgressionWithPain,
   exerciseMap, finishSession, fmtClock, fmtLoad, fmtSec, libraryExercises, noImpactChosen, readSessionFlag, reapplyGate, reducePlannedLoad,
-  screenAnswersFor, skipSession, startSessionWithGate, summarizeSets, todaysGate, todaysRegionState, writeSessionFlag,
+  screenAnswersFor, skipSession, startSessionWithGate, substituteExercise, summarizeSets, todaysGate, todaysRegionState, writeSessionFlag,
   type GateEntry, type GateOutcome, type PainOutcome, type SymptomChange, type SymptomChangeKind,
 } from '../features/workout'
 import { circuitRestAfter } from '../features/workout/focus'
 import { NO_LOAD_EQUIPMENT, buildSetRow } from '../features/workout/useSetLogger'
 import { blueprintProgram, blueprintRows, ensureTodayRow } from '../features/blueprint/session'
 import { dayKey, rowForDate } from '../features/blueprint/week'
-import { parseWorkoutReply } from '../features/coachWorkout/parse'
+import { parseGateReply, parseWorkoutReply } from '../features/coachWorkout/parse'
 import { currentStep, progress, setsByExerciseId, stepLine, type Step } from '../features/coachWorkout/step'
 
 export default function CoachWorkoutScreen() {
@@ -124,13 +124,17 @@ function CoachWorkout({ sessionId }: { sessionId: number }) {
   const setCountdown = (c: Countdown | null) => { setCountdownState(c); writeSessionFlag(timerKey, c) }
   const [restUntil, setRestUntil] = useState<number | null>(null)
   const [thinking, setThinking] = useState(false)
-  const [halted, setHalted] = useState(false)
+  // A safety-screen hit stops the prompts until "Keep going"; kept across a reload.
+  const haltedKey = `coach-workout-halted-${sessionId}`
+  const [halted, setHaltedState] = useState(() => readSessionFlag<boolean>(haltedKey, false))
+  const setHalted = (v: boolean) => { setHaltedState(v); writeSessionFlag(haltedKey, v) }
   const [askFinish, setAskFinish] = useState(false)
   const [finishing, setFinishing] = useState(false)
   const [changes, setChanges] = useState<Partial<Record<Region, SymptomChangeKind>>>({})
   const [gateSheet, setGateSheet] = useState(false)
   const [gateOutcome, setGateOutcome] = useState<GateOutcome | null>(null)
   const [painFor, setPainFor] = useState<Step | null>(null)
+  const [subFor, setSubFor] = useState<{ step: Step; reason: string } | null>(null)
   const [supportOpen, setSupportOpen] = useState(false)
   const [draft, setDraft] = useState('')
 
@@ -245,8 +249,8 @@ function CoachWorkout({ sessionId }: { sessionId: number }) {
     } else if (swapped) {
       say('coach', `Swapped for today: ${outcome.changes.join('; ')}.`)
     } else if (o.action === 'substitute') {
-      markStopped(exerciseId)
-      say('coach', `Let's leave ${s.exercise.name} for today.`)
+      // The player's substitute sheet, with its safe filters and the pain as the reason.
+      setSubFor({ step: s, reason: `${REGION_LABELS[o.check.region]} pain ${o.check.painScore}/10` })
     } else if (o.action === 'reduce_load') {
       const next = reducePlannedLoad(session, s.index, last?.loadKg ?? s.planned.loadKg ?? null)
       say('coach', next != null ? `Load down to ${fmtLoad(next)}. Keep the range pain-free.` : 'No load to drop. Shorten the range instead.')
@@ -322,8 +326,10 @@ function CoachWorkout({ sessionId }: { sessionId: number }) {
       return
     }
     if (status === 'planned') {
-      if (/^(all good|no|nope|nothing|fine|good|ok(ay)?)\b/i.test(q) && !reportedToday) { startWith(GATE_REGIONS.map((region) => ({ region, painScore: 0, redFlags: {} }))); return }
-      if (/\b(hurts?|pain|sore|ache|aching)\b/i.test(q) || /^(all good|no|nope|nothing|fine|good|ok(ay)?)\b/i.test(q)) { setGateSheet(true); return }
+      // Pain words always go to the gate sheet; an all-clear starts at 0 only when nothing was reported earlier today.
+      const g = parseGateReply(q)
+      if (g === 'all_good' && !reportedToday) { startWith(GATE_REGIONS.map((region) => ({ region, painScore: 0, redFlags: {} }))); return }
+      if (g !== 'other') { setGateSheet(true); return }
       void ask(q, before)
       return
     }
@@ -361,11 +367,9 @@ function CoachWorkout({ sessionId }: { sessionId: number }) {
   useEffect(() => {
     if (!session || opened.current) return
     opened.current = true
-    if (session.status === 'planned') say('coach', `${session.name} today. Before we start: anything hurting?`)
-    else if (session.status === 'in_progress') {
-      const text = prog.done ? `Welcome back. ${prog.done} of ${prog.total} sets done.` : programCues.start ?? "Let's go."
-      if (lines[lines.length - 1]?.text !== text) say('coach', text)
-    }
+    const once = (text: string) => { if (lines[lines.length - 1]?.text !== text) say('coach', text) }
+    if (session.status === 'planned') once(`${session.name} today. Before we start: anything hurting?`)
+    else if (session.status === 'in_progress') once(prog.done ? `Welcome back. ${prog.done} of ${prog.total} sets done.` : programCues.start ?? "Let's go.")
     else if (session.status === 'completed' && !lines.length) say('coach', `This one is done: ${sets.length} ${sets.length === 1 ? 'set' : 'sets'}.`)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session])
@@ -483,6 +487,21 @@ function CoachWorkout({ sessionId }: { sessionId: number }) {
         outcome={gateOutcome}
         onClose={() => setGateOutcome(null)}
         onSkip={() => { skipSession(session as WorkoutSession, 'symptom gate RED'); setGateOutcome(null); navigate('/') }}
+      />
+      <SubstituteSheet
+        open={subFor !== null}
+        onClose={() => setSubFor(null)}
+        exercise={subFor?.step.exercise ?? null}
+        gate={gate}
+        library={library}
+        inSessionIds={session.exercises.map((e) => e.exerciseId)}
+        initialReason={subFor?.reason}
+        onPick={(sub, reason) => {
+          if (!subFor) return
+          substituteExercise(session as WorkoutSession, subFor.step.index, sub, reason)
+          say('coach', `Swapped ${subFor.step.exercise.name} for ${sub.name}.`)
+          setSubFor(null)
+        }}
       />
       <PainSheet open={painFor !== null} onClose={() => setPainFor(null)} exercise={painFor?.exercise ?? null} sessionId={session.id} onOutcome={onPain} />
       <SupportSheet open={supportOpen} onClose={() => setSupportOpen(false)} />

@@ -29,14 +29,30 @@ function toSec(n: number, unit: string): number {
   return Math.round(/^m/.test(unit) ? n * 60 : n)
 }
 
+const PAIN = /\b(pain|painful|hurts?|hurting|hurt|sore|aches?|aching|twinge|tweak(ed)?|pinch(ing)?|sharp|injur(ed|y))\b/
+
+const lower = (raw: string) => raw.toLowerCase().replace(/[’']/g, "'").replace(/\s+/g, ' ').trim()
+/** "no pain" and "pain-free" are reassurance, not a report. */
+const withoutReassurance = (t: string) => t.replace(/\b(no pain|pain[- ]free|without pain|doesn't hurt|didn't hurt|nothing hurts)\b/g, ' ').replace(/\s+/g, ' ').trim()
+
+/**
+ * The answer to "Anything hurting?" before the first set. Any pain word wins ("no, but my knee hurts"); only a short
+ * all-clear on its own starts the session at 0 everywhere.
+ */
+export function parseGateReply(raw: string): 'all_good' | 'hurts' | 'other' {
+  const t = lower(raw)
+  if (/^(all good|all fine|all clear|no|nope|none|nothing|fine|good|ok(ay)?|i'm (good|fine)|no pain|nothing hurts|pain[- ]free)[.! ]*$/.test(t)) return 'all_good'
+  if (PAIN.test(withoutReassurance(t))) return 'hurts'
+  return 'other'
+}
+
 export function parseWorkoutReply(raw: string, kind: StepKind | null): WorkoutReply {
-  // "no pain" and "pain-free" are reassurance, not a report.
-  const t = raw.toLowerCase().replace(/[’']/g, "'").replace(/\b(no pain|pain[- ]free|without pain|doesn't hurt|didn't hurt)\b/g, ' ').replace(/\s+/g, ' ').trim()
+  const t = withoutReassurance(lower(raw))
   if (!t) return { kind: 'other' }
 
   if (/^(undo|oops|wrong|that's wrong|not \d+|delete that|scratch that)\b/.test(t)) return { kind: 'undo' }
   if (/\b(finish|i'm done for today|done for today|end (the |this )?(workout|session)|stop the (workout|session)|wrap (it )?up|call it a day|that's it for today)\b/.test(t)) return { kind: 'finish' }
-  if (/\b(pain|painful|hurts?|hurting|hurt|sore|aches?|aching|twinge|tweak(ed)?|pinch(ing)?|sharp|injur(ed|y))\b/.test(t)) return { kind: 'pain' }
+  if (PAIN.test(t)) return { kind: 'pain' }
 
   // "10 at 16 kg", "10 x 16", "10 reps @ 35 lb"
   const repsLoad = t.match(new RegExp(String.raw`\b${NUM}\s*(?:reps?)?\s*(?:@|at|x|×|with)\s*${NUM}\s*${LOAD_UNIT}?`))
