@@ -465,7 +465,8 @@ function CoachWorkout({ sessionId }: { sessionId: number }) {
         {inProgress && !step && !halted && !finishQuestion && <CoachBubble text={`That's everything${prog.total ? `: ${prog.done} of ${prog.total} sets` : ''}. Finish?`} />}
         {inProgress && step && askFinish && !halted && !finishQuestion && <CoachBubble text={`Finish here? ${prog.done} of ${prog.total} sets done.`} />}
         {thinking && <CoachBubble text="…" />}
-        <div ref={endRef} />
+        {/* Scrolled to just above the reply bar, not under it. */}
+        <div ref={endRef} style={{ scrollMarginBottom: 'calc(9.5rem + env(safe-area-inset-bottom, 0px))' }} />
       </div>
 
       <ReplyBar chips={chips} draft={draft} setDraft={setDraft} onSend={() => submit(draft)} disabled={thinking || finishing} />
