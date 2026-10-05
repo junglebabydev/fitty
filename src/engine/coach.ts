@@ -280,7 +280,7 @@ export function generateProposals(f: CoachFacts): ProposalDraft[] {
     })
   }
 
-  if (f.readiness.state === 'AMBER' && f.readiness.modifiers.reduceVolume && f.plannedToday?.status === 'planned' && f.plannedToday.type === 'strength') {
+  if (f.readiness.state === 'AMBER' && f.readiness.modifiers.reduceVolume && f.plannedToday?.status === 'planned' && f.plannedToday.type === 'strength' && f.plannedToday.id > 0) {
     out.push({
       kind: 'volume',
       title: `Trim today's ${f.plannedToday.name} by one set per exercise`,

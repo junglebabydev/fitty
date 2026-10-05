@@ -284,8 +284,8 @@ export const program: Program = {
     longGapDays: 14,
   },
   standalone: [
-    { sessionKey: 'w1d1', name: 'Blueprint strength', fact: '60 min, dumbbells and a kettlebell' },
-    { sessionKey: 'w1d2', name: 'Blueprint sprints', fact: '15 min on the bike' },
+    { sessionKey: 'w1d1', name: 'Strength + zone 2', fact: '60 min, dumbbells and a kettlebell' },
+    { sessionKey: 'w1d2', name: 'Sprints + zone 2', fact: '15 min on the bike' },
     { sessionKey: 'w1d4', name: 'Norwegian 4×4', fact: '40 min on the bike' },
   ],
   cues: {

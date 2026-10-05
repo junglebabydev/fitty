@@ -1,74 +1,73 @@
 // Today on the Blueprint week (FEATURES.blueprint; data in src/data/programs/blueprint.ts): the week as a strip, the
-// day's session with a drawing of every move, and one button. Start runs the session in Focus Mode the same way
-// "Start now" does: the series' safety questions once, then the symptom gate. Tap another day to see it, or do it today.
+// day's session with a drawing of every move, and two ways to do it. Start runs it in Focus Mode the same way "Start
+// now" does (the series' safety questions once, then the symptom gate); "Do it with Coach" runs the same session as a
+// chat (screens/CoachWorkout.tsx). Tap another day to see it, or do it today.
 import { useState, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Activity, Check, ChevronRight, Dumbbell, HeartPulse, PersonStanding, Play, Settings, StretchHorizontal, Wind, type LucideIcon } from 'lucide-react'
+import { Activity, Check, ChevronRight, Dumbbell, HeartPulse, MessageSquare, PersonStanding, Play, Settings, StretchHorizontal, Wind, type LucideIcon } from 'lucide-react'
 import type { Block } from '../domain/programs'
 import type { Exercise } from '../domain/types'
 import { Button, ExerciseVisual, IconButton, Screen } from '../components'
-import { getProgram } from '../data/programs'
 import { exerciseMedia } from '../data/exerciseMedia'
-import { getConditionFlags, getSessions, getSetsForSession } from '../db/repositories'
-import { effectivePaths, screenResult, sessionOnPath } from '../engine'
+import { getConditionFlags } from '../db/repositories'
 import { useQuery } from '../hooks'
 import { cx, dayName, fmtDate, todayStr } from '../lib/util'
-import { SafetyCheckSheet, previewSafety, standaloneSession } from '../features/programs'
+import { SafetyCheckSheet, previewSafety } from '../features/programs'
 import { exerciseMap, libraryExercises } from '../features/workout/helpers'
-import { noImpactChosen, screenAnswersFor, startStandaloneWorkout } from '../features/workout/program'
+import { noImpactChosen, screenAnswersFor } from '../features/workout/program'
+import { blueprintProgram, blueprintRows, blueprintSession, ensureTodayRow } from '../features/blueprint/session'
 import {
-  BLUEPRINT_ID, KIND_META, blockLine, dayKey, dayKind, doneOn, isBlueprintRow, rowForDate, sections, sessionExerciseIds, stationLine, weekDates,
-  type DayKind,
+  KIND_META, blockLine, dayKey, dayKind, doneOn, rowForDate, sections, sessionExerciseIds, stationLine, weekDates, type DayKind,
 } from '../features/blueprint/week'
+
+type Mode = 'player' | 'coach'
 
 export default function BlueprintScreen() {
   const navigate = useNavigate()
   const today = todayStr()
   const [picked, setPicked] = useState(today)
-  const [checkOpen, setCheckOpen] = useState(false)
-  const program = getProgram(BLUEPRINT_ID)!
+  // The safety questions are asked once, before the first start of either kind.
+  const [checkFor, setCheckFor] = useState<Mode | null>(null)
+  const program = blueprintProgram()
   const week = weekDates(today)
   const key = dayKey(picked)
   const kind = dayKind(picked)
 
-  const rows = useQuery(() => getSessions(week[0], week[6]).filter(isBlueprintRow), [week[0]])
-  // Built exactly as startStandaloneWorkout builds it, so the list is what Start creates (before the symptom gate).
+  const rows = useQuery(() => blueprintRows(today), [today])
   const data = useQuery(() => {
-    const base = standaloneSession(program, key)
-    if (!base) return null
+    const session = blueprintSession(key)
+    if (!session) return null
     const flags = getConditionFlags().map((f) => f.region)
-    const noImpact = noImpactChosen()
-    const saved = screenAnswersFor(program.id)
-    const path = screenResult(program, saved?.answers ?? {}, flags, noImpact).path
-    const library = libraryExercises()
     return {
-      session: sessionOnPath(program, base, effectivePaths(program, path, flags, noImpact), library),
-      byId: exerciseMap(library),
-      safety: previewSafety(program, saved, flags, noImpact, today),
+      session,
+      byId: exerciseMap(libraryExercises()),
+      safety: previewSafety(program, screenAnswersFor(program.id), flags, noImpactChosen(), today),
     }
   }, [key, today])
 
   // This session on its own day, or done on today instead ("Do it today").
   const row = rowForDate(rows, picked, key) ?? (picked !== today ? rowForDate(rows, today, key) : null)
-  const open = (id: number) => navigate(`/train/session/${id}`)
-  const start = () => {
-    // An untouched row for this session today is reused rather than doubled.
-    const reuse = rows.find((r) => r.scheduledDate === today && r.status === 'planned' && r.templateKey.endsWith(`:${key}`) && getSetsForSession(r.id).length === 0)
-    open(reuse ? reuse.id : startStandaloneWorkout(BLUEPRINT_ID, key, today))
-  }
-  const onPrimary = () => {
-    if (row && row.status !== 'planned') return open(row.id)
-    if (data?.safety.state === 'ready') return start()
-    setCheckOpen(true)
+  const open = (id: number, mode: Mode) => navigate(mode === 'coach' ? `/coach/workout/${id}` : `/train/session/${id}`)
+  const go = (mode: Mode) => {
+    if (row && row.status !== 'planned') return open(row.id, mode)
+    if (data?.safety.state === 'ready') return open(ensureTodayRow(key, today), mode)
+    setCheckFor(mode)
   }
 
-  const button = row?.status === 'in_progress'
-    ? <Button variant="primary" size="lg" full icon={<Play size={18} />} onClick={onPrimary}>Resume</Button>
-    : row?.status === 'completed'
-      ? <Button variant="secondary" size="lg" full icon={<Check size={18} />} onClick={onPrimary}>Done · See summary</Button>
-      : picked === today
-        ? <Button variant="primary" size="lg" full icon={<Play size={18} />} onClick={onPrimary}>Start</Button>
-        : <Button variant="secondary" size="lg" full onClick={onPrimary}>Do it today</Button>
+  const button = row?.status === 'completed'
+    ? <Button variant="secondary" size="lg" full icon={<Check size={18} />} onClick={() => go('player')}>Done · See summary</Button>
+    : (
+      <div className="flex flex-col gap-2">
+        {row?.status === 'in_progress'
+          ? <Button variant="primary" size="lg" full icon={<Play size={18} />} onClick={() => go('player')}>Resume</Button>
+          : picked === today
+            ? <Button variant="primary" size="lg" full icon={<Play size={18} />} onClick={() => go('player')}>Start</Button>
+            : <Button variant="secondary" size="lg" full onClick={() => go('player')}>Do it today</Button>}
+        <Button variant="secondary" size="lg" full icon={<MessageSquare size={18} />} onClick={() => go('coach')}>
+          {row?.status === 'in_progress' ? 'Continue with Coach' : 'Do it with Coach'}
+        </Button>
+      </div>
+    )
 
   return (
     <Screen
@@ -112,14 +111,20 @@ export default function BlueprintScreen() {
         ))}
       </div>
 
-      <SafetyCheckSheet open={checkOpen} program={program} mode="workout" onClose={() => setCheckOpen(false)} onDone={() => { setCheckOpen(false); start() }} />
+      <SafetyCheckSheet
+        open={checkFor !== null}
+        program={program}
+        mode="workout"
+        onClose={() => setCheckFor(null)}
+        onDone={() => { const mode = checkFor ?? 'player'; setCheckFor(null); open(ensureTodayRow(key, today), mode) }}
+      />
     </Screen>
   )
 }
 
 // --- week strip ------------------------------------------------------------------------------------------------
 
-type Row = ReturnType<typeof getSessions>[number]
+type Row = ReturnType<typeof blueprintRows>[number]
 
 function WeekStrip({ dates, today, picked, rows, onPick }: { dates: string[]; today: string; picked: string; rows: Row[]; onPick: (d: string) => void }) {
   return (

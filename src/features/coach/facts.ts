@@ -3,18 +3,20 @@
 import type { Exercise, NutritionTarget, SymptomCheck, WorkoutSession } from '../../domain/types'
 import { addDays, dateOf, hourNow as clockHour, startOfWeek, todayStr } from '../../lib/util'
 import {
-  activeSession, completedSessionCount, dailyTotals, dailyTotalsRange, getBodyMetrics, getCheckIn, getExercise, getGoals,
+  activeSession, completedSessionCount, dailyTotals, dailyTotalsRange, getBodyMetrics, getCheckIn, getConditionFlags, getExercise, getGoals,
   getHealthMetrics, getMoodLogs, getNutritionTarget, getProfile, getSavedMeals, getSessions, getSessionsForDate, getSetting,
   getSleepRecords, getSymptomChecks, lastNightSleep, lastSetsForExercise, latestBodyMetric, mindfulMinutes, moodLogsForDate,
   previousSetsForExercise, recentFoods, symptomsForDate,
 } from '../../db/repositories'
 import {
-  computePillars, computeReadiness, estimateTargets, evaluateNutritionTrend, evaluateProgression, evaluateSymptomGate,
-  rollingAverage, supportSignal,
+  ageAt, computePillars, computeReadiness, estimateTargets, evaluateNutritionTrend, evaluateProgression, evaluateSymptomGate,
+  regionLabel, rollingAverage, supportSignal,
   type CoachFacts, type GateResult, type ReadinessInput, type ReadinessResult, type Tier,
 } from '../../engine'
 import { EXERCISE_BY_ID, FOOD_BY_ID, HIGH_PROTEIN_IDS } from '../../data'
 import { TRAIN_TIER_SETTING } from '../workout/helpers'
+import { FEATURES } from '../../config/features'
+import { blueprintRows, blueprintToday } from '../blueprint/session'
 
 /** Days of weight / intake history fed to the nutrition trend (PRD §10: adjust from 14–21 day trends). */
 export const TREND_WINDOW_DAYS = 21
@@ -217,8 +219,9 @@ export function buildCoachFacts(today: string = todayStr()): CoachFacts {
   const sleep = sleepFacts(today)
   const readiness = computeReadiness(readinessInputFor(today))
   const gate = gateFor(today)
-  const plannedToday = plannedSessionFor(today)
-  const sessionsThisWeek = weekSessionsFor(today)
+  // On the Blueprint week the coach sees only Blueprint sessions, so old plan rows never come up in its answers.
+  const plannedToday = FEATURES.blueprint ? blueprintToday(today) : plannedSessionFor(today)
+  const sessionsThisWeek = FEATURES.blueprint ? blueprintRows(today) : weekSessionsFor(today)
   const target = currentTarget(today)
 
   const weightRows = getBodyMetrics('weight', TREND_WINDOW_DAYS)
@@ -264,4 +267,24 @@ export function buildCoachFacts(today: string = todayStr()): CoachFacts {
     loggedMealDaysLast7,
     mind: mindFacts(today),
   }
+}
+
+// --- profile -------------------------------------------------------------------------
+
+/** One line about the user for the coach prompt (moved from screens/Coach.tsx; the coach-led workout sends it too). */
+export function profileSummary(): string {
+  const p = getProfile()
+  if (!p) return 'No profile yet.'
+  const flags = getConditionFlags()
+  const goals = getGoals().filter((g) => g.status === 'active')
+  return [
+    `${p.name || 'User'}, ${p.sex}, ${ageAt(p.dob)} y, ${p.heightCm} cm, ${p.experience}`,
+    `diet: ${p.dietPattern || 'not specified'}`,
+    `equipment: ${p.equipment.join(', ') || 'not specified'}`,
+    `mobility priorities: ${p.mobilityPriorities.join(', ') || 'none'}`,
+    `conditions: ${flags.map((f) => `${f.label} (${regionLabel(f.region)})`).join('; ') || 'none'}`,
+    `goals: ${goals.map((g) => `${g.type} ${g.targetValue} ${g.unit}`).join(', ') || 'none'}`,
+    `coach style: ${p.coachStyle}`,
+    `training days min/target/stretch ${p.trainingDaysMin}/${p.trainingDaysTarget}/${p.trainingDaysStretch}`,
+  ].join('; ') + '.'
 }

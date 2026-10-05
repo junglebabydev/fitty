@@ -6,7 +6,7 @@
 // the provider. Journal text and mood notes are never read here.
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { Link, useLocation, useSearchParams } from 'react-router-dom'
-import { Check, ChevronDown, ChevronRight, CircleAlert, Eraser, Lightbulb, RotateCcw, TriangleAlert, Undo2, X } from 'lucide-react'
+import { Check, ChevronDown, ChevronRight, CircleAlert, Eraser, Lightbulb, MessageSquare, RotateCcw, TriangleAlert, Undo2, X } from 'lucide-react'
 import type { CoachDecision, CoachMessage, Evidence } from '../domain/types'
 import {
   AIBadge, Button, Chip, IconButton, PILLARS, ReadinessBadge, Ring, Screen, Sheet, Skeleton, StatusPill,
@@ -27,7 +27,7 @@ import { useAIStatus } from '../features/ai/config'
 import { COMPOSER_CLEARANCE, Composer } from '../features/composer'
 import { reportContextLines } from '../features/reports'
 import { addDays, cx, dateOf, fmtDate, fmtTime, nowIso, todayStr } from '../lib/util'
-import { buildCoachFacts } from '../features/coach/facts'
+import { buildCoachFacts, profileSummary } from '../features/coach/facts'
 import { FEATURES } from '../config/features'
 import {
   acceptDecision, decisionKindLabel, extractProposalLine, isReversible, numberOr, rejectDecision, revertDecision, syncProposals,
@@ -66,23 +66,6 @@ function safeFacts(): CoachFacts | null {
     console.warn('buildCoachFacts failed', e)
     return null
   }
-}
-
-function profileSummary(): string {
-  const p = getProfile()
-  if (!p) return 'No profile yet.'
-  const flags = getConditionFlags()
-  const goals = getGoals().filter((g) => g.status === 'active')
-  return [
-    `${p.name || 'User'}, ${p.sex}, ${ageAt(p.dob)} y, ${p.heightCm} cm, ${p.experience}`,
-    `diet: ${p.dietPattern || 'not specified'}`,
-    `equipment: ${p.equipment.join(', ') || 'not specified'}`,
-    `mobility priorities: ${p.mobilityPriorities.join(', ') || 'none'}`,
-    `conditions: ${flags.map((f) => `${f.label} (${regionLabel(f.region)})`).join('; ') || 'none'}`,
-    `goals: ${goals.map((g) => `${g.type} ${g.targetValue} ${g.unit}`).join(', ') || 'none'}`,
-    `coach style: ${p.coachStyle}`,
-    `training days min/target/stretch ${p.trainingDaysMin}/${p.trainingDaysTarget}/${p.trainingDaysStretch}`,
-  ].join('; ') + '.'
 }
 
 /**
@@ -640,6 +623,24 @@ export default function CoachScreen() {
             <span className="line-clamp-2 min-w-0 flex-1 text-[15px] leading-snug text-app">{firstSentence(priority.headline)}</span>
             <ChevronRight size={18} className="shrink-0 text-faint" aria-hidden />
           </button>
+        )}
+
+        {/* Blueprint week: today's session, done here as a chat (screens/CoachWorkout.tsx). Gone once it is done. */}
+        {FEATURES.blueprint && facts?.plannedToday && (facts.plannedToday.status === 'planned' || facts.plannedToday.status === 'in_progress') && (
+          <Link
+            to={facts.plannedToday.id > 0 ? `/coach/workout/${facts.plannedToday.id}` : '/coach/workout/today'}
+            {...rise(0)}
+            className="anim-rise press flex min-h-14 w-full items-center gap-3 rounded-[1.25rem] bg-surface px-4 py-3 text-left active:bg-surface-2"
+          >
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-accent-fg" aria-hidden><MessageSquare size={18} /></span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[15px] font-semibold leading-snug text-app">
+                {facts.plannedToday.status === 'in_progress' ? "Continue today's workout with me" : "Do today's workout with me"}
+              </span>
+              <span className="block truncate text-[13px] text-muted">{facts.plannedToday.name}</span>
+            </span>
+            <ChevronRight size={18} className="shrink-0 text-faint" aria-hidden />
+          </Link>
         )}
 
         {FEATURES.coachBrief && proposals && (
