@@ -9,7 +9,8 @@ import App from './App'
 // `immediate` registers on load; updates are applied automatically (registerType: 'autoUpdate').
 initTheme()
 
-registerSW({
+// The iPhone app (mode 'ios') has no service worker: its files ship inside the app and update through TestFlight.
+if (import.meta.env.MODE !== 'ios') registerSW({
   immediate: true,
   // The browser only looks for a new service worker on navigation. A home-screen app can stay open for days,
   // so ask again every minute while visible and whenever the app comes back to the foreground.

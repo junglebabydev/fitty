@@ -145,3 +145,5 @@ Design rules live in `docs/DESIGN.md` (section 10 is the current direction).
 ## Deploy
 
 The app ships as one Cloudflare Worker (`wrangler.jsonc`, name `fitty`): the built PWA as static assets plus `worker/index.ts`, which answers `/api/ai/*` with Google Gemini (default) or Anthropic behind a mandatory PIN. Workers Builds form: build command empty (Wrangler runs `npm run build` itself), deploy command `npx wrangler deploy`, path `/`. Add `COACH_BRIDGE_PIN` (8+ characters) and `GEMINI_API_KEY` or `ANTHROPIC_API_KEY` as Worker **secrets**, and put the site behind Cloudflare Access. Data never leaves each browser's own database, so devices do not sync. Full steps, the free-versus-paid Gemini data terms, custom domains and troubleshooting: [`docs/DEPLOY.md`](docs/DEPLOY.md). Local checks: `npm run cf:dry`, `npm run typecheck:worker`, `npx vitest run worker`.
+
+The iPhone app (TestFlight) wraps the same build in a Capacitor shell, and it needs Cloudflare Access off: [`docs/IOS.md`](docs/IOS.md).

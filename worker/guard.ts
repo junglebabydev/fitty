@@ -146,7 +146,8 @@ export function pinFailKey(ip: string): string {
  * Same-origin only. Browsers send Origin on every POST and on cross-origin GETs; when it is present its
  * origin (scheme, host and port) must equal the origin of the URL being requested. Sec-Fetch-Site, when
  * present, must not say the request came from another site. Requests without either header (curl,
- * same-origin GET) pass this check and still need the PIN.
+ * same-origin GET) pass this check and still need the PIN. The iPhone app relies on this: its native HTTP
+ * calls send no Origin (docs/IOS.md).
  */
 export function isSameOrigin(requestUrl: string, origin: string | null, secFetchSite: string | null = null): boolean {
   if (secFetchSite && secFetchSite !== 'same-origin' && secFetchSite !== 'none') return false

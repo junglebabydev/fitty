@@ -8,6 +8,7 @@ import { useQuery, useToast } from './hooks'
 import { db } from './db/database'
 import { acquireTabLock } from './db/tabLock'
 import { seedIfEmpty } from './db/seed'
+import { aiHostname } from './ai/endpoint'
 import { applyAISettings, inferBridgeHost } from './features/ai/config'
 import { RequireSetup } from './features/onboarding/SetupGate'
 import { isOnboarded, onboardingSkipped } from './features/onboarding/setup'
@@ -241,7 +242,7 @@ function OnboardingGate({ children }: { children: ReactNode }) {
   const atOnboarding = pathname === '/onboarding'
   if (onboarded || skipped || atOnboarding) return <>{children}</>
   // Hosted site, fresh phone: offer to load the owner profile from the Worker before falling back to the wizard.
-  if (!skipUnlock && inferBridgeHost(window.location.hostname) === 'cloud') {
+  if (!skipUnlock && inferBridgeHost(aiHostname()) === 'cloud') {
     return <OwnerUnlockScreen onSkip={() => setSkipUnlock(true)} />
   }
   return <Navigate to="/onboarding" replace />

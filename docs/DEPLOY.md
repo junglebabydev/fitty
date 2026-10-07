@@ -121,6 +121,8 @@ This is a personal health app on a public URL. Without Access, anyone who finds 
 
 Keep the PIN anyway: it is the second lock.
 
+**The iPhone app needs Access off.** Its native requests can't complete the Access login, so with the app in use the PIN is the only lock. See [IOS.md](IOS.md).
+
 **When an Access session expires**, AI calls fail with a network error (the browser is redirected to the Access login, which a background request cannot follow) and app updates stop arriving. Reloading does not help: the service worker serves the app shell from its cache, so a reload never reaches Access. Open **`/api/ai/reauth`** on the site instead, for example `https://fitty.<subdomain>.workers.dev/api/ai/reauth`. That path always goes to the network, so Access shows its login and the Worker then sends you back to the app. In the iPhone home-screen app there is no address bar: use the "Sign in again" action the app shows when a hosted AI call cannot reach the server. Do not delete the home-screen app to get out of this state, because that also deletes its local database.
 
 ## 5. What works where
