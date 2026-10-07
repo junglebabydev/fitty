@@ -16,6 +16,7 @@ import { addSet, deleteSet, getConditionFlags, getSession, getSetsForSession, la
 import { aiConnected, coachConversation, isAIError } from '../ai'
 import { REDACTED_SAFETY_TURN, computeDailyPriority, isExerciseAllowed, screenMessage } from '../engine'
 import { acquireWakeLock } from '../native'
+import { beep, speak, unlockCues } from '../native/cues'
 import { useNow, useOnline, useQuery } from '../hooks'
 import { cx, nowIso, todayStr } from '../lib/util'
 import { buildCoachFacts, profileSummary, todayReadiness } from '../features/coach/facts'
@@ -29,6 +30,7 @@ import {
   type GateEntry, type GateOutcome, type PainOutcome, type SymptomChange, type SymptomChangeKind,
 } from '../features/workout'
 import { circuitRestAfter } from '../features/workout/focus'
+import { autoBlock, startWord } from '../features/workout/autoRun'
 import { NO_LOAD_EQUIPMENT, buildSetRow } from '../features/workout/useSetLogger'
 import { blueprintProgram, blueprintRows, ensureTodayRow } from '../features/blueprint/session'
 import { dayKey, rowForDate } from '../features/blueprint/week'
@@ -78,7 +80,7 @@ interface Line {
 }
 
 /** A hold or steady block counting down, anchored to the wall clock so a locked phone does not lose it. */
-interface Countdown { index: number; setNo: number; startedAt: number; endsAt: number }
+interface Countdown { index: number; setNo: number; startedAt: number; endsAt: number; /** Scheduled by a running block. */ auto?: boolean }
 
 interface Chip { label: string; primary?: boolean; run: () => void }
 
@@ -120,9 +122,16 @@ function CoachWorkout({ sessionId }: { sessionId: number }) {
     setLines((prev) => [...prev, { id: lineId(), from, text, ...extra }])
   }, [])
 
-  const [countdown, setCountdownState] = useState<Countdown | null>(() => readSessionFlag<Countdown | null>(timerKey, null))
+  // A hold that was running resumes (and logs at its end) after a reload or a locked phone; a round a running block had
+  // scheduled but not started is dropped, so a reload never starts one by itself.
+  const [countdown, setCountdownState] = useState<Countdown | null>(() => {
+    const c = readSessionFlag<Countdown | null>(timerKey, null)
+    return c?.auto && Date.now() < c.startedAt ? null : c
+  })
   const setCountdown = (c: Countdown | null) => { setCountdownState(c); writeSessionFlag(timerKey, c) }
   const [restUntil, setRestUntil] = useState<number | null>(null)
+  // The block running on its own (autoRun.ts): after each rest its next round or station is scheduled. This visit only.
+  const [armed, setArmed] = useState<string | null>(null)
   const [thinking, setThinking] = useState(false)
   // A safety-screen hit stops the prompts until "Keep going"; kept across a reload.
   const haltedKey = `coach-workout-halted-${sessionId}`
@@ -195,19 +204,35 @@ function CoachWorkout({ sessionId }: { sessionId: number }) {
     if (!last?.undo) { say('coach', 'Nothing to undo.'); return }
     deleteSet(last.undo)
     setLines((prev) => prev.map((l) => (l.id === last.id ? { ...l, undo: undefined } : l)))
+    setArmed(null)
+    setCountdown(null)
     setRestUntil(null)
     say('coach', 'Removed. Tell me again when you are ready.')
   }
 
   const startTimer = (s: Step) => {
     if (s.seconds == null) return
+    unlockCues()
+    const block = autoBlock(s.planned, s.index)
+    if (block && s.kind === 'hold') {
+      // The first tap of a block starts the run: rounds and stations go on by themselves from here.
+      setArmed(block)
+      speak(startWord(s.planned, s.setNo, s.exercise.name))
+    }
     const t = Date.now()
     setCountdown({ index: s.index, setNo: s.setNo, startedAt: t, endsAt: t + s.seconds * 1000 })
     setRestUntil(null)
   }
 
+  /** Stops a running block and any countdown: after pain, a safety stop or a finish, only a new Start tap goes on. */
+  const stopRun = () => {
+    setArmed(null)
+    setCountdown(null)
+  }
+  const pause = stopRun
+
   const doneEarly = (s: Step) => {
-    if (!countdown) return
+    if (!countdown || Date.now() < countdown.startedAt) return
     const sec = Math.max(1, Math.round((Date.now() - countdown.startedAt) / 1000))
     setCountdown(null)
     logStep(s, { sec })
@@ -215,6 +240,7 @@ function CoachWorkout({ sessionId }: { sessionId: number }) {
 
   const skip = (s: Step) => {
     markStopped(s.planned.exerciseId)
+    setArmed(null)
     setCountdown(null)
     setRestUntil(null)
     say('coach', `Skipped ${s.exercise.name}.`)
@@ -234,6 +260,7 @@ function CoachWorkout({ sessionId }: { sessionId: number }) {
   const onPain = (o: PainOutcome) => {
     const s = painFor
     setPainFor(null)
+    stopRun()
     if (!session || !s) return
     const exerciseId = s.planned.exerciseId
     const logged = setsFor.get(exerciseId) ?? []
@@ -320,7 +347,7 @@ function CoachWorkout({ sessionId }: { sessionId: number }) {
     say('you', q, hit ? { screened: true } : {})
     if (hit) {
       say('coach', hit.reply)
-      setCountdown(null)
+      stopRun()
       setHalted(true)
       setSupportOpen(true)
       return
@@ -336,9 +363,9 @@ function CoachWorkout({ sessionId }: { sessionId: number }) {
     if (!inProgress || halted) { void ask(q, before); return }
     const r = parseWorkoutReply(q, step?.kind ?? null)
     if (r.kind === 'undo') return undo()
-    if (r.kind === 'finish') { setAskFinish(true); say('coach', prog.done ? 'Finish here?' : 'Nothing is logged yet. Finish anyway?'); return }
+    if (r.kind === 'finish') { stopRun(); setAskFinish(true); say('coach', prog.done ? 'Finish here?' : 'Nothing is logged yet. Finish anyway?'); return }
     if (step) {
-      if (r.kind === 'pain') { setPainFor(step); return }
+      if (r.kind === 'pain') { stopRun(); setPainFor(step); return }
       if (r.kind === 'reps' && step.kind === 'reps') return logStep(step, { reps: r.reps, loadKg: r.loadKg })
       if (r.kind === 'seconds' && step.kind !== 'reps') return logStep(step, { sec: r.sec })
       if (r.kind === 'done') {
@@ -389,9 +416,43 @@ function CoachWorkout({ sessionId }: { sessionId: number }) {
     if (loggedTimer.current === k) return
     loggedTimer.current = k
     setCountdown(null)
+    if (armed && session) {
+      // What comes next: another round of this block, or the end of the run.
+      const next = currentStep(session.exercises, [...sets, { exerciseId: step.planned.exerciseId }], stopped, byId)
+      const same = !!next && autoBlock(next.planned, next.index) === armed
+      beep(true)
+      speak(!next ? 'Done' : same ? (step.planned.restExerciseId ? 'Easy' : `Next, ${next.exercise.name}`) : `Done. Next, ${next.exercise.name}`)
+      if (!same) setArmed(null)
+    }
     logStep(step, { sec: step.seconds ?? Math.round((countdown.endsAt - countdown.startedAt) / 1000) })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [now, countdown, step])
+
+  // A running block schedules its next round or station to start when the rest ends.
+  useEffect(() => {
+    if (!armed || !step || halted || askFinish || countdown || step.kind !== 'hold' || step.seconds == null) return
+    if (autoBlock(step.planned, step.index) !== armed) return
+    const startAt = Math.max(Date.now(), restUntil ?? 0)
+    setCountdown({ index: step.index, setNo: step.setNo, startedAt: startAt, endsAt: startAt + step.seconds * 1000, auto: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [armed, step?.index, step?.setNo, halted, askFinish, countdown, restUntil])
+
+  // Beeps on the last three seconds of a running block's rest and work, and one word when a round starts.
+  const cued = useRef<string>('')
+  useEffect(() => {
+    if (!armed || !countdown || !step) return
+    const t = now.getTime()
+    const round = `${countdown.index}:${countdown.setNo}`
+    if (t < countdown.startedAt) {
+      const pre = Math.ceil((countdown.startedAt - t) / 1000)
+      if (pre <= 3 && cued.current !== `rest${round}:${pre}`) { cued.current = `rest${round}:${pre}`; beep() }
+      return
+    }
+    if (countdown.auto && !cued.current.startsWith(`go${round}`)) { cued.current = `go${round}`; speak(startWord(step.planned, step.setNo, step.exercise.name)); return }
+    const left = Math.ceil((countdown.endsAt - t) / 1000)
+    if (left > 0 && left <= 3 && cued.current !== `go${round}:${left}`) { cued.current = `go${round}:${left}`; beep() }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [now])
 
   const endRef = useRef<HTMLDivElement>(null)
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }) }, [lines.length, step?.index, step?.setNo, thinking, askFinish])
@@ -408,8 +469,11 @@ function CoachWorkout({ sessionId }: { sessionId: number }) {
   if (!session) return null
 
   const finishQuestion = inProgress && (askFinish || !step) && !halted ? sore.find((r) => !changes[r.region]) ?? null : null
-  const restLeft = restUntil ? Math.max(0, Math.ceil((restUntil - now.getTime()) / 1000)) : 0
-  const timerLeft = countdown ? Math.max(0, Math.ceil((countdown.endsAt - now.getTime()) / 1000)) : null
+  // A scheduled round shows its rest first ("Rest 0:15, then it starts"), then its countdown.
+  const waiting = !!countdown && now.getTime() < countdown.startedAt
+  const restLeft = waiting ? Math.ceil((countdown!.startedAt - now.getTime()) / 1000) : restUntil ? Math.max(0, Math.ceil((restUntil - now.getTime()) / 1000)) : 0
+  const timerLeft = countdown && !waiting ? Math.max(0, Math.ceil((countdown.endsAt - now.getTime()) / 1000)) : null
+  const running = !!armed && !!step && autoBlock(step.planned, step.index) === armed
   const lastLine = lines[lines.length - 1]
 
   const chips: Chip[] = []
@@ -439,15 +503,18 @@ function CoachWorkout({ sessionId }: { sessionId: number }) {
     if (step.kind === 'reps') {
       const nums = [...new Set([step.planned.repMin, Math.round((step.planned.repMin + step.planned.repMax) / 2), step.planned.repMax])]
       for (const n of nums) chips.push({ label: `${n}`, primary: !blocked && n === step.planned.repMax, run: tap(`${n}`, () => logStep(step, { reps: n })) })
+    } else if (waiting && countdown) {
+      chips.push({ label: 'Skip rest', primary: true, run: () => { const t = Date.now(); setCountdown({ ...countdown, startedAt: t, endsAt: t + (step.seconds ?? 0) * 1000 }) } })
     } else if (countdown) {
       chips.push({ label: 'Done early', primary: true, run: tap('Done early', () => doneEarly(step)) })
     } else {
       chips.push({ label: `Start ${fmtSec(step.seconds ?? 0)}`, primary: !blocked, run: () => startTimer(step) })
       chips.push({ label: 'Done', run: tap('Done', () => logStep(step, { sec: step.seconds ?? 0 })) })
     }
+    if (running) chips.push({ label: 'Pause', run: tap('Pause', pause) })
     if (!blocked) chips.push({ label: 'Skip', run: tap('Skip', () => skip(step)) })
     chips.push({ label: 'How?', run: tap('How?', () => how(step)) })
-    chips.push({ label: 'Pain', run: () => setPainFor(step) })
+    chips.push({ label: 'Pain', run: () => { stopRun(); setPainFor(step) } })
   }
 
   return (
@@ -463,7 +530,7 @@ function CoachWorkout({ sessionId }: { sessionId: number }) {
         {lines.map((l) => (l.from === 'you' ? <YouBubble key={l.id} text={l.text} /> : <CoachBubble key={l.id} text={l.text} />))}
 
         {inProgress && step && !halted && !askFinish && (
-          <StepCard step={step} load={info?.load ?? null} lastTime={info?.lastTime ?? null} timerLeft={timerLeft} restLeft={restLeft} blocked={blocked} />
+          <StepCard step={step} load={info?.load ?? null} lastTime={info?.lastTime ?? null} timerLeft={timerLeft} restLeft={restLeft} autoNext={waiting} blocked={blocked} />
         )}
         {finishQuestion && <CoachBubble text={`How is your ${REGION_LABELS[finishQuestion.region].toLowerCase()} now?`} />}
         {inProgress && !step && !halted && !finishQuestion && <CoachBubble text={`That's everything${prog.total ? `: ${prog.done} of ${prog.total} sets` : ''}. Finish?`} />}
@@ -530,8 +597,8 @@ function CoachBubble({ text }: { text: string }) {
 }
 
 /** The step the coach is asking for: the drawing, the target, the cue, last time, and the rest or the countdown. */
-function StepCard({ step, load, lastTime, timerLeft, restLeft, blocked }: {
-  step: Step; load: number | null; lastTime: string | null; timerLeft: number | null; restLeft: number; blocked: boolean
+function StepCard({ step, load, lastTime, timerLeft, restLeft, autoNext, blocked }: {
+  step: Step; load: number | null; lastTime: string | null; timerLeft: number | null; restLeft: number; autoNext: boolean; blocked: boolean
 }) {
   return (
     <div className="flex w-[88%] max-w-[360px] flex-col overflow-hidden rounded-[1.25rem] rounded-bl-md bg-surface">
@@ -546,7 +613,7 @@ function StepCard({ step, load, lastTime, timerLeft, restLeft, blocked }: {
         </div>
         {step.planned.cue && <p className="m-0 mt-1.5 text-[15px] leading-snug text-muted">{step.planned.cue}</p>}
         {lastTime && <p className="m-0 mt-1 text-[13px] text-faint">Last time: {lastTime}</p>}
-        {restLeft > 0 && timerLeft == null && <p className="m-0 mt-2 text-[13px] font-semibold text-muted">Rest {fmtClock(restLeft)}</p>}
+        {restLeft > 0 && timerLeft == null && <p className="m-0 mt-2 text-[13px] font-semibold text-muted">Rest {fmtClock(restLeft)}{autoNext ? ', then it starts' : ''}</p>}
         {blocked && (
           <p className="m-0 mt-2 flex items-start gap-1.5 text-[13px] leading-snug text-warn">
             <ShieldAlert size={15} className="mt-px shrink-0" aria-hidden />
