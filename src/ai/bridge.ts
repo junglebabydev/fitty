@@ -5,6 +5,7 @@
 //             as Worker secrets and always needs the PIN
 import { MEAL_RECOGNITION_SCHEMA, MEAL_SYSTEM_PROMPT, parseMealRecognition, stripDataUrl } from './anthropic'
 import type { CoachTurnRequest, CoachTurnResponse } from '../../coach/contract'
+import { aiUrl } from './endpoint'
 import { AIError, type AIProvider, type ChatTurn, type JsonRequest, type MealContext, type MealImage, type MealRecognition } from './types'
 
 export type BridgeHost = 'mac' | 'cloud'
@@ -112,7 +113,7 @@ export class BridgeProvider implements AIProvider {
     const model = this.host === 'mac' && this.model ? { model: this.model } : {}
     let res: Response
     try {
-      res = await fetch(`/api/ai${path}`, {
+      res = await fetch(aiUrl(path), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(this.pin ? { 'x-coach-pin': this.pin } : {}) },
         body: JSON.stringify({ ...body, ...model }),
@@ -160,7 +161,7 @@ export class BridgeProvider implements AIProvider {
 /** `deep` makes the bridge run one tiny real call so sign-in, key and PIN problems surface immediately. */
 export async function probeBridge(deep = false, pin = ''): Promise<BridgeHealth | null> {
   try {
-    const res = await fetch(`/api/ai/health${deep ? '?deep=1' : ''}`, { headers: pin ? { 'x-coach-pin': pin } : {} })
+    const res = await fetch(aiUrl(`/health${deep ? '?deep=1' : ''}`), { headers: pin ? { 'x-coach-pin': pin } : {} })
     return normalizeBridgeHealth(res.status, await res.json())
   } catch {
     return null

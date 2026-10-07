@@ -7,12 +7,13 @@ import {
   addSleepRecord,
   getBodyMetrics,
   getHealthMetrics,
+  getSetting,
   getSleepRecords,
   setSetting,
 } from '../../db/repositories'
-import { nowIso } from '../../lib/util'
+import { dateOf, nowIso, todayStr } from '../../lib/util'
 import { getHealthBridge } from '../../native'
-import { KEYS } from './keys'
+import { KEYS, readHealthPermissions } from './keys'
 
 export interface HealthImportResult {
   sleep: number
@@ -85,6 +86,25 @@ export async function importHealthData(days: number = HEALTH_IMPORT_DAYS): Promi
 
   if (errors.length) result.error = errors.join('; ')
   return result
+}
+
+let pulling: Promise<HealthImportResult | null> | null = null
+
+/**
+ * The morning Apple Health pull (PRD §7.1, §18): once a day when sleep, body mass or resting HR is permitted, so
+ * readiness and the coach do not sit on stale data until a manual import. App.tsx runs it at launch and whenever the
+ * app comes back to the front; a second call while one runs gets the same promise. Null when nothing was due.
+ */
+export function importHealthIfDue(today: string = todayStr()): Promise<HealthImportResult | null> {
+  pulling ??= (async () => {
+    const last = getSetting<string | null>(KEYS.healthLastImport, null)
+    if (last && dateOf(last) === today) return null
+    const perms = readHealthPermissions()
+    if (perms.sleep !== 'granted' && perms.bodyMass !== 'granted' && perms.restingHeartRate !== 'granted') return null
+    const avail = await getHealthBridge().isAvailable()
+    return avail.available ? importHealthData(7) : null
+  })().finally(() => { pulling = null })
+  return pulling
 }
 
 function describe(e: unknown): string {

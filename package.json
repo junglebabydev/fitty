@@ -15,11 +15,16 @@
     "deploy:coach": "wrangler deploy --config wrangler.coach.jsonc",
     "coach:dry": "wrangler deploy --dry-run --config wrangler.coach.jsonc --outdir .wrangler/coach-dry",
     "deploy": "npm run build && wrangler deploy",
+    "ios": "tsc -b && vite build --mode ios --outDir dist-ios && cap sync ios",
+    "ios:open": "cap open ios",
     "cf:dry": "wrangler deploy --dry-run --outdir .wrangler/dry",
     "owner:secret": "node --experimental-strip-types --no-warnings -e \"import('./src/config/owner.local.ts').then(m => process.stdout.write(JSON.stringify(m.OWNER)))\" | wrangler secret put OWNER_PROFILE"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.124.0",
+    "@capacitor/core": "^8.5.2",
+    "@capacitor/ios": "^8.5.2",
+    "@capgo/capacitor-health": "^8.11.5",
     "@fontsource-variable/lora": "^5.3.0",
     "@fontsource/barlow": "^5.3.0",
     "@fontsource/barlow-condensed": "^5.3.0",
@@ -31,6 +36,7 @@
     "sql.js": "^1.12.0"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.5.2",
     "@tailwindcss/vite": "^4.0.0",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",

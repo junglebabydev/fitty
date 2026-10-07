@@ -10,6 +10,7 @@
 //   'mock'            → on-device demo estimates only, nothing leaves the phone
 import { useSyncExternalStore } from 'react'
 import { bridgeProviderLabel, configureAI, probeBridge, type AIProviderId, type BridgeHealth, type BridgeHost } from '../../ai'
+import { aiHostname } from '../../ai/endpoint'
 import { addLedgerEntry, getSetting } from '../../db/repositories'
 import { nowIso } from '../../lib/util'
 
@@ -219,7 +220,7 @@ export function useAIStatus(): AIStatus {
 
 function configure(s: AISettings, checking: boolean): void {
   const active = resolveActive(s, bridge)
-  const host = bridgeHostOf(bridge, typeof location === 'undefined' ? '' : location.hostname)
+  const host = bridgeHostOf(bridge, aiHostname())
   configureAI({
     providerId: active,
     apiKey: s.apiKey || null,

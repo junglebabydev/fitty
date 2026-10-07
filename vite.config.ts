@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
@@ -14,14 +14,18 @@ const commit = (process.env.WORKERS_CI_COMMIT_SHA || process.env.CF_PAGES_COMMIT
 const builtAt = new Date().toISOString()
 const buildId = commit || builtAt.slice(0, 16).replace('T', ' ')
 
-export default defineConfig({
+// `npm run ios` builds with mode 'ios' for the iPhone app (capacitor.config.ts, docs/IOS.md): into dist-ios, with no
+// service worker (WKWebView does not run one on capacitor://), and AI calls sent to the Worker at VITE_API_BASE.
+export default defineConfig(({ mode }) => ({
   define: { __BUILD_ID__: JSON.stringify(buildId), __BUILD_TIME__: JSON.stringify(builtAt) },
   plugins: [
     react(),
     aiBridge(),
+    { name: 'ios-api-base', config() { if (mode === 'ios' && !loadEnv(mode, process.cwd()).VITE_API_BASE) throw new Error('npm run ios needs VITE_API_BASE in .env.ios (see docs/IOS.md).') } },
     ...(https ? [basicSsl()] : []),
     tailwindcss(),
     VitePWA({
+      disable: mode === 'ios',
       registerType: 'autoUpdate',
       // Behind Cloudflare Access the manifest must be fetched WITH the login cookie, or the browser gets the
       // Access sign-in page instead and "Add to Home Screen" loses the app name and icon.
@@ -65,4 +69,4 @@ export default defineConfig({
   // sql.js ships CJS/UMD only; pre-bundling makes its default import work in dev.
   optimizeDeps: { include: ['sql.js'] },
   test: { environment: 'node' },
-} as any)
+}) as any)

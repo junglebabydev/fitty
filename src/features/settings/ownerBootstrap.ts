@@ -3,6 +3,7 @@
 // persona. Everything goes through commitOnboarding(), the wizard's own validated write path.
 // On the hosted site there is no owner file: the profile comes from the Worker's OWNER_PROFILE secret instead,
 // fetched with the PIN (unlockOwnerProfile, from the OwnerUnlock screen).
+import { aiUrl } from '../../ai/endpoint'
 import { OWNER, type OwnerSetup } from '../../config/owner'
 import { db } from '../../db/database'
 import { addBodyMetric, getProfile, setSetting } from '../../db/repositories'
@@ -110,7 +111,7 @@ export async function unlockOwnerProfile(pin: string): Promise<string | null> {
   let status: number
   let body: { ok?: boolean; owner?: unknown; message?: string }
   try {
-    const res = await fetch('/api/ai/owner', { headers: { 'x-coach-pin': trimmed }, cache: 'no-store' })
+    const res = await fetch(aiUrl('/owner'), { headers: { 'x-coach-pin': trimmed }, cache: 'no-store' })
     status = res.status
     body = await res.json()
   } catch {
