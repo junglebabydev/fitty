@@ -69,7 +69,8 @@ write to Health yet, so it hasn't been added.
 - **What it reads:** sleep, resting heart rate and weight, through `@capgo/capacitor-health` (MPL-2.0, used
   unmodified). The mapping in `src/native/healthKit.ts` reuses the export importer's rules, so live reads and
   file imports dedupe each other.
-- **How you turn it on:** Settings → Health → switch on the types; iOS shows its permission sheet once. After that
+- **How you turn it on:** Settings → Health → switch on the types; iOS shows its permission sheet once. iOS 27 then
+  asks how much history to share: **Past 30 Days** is enough, since the app never reads further back. After that
   the app imports once a day, at launch and whenever it comes back to the front (`importHealthIfDue`), and
   **Import now** pulls 30 days on demand.
 - **Permission quirk:** HealthKit never tells an app it was refused, so a refusal just looks like no data. To change
