@@ -47,6 +47,8 @@
 	<false/>
 	<key>NSCameraUsageDescription</key>
 	<string>Take a photo of a meal or a report.</string>
+	<key>NSHealthShareUsageDescription</key>
+	<string>Read your sleep, resting heart rate and weight from Apple Health to judge readiness and guide training.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Speak to the coach instead of typing.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

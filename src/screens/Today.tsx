@@ -9,22 +9,19 @@ import {
   ChartLine, ChevronRight, ClipboardCheck, Clock, Inbox, Moon, Play, Settings, Smile, StretchHorizontal, Utensils, type LucideIcon,
 } from 'lucide-react'
 import { isProgramDerived } from '../domain/programs'
-import { addDays, dateOf, dayName, fmtDate, toDateStr } from '../lib/util'
+import { addDays, dayName, fmtDate, toDateStr } from '../lib/util'
 import { Button, IconButton, PillarDial, Screen, Sheet } from '../components'
 import { useNow, useQuery, useToast } from '../hooks'
-import { getCheckIn, getMealsForDate, getPendingDecisions, getSessions, getSetting, lastNightSleep, moodLogsForDate, updateSession } from '../db/repositories'
+import { getCheckIn, getMealsForDate, getPendingDecisions, getSessions, lastNightSleep, moodLogsForDate, updateSession } from '../db/repositories'
 import { isStaleSession } from '../features/workout/stale'
 import { startedLabel } from '../features/workout/StaleSessionSheet'
 import { computeDailyPriority, shortenedVersion } from '../engine'
-import { getHealthBridge } from '../native'
 import { SetupPrompt, useSetupGate } from '../features/onboarding/SetupGate'
 import { buildCoachFacts, buildPillars } from '../features/coach/facts'
 import { syncProposals } from '../features/coach/apply'
 import { ensureProgramWeek } from '../features/workout/program'
 import { COMPOSER_CLEARANCE, Composer } from '../features/composer'
 import { useAIStatus } from '../features/ai/config'
-import { importHealthData } from '../features/settings/healthImport'
-import { KEYS, readHealthPermissions } from '../features/settings/keys'
 import { nextAction, type NextActionKind } from '../features/today/nextAction'
 import { ReadinessCenter, ReadinessSheet, ReasonLine } from '../features/today/readiness'
 import { FEATURES } from '../config/features'
@@ -83,24 +80,6 @@ export default function TodayScreen() {
       console.warn('syncProposals failed', e)
     }
   }, [today])
-
-  // Morning Apple Health pull (PRD §7.1, §18): once a day when permitted, so readiness and the
-  // Rest tile do not sit on stale local data until a manual import.
-  useEffect(() => {
-    const last = getSetting<string | null>(KEYS.healthLastImport, null)
-    if (last && dateOf(last) === today) return
-    const perms = readHealthPermissions()
-    if (perms.sleep !== 'granted' && perms.bodyMass !== 'granted' && perms.restingHeartRate !== 'granted') return
-    let cancelled = false
-    getHealthBridge()
-      .isAvailable()
-      .then((a) => (a.available && !cancelled ? importHealthData(7) : null))
-      .then((r) => {
-        if (r?.error && !cancelled) toast.show(`Apple Health import: ${r.error}`, 'error')
-      })
-      .catch((e: unknown) => console.warn('health import failed', e))
-    return () => { cancelled = true }
-  }, [today, toast])
 
   const session = facts.plannedToday
   // A workout started and never finished gets a nudge to wrap it up. The window runs a week ahead too: a

@@ -30,6 +30,7 @@ import { HEALTH_IMPORT_DAYS, importHealthData, summariseImport, type HealthImpor
 import { KEYS, readHealthPermissions, writeHealthPermissions } from '../features/settings/keys'
 import { ControlRow, Group, GroupText, Row, StatusLine, Toggle } from '../features/settings/SettingsUI'
 import { useSetting } from '../features/settings/useSetting'
+import { FEATURES } from '../config/features'
 
 const ICON: Record<HealthDataType, ReactNode> = {
   sleep: <Moon size={18} />,
@@ -422,6 +423,7 @@ export default function HealthSettingsScreen() {
         ))}
       </Group>
 
+      {FEATURES.healthWrites && (
       <Group title="Write to Health" footer="Off by default. Detailed strength data (exercise, set, reps, load, RIR) always stays in the local database; only a summary is written.">
         <ControlRow
           icon={<Dumbbell size={18} />}
@@ -436,6 +438,7 @@ export default function HealthSettingsScreen() {
           control={<Toggle checked={writeBodyMass} onChange={setWriteBodyMass} disabled={!avail.available} label="Write body mass to Health" />}
         />
       </Group>
+      )}
 
       <Group title="Live import" footer={`Pulls the last ${HEALTH_IMPORT_DAYS} days of sleep, body mass and resting HR from HealthKit. Rows with a timestamp already stored are skipped, so importing twice is safe.`}>
         <ControlRow

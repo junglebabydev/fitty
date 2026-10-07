@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { registerSW } from 'virtual:pwa-register'
 import './index.css'
 import { initTheme } from './lib/theme'
+import { setHealthBridge } from './native/health'
 import App from './App'
 
 // Offline-first shell: the service worker precaches the app bundle and sql-wasm.wasm.
@@ -24,8 +25,14 @@ if (import.meta.env.MODE !== 'ios') registerSW({
   },
 })
 
-createRoot(document.getElementById('root')!).render(
+// The iPhone app reads Apple Health through HealthKit (native/healthKit.ts), registered before the first render so
+// no screen sees the web's "unavailable" bridge. The web build drops this branch.
+const nativeReady = import.meta.env.MODE === 'ios'
+  ? import('./native/healthKit').then(({ CapacitorHealthBridge }) => setHealthBridge(new CapacitorHealthBridge()))
+  : Promise.resolve()
+
+void nativeReady.catch((e: unknown) => console.error('[health]', e)).then(() => createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <App />
   </StrictMode>,
-)
+))

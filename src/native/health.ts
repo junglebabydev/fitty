@@ -6,6 +6,8 @@ import type { BodyMetric, CardioSession, HealthMetric, SleepRecord } from '../do
 // per-type permission map, never assume data.
 //
 // ── Capacitor swap ───────────────────────────────────────────────────────────
+// Done for reads: healthKit.ts (CapacitorHealthBridge, through @capgo/capacitor-health), registered in main.tsx.
+// The plan below was written for a custom Swift plugin; the writes in it are still to do.
 // When the app is wrapped in Capacitor, add a native `HealthKitBridge` that
 // implements `HealthBridge` and register it once at boot:
 //

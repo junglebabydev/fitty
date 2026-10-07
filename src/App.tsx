@@ -12,6 +12,7 @@ import { aiHostname } from './ai/endpoint'
 import { applyAISettings, inferBridgeHost } from './features/ai/config'
 import { RequireSetup } from './features/onboarding/SetupGate'
 import { isOnboarded, onboardingSkipped } from './features/onboarding/setup'
+import { importHealthIfDue } from './features/settings/healthImport'
 import { applyOwnerProfile } from './features/settings/ownerBootstrap'
 // Not lazy: OnboardingGate renders it outside the Suspense boundary.
 import OwnerUnlockScreen from './screens/OwnerUnlock'
@@ -146,6 +147,7 @@ export default function App() {
     <BrowserRouter>
       <ToastProvider>
         <PersistWatcher />
+        <HealthWatcher />
         <Shell />
       </ToastProvider>
     </BrowserRouter>
@@ -203,6 +205,23 @@ function PersistWatcher() {
   useEffect(() => {
     db.onPersistError = () => toast.show("Couldn't save to this device's storage — free up space, then log again", 'error')
     return () => { db.onPersistError = null }
+  }, [toast])
+  return null
+}
+
+/** The daily Apple Health pull (features/settings/healthImport.ts), at launch and whenever the app returns to the front. */
+function HealthWatcher() {
+  const toast = useToast()
+  useEffect(() => {
+    const pull = () => {
+      if (document.visibilityState !== 'visible') return
+      importHealthIfDue()
+        .then((r) => { if (r?.error) toast.show(`Apple Health import: ${r.error}`, 'error') })
+        .catch((e: unknown) => console.warn('health import failed', e))
+    }
+    pull()
+    document.addEventListener('visibilitychange', pull)
+    return () => document.removeEventListener('visibilitychange', pull)
   }, [toast])
   return null
 }
