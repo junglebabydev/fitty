@@ -76,11 +76,17 @@ write to Health yet, so it hasn't been added.
   access later: Health app → your profile → Apps → Coach.
 - **No writes yet.** The "Write to Health" switches are hidden (`FEATURES.healthWrites`). The planned Watch app
   will save workouts to Health itself.
+- **If Xcode won't sign HealthKit** on a free Apple ID, the whole app fails to install, not just Health. To get the
+  shell running anyway, clear **Code Signing Entitlements** (`CODE_SIGN_ENTITLEMENTS`) in the App target's Build
+  Settings. The app then shows Health as unavailable.
 
 ## Checks after a new build
 
 - The app gets past the loading screen. That proves sql.js and its wasm file load under `capacitor://`.
 - After the PIN unlock, the app opens with your profile loaded.
+- The daily import runs on resume: leave the app in the background overnight and reopen it in the morning. Last
+  night should appear without tapping Import. If it doesn't, WKWebView isn't firing `visibilitychange` on resume,
+  and Capacitor's app `resume` event is the swap in `HealthWatcher` (App.tsx).
 - Health on the simulator: in the simulator's Health app, add a sleep entry and a weight by hand (Browse → the
   category → Add Data). Then switch the types on in Settings → Health and tap Import now: one night and one weigh-in
   should appear.
