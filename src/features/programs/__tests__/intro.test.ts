@@ -48,6 +48,7 @@ describe('running/jumping series', () => {
     expect(result['home-dumbbells']).toBe(false)
     expect(result).toMatchInlineSnapshot(`
       {
+        "bft": true,
         "blueprint": true,
         "bodyweight": false,
         "gym-strength": false,

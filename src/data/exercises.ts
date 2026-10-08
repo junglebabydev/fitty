@@ -1620,8 +1620,167 @@ const BLUEPRINT: Exercise[] = [
   },
 ]
 
+// ── BFT week (src/data/programs/bft.ts) ─────────────────────────────────────
+// The moves of BFT's six classes (Strength, Summit, Pump, HIIT, Balanced, Power) that the library did not have.
+const BFT: Exercise[] = [
+  {
+    id: 'bb_sumo_deadlift', name: 'Sumo Deadlift', equipment: 'barbell',
+    primaryMuscles: ['glutes', 'hamstrings'], secondaryMuscles: ['quads', 'adductors', 'back'], pattern: 'hinge',
+    safetyTags: ['spinal_load', 'axial_load'], substitutions: ['hip_thrust', 'trap_bar_deadlift', 'db_rdl'],
+    instructions: 'Stand with the feet wide and the toes turned out, the bar over the middle of the feet. Hinge and bend the knees to take the bar inside your legs, arms long, chest up and back flat. Push the floor away with the knees tracking out over the toes and stand tall with the bar close; lower it the same way. Stop the set if the lower back starts to round.',
+    timed: false,
+  },
+  {
+    id: 'kb_rdl', name: 'Kettlebell Romanian Deadlift', equipment: 'kettlebell',
+    primaryMuscles: ['hamstrings', 'glutes'], secondaryMuscles: ['back', 'grip'], pattern: 'hinge',
+    safetyTags: ['spinal_load'], substitutions: ['db_rdl', 'cable_pull_through', 'glute_bridge'],
+    instructions: 'Hold a kettlebell in each hand in front of the thighs with a soft bend in the knees. Push the hips back and slide the bells down the legs until the hamstrings stretch, back flat and chin tucked. Drive the hips forward to stand tall and squeeze the glutes at the top.',
+    timed: false,
+  },
+  {
+    id: 'slam_hop_over', name: 'Slam Ball Hop-Over', equipment: 'bodyweight',
+    primaryMuscles: ['full body'], secondaryMuscles: ['core', 'calves'], pattern: 'plyometric',
+    safetyTags: ['impact', 'knee_load', 'overhead', 'spinal_flexion'], substitutions: ['ball_slam', 'battle_rope', 'stationary_bike'],
+    instructions: 'Lift a slam ball overhead and slam it into the floor in front of you, then hop over it with both feet and turn to face it again. Land softly with the knees bent and tracking over the toes. Keep the head back out of the ball\'s path and hinge from the hips rather than rounding the back to pick it up.',
+    timed: false,
+  },
+  {
+    id: 'ball_slam', name: 'Ball Slam', equipment: 'bodyweight',
+    primaryMuscles: ['lats', 'core'], secondaryMuscles: ['shoulders', 'glutes'], pattern: 'cardio',
+    safetyTags: ['overhead', 'spinal_flexion'], substitutions: ['battle_rope', 'sled_push', 'stationary_bike'],
+    instructions: 'Stand tall with a slam ball overhead, then throw it hard into the floor just in front of your feet. Squat and hinge from the hips to pick it up with a flat back, then go straight into the next rep. Keep the chin tucked and the head out of the bounce.',
+    timed: false,
+  },
+  {
+    id: 'double_under', name: 'Double-Unders', equipment: 'bodyweight',
+    primaryMuscles: ['calves'], secondaryMuscles: ['shoulders', 'quads'], pattern: 'cardio',
+    safetyTags: ['impact', 'knee_load'], substitutions: ['step_jack', 'jump_rope', 'stationary_bike'],
+    instructions: 'Jump a little higher than for single skips and spin the rope fast enough to pass under the feet twice per jump, turning it from the wrists. Land on the balls of the feet with soft knees and stay tall. Mix in single skips whenever the rhythm breaks.',
+    timed: true,
+  },
+  {
+    id: 'track_run', name: 'Run (track)', equipment: 'bodyweight',
+    primaryMuscles: ['quads', 'calves'], secondaryMuscles: ['glutes', 'hamstrings'], pattern: 'cardio',
+    safetyTags: ['impact', 'knee_load'], substitutions: ['stationary_bike', 'incline_walk', 'treadmill_jog'],
+    instructions: 'Run a short track or a lap of the room at the effort the session asks for, upright with a quick, light step. Land under the hips rather than reaching out in front, which jars the knees. Turn on a wide arc, not a sharp pivot.',
+    timed: true,
+  },
+  {
+    id: 'bike_climb', name: 'Bike Climb (out of the saddle)', equipment: 'bike',
+    primaryMuscles: ['quads', 'glutes'], secondaryMuscles: ['calves', 'core'], pattern: 'cardio',
+    safetyTags: ['knee_load'], substitutions: ['stationary_bike', 'assault_bike', 'elliptical'],
+    instructions: 'Add resistance until the pedals feel like a steep hill, then stand up out of the saddle with the hands on the bars. Push each pedal down with the hips over the cranks and the knees in line with the feet. Sit back down if the knees complain.',
+    timed: true,
+  },
+  {
+    id: 'treadmill_push', name: 'Treadmill Sprint (mid grip)', equipment: 'treadmill',
+    primaryMuscles: ['quads', 'glutes'], secondaryMuscles: ['calves', 'core'], pattern: 'cardio',
+    safetyTags: ['impact', 'knee_load'], substitutions: ['incline_walk', 'sled_push', 'stationary_bike'],
+    instructions: 'On a manual or curved treadmill, hold the handles at mid height, lean in and drive the belt with fast, powerful steps, like pushing a sled. Keep the back long and the knees tracking over the toes. A motorised treadmill on a steep incline at a fast walk is the gentler version.',
+    timed: true,
+  },
+  {
+    id: 'db_fly', name: 'Dumbbell Fly', equipment: 'dumbbell',
+    primaryMuscles: ['chest'], secondaryMuscles: ['front delts'], pattern: 'chest_isolation',
+    safetyTags: [], substitutions: ['cable_fly', 'pec_deck', 'db_bench_press'],
+    instructions: 'Lie on a flat bench with the dumbbells over the chest, palms facing and a soft bend in the elbows. Open the arms in a wide arc until you feel a stretch across the chest, not the shoulders, then hug them back together. Keep the head on the bench and the elbow bend fixed.',
+    timed: false,
+  },
+  {
+    id: 'db_overhead_triceps', name: 'Overhead Triceps Extension', equipment: 'dumbbell',
+    primaryMuscles: ['triceps'], secondaryMuscles: ['core'], pattern: 'elbow_extension',
+    safetyTags: ['overhead'], substitutions: ['triceps_pushdown', 'db_kickback', 'band_pushdown'],
+    instructions: 'Stand tall holding one dumbbell or a plate in both hands above your head. Bend only at the elbows to lower it behind the head, then straighten the arms. Keep the elbows pointing forward, the ribs down and the chin level rather than pushed forward.',
+    timed: false,
+  },
+  {
+    id: 'db_pullover_bridge', name: 'Pullover Bridge', equipment: 'dumbbell',
+    primaryMuscles: ['lats', 'glutes'], secondaryMuscles: ['chest', 'core'], pattern: 'vertical_pull',
+    safetyTags: ['overhead'], substitutions: ['straight_arm_pulldown', 'db_pullover', 'glute_bridge'],
+    instructions: 'Rest the upper back across a bench with the hips lifted in a bridge and a dumbbell held over the chest in both hands. Lower it in an arc behind the head while the hips stay up, then pull it back over the chest. Keep the head supported on the bench and stop where the shoulders are comfortable.',
+    timed: false,
+  },
+  {
+    id: 'scapular_roll', name: 'Scapular Roll (bar)', equipment: 'bodyweight',
+    primaryMuscles: ['lats', 'traps'], secondaryMuscles: ['rear delts'], pattern: 'vertical_pull',
+    safetyTags: ['overhead'], substitutions: ['band_pull_apart', 'face_pull', 'straight_arm_pulldown'],
+    instructions: 'Hold a bar overhead with straight arms, feet on the floor taking some of your weight. Without bending the elbows, draw the shoulder blades down and back, then let them rise slowly, rolling through the movement. Keep the neck long and the head still.',
+    timed: false,
+  },
+  {
+    id: 'ball_back_extension', name: 'Swiss Ball Back Extension', equipment: 'bodyweight',
+    primaryMuscles: ['lower back', 'glutes'], secondaryMuscles: ['hamstrings'], pattern: 'hinge',
+    safetyTags: ['spinal_load'], substitutions: ['bird_dog', 'glute_bridge', 'back_extension_45'],
+    instructions: 'Lie face down over a Swiss ball with the hips on the ball and the feet wide against a wall or the floor. With the hands by the ears, lift the chest until the body is in a straight line, then lower slowly. Do not arch the back past straight.',
+    timed: false,
+  },
+  {
+    id: 'sl_bridge_bench', name: 'Single-Leg Bridge (foot on bench)', equipment: 'bodyweight',
+    primaryMuscles: ['glutes', 'hamstrings'], secondaryMuscles: ['core'], pattern: 'hinge',
+    safetyTags: [], substitutions: ['single_leg_glute_bridge', 'glute_bridge'],
+    instructions: 'Lie on your back with one heel on a bench, knee bent, and the other leg lifted. Drive through the heel to raise the hips until the body is straight from knee to shoulders, then lower with control. Keep the hips level; do all the reps on one side, then switch.',
+    timed: false,
+  },
+  {
+    id: 'arabesque', name: 'Arabesque (plate)', equipment: 'bodyweight',
+    primaryMuscles: ['glutes', 'hamstrings'], secondaryMuscles: ['core', 'shoulders'], pattern: 'balance',
+    safetyTags: ['spinal_load'], substitutions: ['single_leg_rdl_bw', 'single_leg_balance', 'db_single_leg_rdl'],
+    instructions: 'Stand on one leg holding a light plate at arm\'s length in front of the chest. Hinge forward as the free leg reaches back, until the body and back leg make a line, then return to standing. Keep the back flat and the hips square to the floor.',
+    timed: false,
+  },
+  {
+    id: 'kb_bottoms_up_press', name: 'Bottoms-Up Kettlebell Press', equipment: 'kettlebell',
+    primaryMuscles: ['shoulders'], secondaryMuscles: ['forearms', 'core'], pattern: 'vertical_push',
+    safetyTags: ['overhead'], substitutions: ['landmine_press', 'lateral_raise', 'band_pull_apart'],
+    instructions: 'Hold a light kettlebell upside down by the handle, bell pointing up, at shoulder height. Grip hard and press it straight up without letting it tip, then lower it slowly. Keep the ribs down, the head still and the press in front of the ear rather than behind it.',
+    timed: false,
+  },
+  {
+    id: 'pallof_press_overhead', name: 'Band Pallof Press with Overhead Reach', equipment: 'band',
+    primaryMuscles: ['core'], secondaryMuscles: ['shoulders', 'obliques'], pattern: 'core_anti_rotation',
+    safetyTags: ['overhead'], substitutions: ['pallof_press', 'half_kneeling_pallof', 'dead_bug'],
+    instructions: 'Stand side-on to a band anchored at chest height, holding it at the chest. Press it straight out, raise the arms overhead, then bring them back down and in, all without letting the band twist you. Keep the ribs down and the neck relaxed.',
+    timed: false,
+  },
+  {
+    id: 'kb_suitcase_squat', name: 'Suitcase Squat', equipment: 'kettlebell',
+    primaryMuscles: ['quads', 'glutes'], secondaryMuscles: ['grip', 'core'], pattern: 'squat',
+    safetyTags: ['knee_load', 'deep_knee_flexion'], substitutions: ['glute_bridge', 'leg_press', 'wall_sit'],
+    instructions: 'Hold a kettlebell in each hand at your sides and stand with the feet shoulder-width apart. Sit down between the heels with the chest up until the bells nearly touch the floor, then drive up fast. Keep the knees tracking over the toes and stop above any depth that pinches.',
+    timed: false,
+  },
+  {
+    id: 'kneeling_hip_thrust', name: 'Kneeling Hip Thrust (band)', equipment: 'band',
+    primaryMuscles: ['glutes'], secondaryMuscles: ['hamstrings', 'core'], pattern: 'hip_extension',
+    safetyTags: [], substitutions: ['glute_bridge', 'cable_pull_through', 'hip_thrust'],
+    instructions: 'Kneel facing away from a low anchor with a band around the hips. Sit the hips back toward the heels, then snap them forward to tall kneeling and squeeze the glutes hard. Keep the ribs down so the movement comes from the hips, not the lower back.',
+    timed: false,
+  },
+  {
+    id: 'landmine_lunge_press', name: 'Split-Stance Landmine Press', equipment: 'barbell',
+    primaryMuscles: ['shoulders', 'quads'], secondaryMuscles: ['core', 'triceps', 'glutes'], pattern: 'vertical_push',
+    safetyTags: ['overhead', 'knee_load'], substitutions: ['landmine_press', 'half_kneeling_pallof', 'db_shoulder_press'],
+    instructions: 'Hold the end of a landmine bar at the shoulder in a split stance, back knee hovering just off the floor. Press the bar up and forward until the arm is long, then lower it and switch shoulders each rep. Keep the front knee over the ankle and the head still.',
+    timed: false,
+  },
+  {
+    id: 'bb_hang_pull', name: 'Hang High Pull', equipment: 'barbell',
+    primaryMuscles: ['traps', 'glutes'], secondaryMuscles: ['hamstrings', 'shoulders'], pattern: 'hinge',
+    safetyTags: ['spinal_load'], substitutions: ['kb_swing', 'face_pull', 'db_shrug'],
+    instructions: 'Stand holding a light barbell at the thighs with a shoulder-width grip. Dip the hips back, then extend them fast and pull the bar up the body to chest height with the elbows high. Lower it to the thighs with a flat back and reset before the next rep.',
+    timed: false,
+  },
+  {
+    id: 'db_standing_press', name: 'Standing Dumbbell Press', equipment: 'dumbbell',
+    primaryMuscles: ['shoulders'], secondaryMuscles: ['triceps', 'core'], pattern: 'vertical_push',
+    safetyTags: ['overhead', 'neck_load'], substitutions: ['machine_shoulder_press', 'landmine_press', 'lateral_raise'],
+    instructions: 'Stand tall with a dumbbell at each shoulder and the glutes squeezed. Press both straight up until the arms are long, then lower to the shoulders. Keep the ribs down so the back does not arch, and let the head move through, not forward.',
+    timed: false,
+  },
+]
+
 export const EXERCISES: Exercise[] = [
-  ...UPPER, ...LOWER, ...CORE_AND_CARDIO, ...BARBELL_AND_KETTLEBELL, ...EXPANSION, ...PROGRAMS, ...BLUEPRINT,
+  ...UPPER, ...LOWER, ...CORE_AND_CARDIO, ...BARBELL_AND_KETTLEBELL, ...EXPANSION, ...PROGRAMS, ...BLUEPRINT, ...BFT,
 ]
 
 export const EXERCISE_BY_ID: Record<string, Exercise> = Object.fromEntries(EXERCISES.map(e => [e.id, e]))
@@ -1865,6 +2024,29 @@ export const EXERCISE_ALIASES: Record<string, string[]> = {
   meditation: ['meditation', 'meditate', 'meditating'],
   zone2_cardio: ['zone 2', 'zone two', 'zone 2 cardio'],
   play: ['play day', 'pickleball', 'basketball', 'hiking'],
+  // BFT week
+  bb_sumo_deadlift: ['sumo deadlift', 'sumo deadlifts', 'sumo'],
+  kb_rdl: ['kettlebell rdl', 'kettlebell romanian deadlift', 'kb rdl'],
+  slam_hop_over: ['slam hop over', 'slam ball hop over', 'hop over'],
+  ball_slam: ['ball slam', 'ball slams', 'slam ball', 'slams'],
+  double_under: ['double under', 'double unders', 'skipping double unders'],
+  track_run: ['track run', 'running on track', 'run on track'],
+  bike_climb: ['out of seat climbing', 'bike climb', 'standing climb'],
+  treadmill_push: ['mid grip sprint', 'curved treadmill', 'treadmill sprint'],
+  db_fly: ['dumbbell fly', 'dumbbell flys', 'db flys', 'dumbbell flyes'],
+  db_overhead_triceps: ['dumbbell overhead extension', 'ovh tricep extension', 'dumbbell overhead triceps'],
+  db_pullover_bridge: ['pullover bridge', 'bridge pullover'],
+  scapular_roll: ['scapular roll', 'scap roll', 'scapular pull'],
+  ball_back_extension: ['ball back extension', 'swiss ball back extension', 'back extension on ball'],
+  sl_bridge_bench: ['bench single leg bridge', 'hip extension bent knee', 'single leg bridge on bench'],
+  arabesque: ['arabesque', 'arabesques'],
+  kb_bottoms_up_press: ['bottoms up press', 'bottoms up kettlebell press', 'bottoms up'],
+  pallof_press_overhead: ['pallof press overhead', 'pallof press with overhead', 'band pallof overhead'],
+  kb_suitcase_squat: ['suitcase squat', 'suitcase squats'],
+  kneeling_hip_thrust: ['kneeling hip thrust', 'kneeling hip thrusts', 'band kneeling hip thrust'],
+  landmine_lunge_press: ['landmine lunge press', 'split stance landmine press', 'lunge static press'],
+  bb_hang_pull: ['hang pull', 'hang high pull', 'high pull'],
+  db_standing_press: ['standing dumbbell press', 'standing shoulder press', 'sh press'],
 }
 
 function normalizeText(s: string): string {

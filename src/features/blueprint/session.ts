@@ -1,4 +1,4 @@
-// The Blueprint session for a day on this user's path, and the database rows for it. Shared by Today, the
+// The week's session (BFT, see week.ts) for a day on this user's path, and the database rows for it. Shared by Today, the
 // coach-led workout and the coach's facts, so all three see the same session. Reads the database; only
 // ensureTodayRow writes.
 import type { ProgramSession } from '../../domain/programs'
@@ -9,10 +9,10 @@ import { getConditionFlags, getSessions, getSetsForSession } from '../../db/repo
 import { effectivePaths, expandSessions, screenResult, sessionOnPath, toPlannedExercises } from '../../engine'
 import { libraryExercises } from '../workout/helpers'
 import { noImpactChosen, screenAnswersFor, startStandaloneWorkout } from '../workout/program'
-import { BLUEPRINT_ID, dayKey, isBlueprintRow, rowForDate, weekDates } from './week'
+import { WEEK_PROGRAM_ID, dayKey, isBlueprintRow, rowForDate, weekDates } from './week'
 
 export function blueprintProgram() {
-  return getProgram(BLUEPRINT_ID)!
+  return getProgram(WEEK_PROGRAM_ID)!
 }
 
 /** The day's session on the user's path (standing flags, saved answers, the no-impact choice): what Start creates, before the gate. */
@@ -38,7 +38,7 @@ export function ensureTodayRow(key: string, today: string): number {
   const live = own.find((r) => r.status === 'in_progress')
   if (live) return live.id
   const fresh = own.find((r) => r.status === 'planned' && getSetsForSession(r.id).length === 0)
-  return fresh ? fresh.id : startStandaloneWorkout(BLUEPRINT_ID, key, today)
+  return fresh ? fresh.id : startStandaloneWorkout(WEEK_PROGRAM_ID, key, today)
 }
 
 /**
@@ -53,7 +53,7 @@ export function blueprintToday(today: string): WorkoutSession | null {
   if (!session) return null
   return {
     id: 0,
-    templateKey: workoutTemplateKey(BLUEPRINT_ID, key),
+    templateKey: workoutTemplateKey(WEEK_PROGRAM_ID, key),
     name: session.name,
     type: session.type,
     tier: 'minimum',

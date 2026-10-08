@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Activity, Bike, Cable, Cog, Dumbbell, Footprints, PersonStanding, StretchHorizontal, Waves, type LucideIcon } from 'lucide-react'
 import type { Exercise } from '../domain/types'
-import { exerciseMedia } from '../data/exerciseMedia'
+import { exerciseMedia, photoModelFor } from '../data/exerciseMedia'
+import { getProfile } from '../db/repositories'
+import { useQuery } from '../hooks/useQuery'
 import { cx } from '../lib/util'
 import { MuscleMap } from './MuscleMap'
 
@@ -45,12 +47,14 @@ function usePrefersReducedMotion(): boolean {
 }
 
 /**
- * Best available picture of the movement: the looping animation, then the verified photos, then the line
- * illustration, then (or on load error) a tinted MuscleMap tile. Reduced motion skips the animation. A drawing
- * with several frames flips through them on cards and heroes; thumbs and reduced motion show the first.
+ * Best available picture of the movement: the AI photo loop, then the looping animation, then the verified photos, then
+ * the line illustration, then (or on load error) a tinted MuscleMap tile. Reduced motion skips the animation. A photo
+ * loop or a drawing with several frames plays on cards and heroes; thumbs and reduced motion show the first frame.
  */
 export function ExerciseVisual({ exercise, size = 'card', className }: ExerciseVisualProps) {
-  const { animation, images, art, artFrames } = exerciseMedia(exercise.id)
+  const model = useQuery(() => photoModelFor(getProfile()?.sex), [])
+  const { animation, images, art, artFrames, photoLoop, photoStill } = exerciseMedia(exercise.id, model)
+  const [photoFailed, setPhotoFailed] = useState(false)
   const [animFailed, setAnimFailed] = useState(false)
   const [failed, setFailed] = useState(false)
   const [artFailed, setArtFailed] = useState(false)
@@ -59,7 +63,7 @@ export function ExerciseVisual({ exercise, size = 'card', className }: ExerciseV
   const reduced = usePrefersReducedMotion()
 
   // A new exercise gets a fresh chance to load its media.
-  useEffect(() => { setAnimFailed(false); setFailed(false); setArtFailed(false); setFrame(0); setStep(0) }, [exercise.id])
+  useEffect(() => { setPhotoFailed(false); setAnimFailed(false); setFailed(false); setArtFailed(false); setFrame(0); setStep(0) }, [exercise.id])
 
   const showAnim = !!animation && !animFailed && !reduced
   const showPhoto = !showAnim && images.length > 0 && !failed
@@ -78,6 +82,23 @@ export function ExerciseVisual({ exercise, size = 'card', className }: ExerciseV
     const t = window.setInterval(() => setStep((i) => (i + 1) % artFrames.length), 650)
     return () => window.clearInterval(t)
   }, [flip, artFrames.length])
+
+  if (photoLoop && !photoFailed) {
+    // The SVG plays itself (SMIL); its first frame is a separate still. A thumb crops the 4:3 frame to the person.
+    return (
+      <div role="img" aria-label={exercise.name} className={cx('relative overflow-hidden border border-line bg-media', FRAME[size], className)}>
+        <img
+          src={size === 'thumb' || reduced ? photoStill! : photoLoop}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          draggable={false}
+          onError={() => setPhotoFailed(true)}
+          className={cx('absolute inset-0 h-full w-full', size === 'thumb' ? 'object-cover' : 'object-contain')}
+        />
+      </div>
+    )
+  }
 
   const map = (h: number, view: 'both' | 'front' | 'back' = 'both') => (
     <MuscleMap primary={exercise.primaryMuscles} secondary={exercise.secondaryMuscles} size={h} view={view} ariaLabel="" />

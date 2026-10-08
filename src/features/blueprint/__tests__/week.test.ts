@@ -4,18 +4,16 @@ import { EXERCISES } from '../../../data/exercises'
 import { sessionsForWeek, toPlannedExercises } from '../../../engine/programs'
 import { blockLine, dayKey, dayKind, doneOn, fmtSeconds, rowForDate, sections, sessionExerciseIds, stationLine, weekDates } from '../week'
 
-const blueprint = getProgram('blueprint')!
+const blueprint = getProgram('bft')!
 
-describe('Blueprint week', () => {
-  it('maps Monday to w1d1 and Sunday to w1d7', () => {
+describe('BFT week', () => {
+  it("maps Monday to w1d1 and Sunday to w1d7, one BFT class a day", () => {
     // 2026-10-05 is a Monday.
     expect(dayKey('2026-10-05')).toBe('w1d1')
     expect(dayKey('2026-10-06')).toBe('w1d2')
     expect(dayKey('2026-10-11')).toBe('w1d7')
-    expect(dayKind('2026-10-05')).toBe('strength')
-    expect(dayKind('2026-10-08')).toBe('hiit')
-    expect(dayKind('2026-10-10')).toBe('play')
-    expect(dayKind('2026-10-11')).toBe('recovery')
+    expect(['2026-10-05', '2026-10-06', '2026-10-07', '2026-10-08', '2026-10-09', '2026-10-10', '2026-10-11'].map(dayKind))
+      .toEqual(['strength', 'summit', 'pump', 'hiit', 'balanced', 'power', 'recovery'])
   })
 
   it('gives every weekday a session that exists', () => {
@@ -28,27 +26,35 @@ describe('Blueprint week', () => {
   })
 
   it('picks the row in progress, then a finished one, then a planned one, ignoring other series and skipped rows', () => {
-    const row = (id: number, status: 'planned' | 'in_progress' | 'completed' | 'skipped', key = 'work:blueprint:w1d7', scheduledDate = '2026-10-04') =>
+    const row = (id: number, status: 'planned' | 'in_progress' | 'completed' | 'skipped', key = 'work:bft:w1d7', scheduledDate = '2026-10-04') =>
       ({ id, status, templateKey: key, scheduledDate })
     expect(rowForDate([row(1, 'planned'), row(2, 'completed')], '2026-10-04')?.id).toBe(2)
     expect(rowForDate([row(1, 'completed'), row(2, 'in_progress')], '2026-10-04')?.id).toBe(2)
     expect(rowForDate([row(1, 'skipped')], '2026-10-04')).toBeNull()
     expect(rowForDate([row(1, 'planned', 'work:hiit:w1d1')], '2026-10-04')).toBeNull()
-    expect(rowForDate([row(1, 'planned', 'work:blueprint:w1d6', '2026-10-03')], '2026-10-04')).toBeNull()
+    expect(rowForDate([row(1, 'planned', 'work:bft:w1d6', '2026-10-03')], '2026-10-04')).toBeNull()
+    // Bryan's Blueprint rows from before the switch are not the BFT week's.
+    expect(rowForDate([row(1, 'planned', 'work:blueprint:w1d7')], '2026-10-04')).toBeNull()
     // With a key, only that session: Tuesday's workout done on Sunday is not Sunday's.
-    expect(rowForDate([row(1, 'in_progress', 'work:blueprint:w1d2')], '2026-10-04', 'w1d7')).toBeNull()
-    expect(rowForDate([row(1, 'in_progress', 'work:blueprint:w1d2')], '2026-10-04', 'w1d2')?.id).toBe(1)
-    expect(doneOn([row(1, 'completed', 'work:blueprint:w1d2'), row(2, 'in_progress')], '2026-10-04')).toBe(true)
+    expect(rowForDate([row(1, 'in_progress', 'work:bft:w1d2')], '2026-10-04', 'w1d7')).toBeNull()
+    expect(rowForDate([row(1, 'in_progress', 'work:bft:w1d2')], '2026-10-04', 'w1d2')?.id).toBe(1)
+    expect(doneOn([row(1, 'completed', 'work:bft:w1d2'), row(2, 'in_progress')], '2026-10-04')).toBe(true)
     expect(doneOn([row(1, 'in_progress')], '2026-10-04')).toBe(false)
   })
 
-  it("groups Monday's blocks under Bryan's headings", () => {
-    const monday = blueprint.sessions.find((s) => s.key === 'w1d1')!
-    expect(sections(monday).map((s) => [s.title, s.meta])).toEqual([
-      ['Warm-up', null], ['Strength', null], ['Stability', '2 rounds'], ['Cardio', null],
-    ])
-    const thursday = blueprint.sessions.find((s) => s.key === 'w1d4')!
-    expect(sections(thursday).map((s) => [s.title, s.meta])).toEqual([['Warm-up', null], ['4 × 4', '4 rounds'], ['Cool-down', null]])
+  it('groups each class under its zones', () => {
+    const at = (key: string) => sections(blueprint.sessions.find((s) => s.key === key)!).map((s) => [s.title, s.meta])
+    expect(at('w1d1')).toEqual([['Warm-up', null], ['Strength · tempo', null]])
+    expect(at('w1d2')).toEqual([['Warm-up', null], ['Summit', '2 rounds']])
+    expect(at('w1d3')).toEqual([['Warm-up', null], ['Zone 1', '3 rounds'], ['Zone 2 · tempo', '4 rounds'], ['Zone 3', '3 rounds']])
+    expect(at('w1d4')).toEqual([['Warm-up', null], ['HIIT', '2 rounds']])
+  })
+
+  it("puts the six classes' stations in the order of BFT's class screens", () => {
+    const ids = (key: string) => sessionExerciseIds(blueprint.sessions.find((s) => s.key === key)!).filter((id) => !['march_in_place', 'arm_circles', 'hip_circles', 'leg_swings'].includes(id))
+    expect(ids('w1d1')).toEqual(['bb_back_squat', 'bb_sumo_deadlift', 'lateral_lunge', 'kb_rdl'])
+    expect(ids('w1d4')).toEqual(['ski_erg', 'assault_bike', 'wall_ball', 'treadmill_push', 'burpee', 'ball_slam', 'thruster', 'rowing_machine', 'bike_climb', 'battle_rope', 'double_under', 'track_run'])
+    expect(ids('w1d6')).toEqual(['db_standing_press', 'landmine_lunge_press', 'kb_suitcase_squat', 'bb_hang_pull', 'kneeling_hip_thrust', 'kb_swing'])
   })
 
   it('writes one plain line per block and station', () => {

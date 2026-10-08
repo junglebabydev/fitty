@@ -192,6 +192,49 @@ export const EXERCISE_ART_LOOPS: Record<string, [slug: string, frames: number[]]
   childs_pose: ['childs-pose', [1]], hamstring_stretch: ['hamstring-stretch', [1]],
 }
 
+// Photos first (2026-10-08, for the BFT week): these moves show AI photos of one woman (and, in a second set, one man)
+// in one plain white studio: first drafts from Canva's image generator, redrawn at 1200 px with Gemini image models
+// through OpenRouter from the drafts and text prompts (two frames: start and end of the movement). Each move is one
+// looping SVG made by scripts/moves/build.mjs: public/moves/loop/<f|m>/<id>.svg, cached on first view, and a small
+// still, public/moves/still/<f|m>/<id>.svg, precached so thumbnails work offline. They replace every other picture of these moves, so a class and its swaps read in one style. Every
+// frame was checked by eye; the leg press stops at 90° and the back squat above parallel, the ranges the instructions
+// set. The Sunday stretches are holds, so they have one frame.
+export const EXERCISE_PHOTO_SOURCE = 'AI-generated (Canva, Gemini)'
+export const EXERCISE_PHOTO_LOOPS: string[] = [
+  'arabesque', 'arm_circles', 'arnold_press', 'assault_bike', 'ball_back_extension', 'ball_slam', 'band_monster_walk',
+  'battle_rope', 'bb_back_squat', 'bb_bench_press', 'bb_hang_pull', 'bb_row', 'bb_sumo_deadlift', 'bike_climb',
+  'burpee', 'butterfly_stretch', 'cat_cow', 'childs_pose', 'cobra_pose', 'db_fly', 'db_overhead_triceps',
+  'db_pullover_bridge', 'db_standing_press', 'double_under', 'glute_bridge', 'hamstring_stretch', 'hip_circles',
+  'hip_thrust', 'incline_walk', 'jump_rope', 'kb_bottoms_up_press', 'kb_halo', 'kb_rdl', 'kb_suitcase_squat',
+  'kb_swing', 'kneeling_hip_thrust', 'landmine_lunge_press', 'lateral_lunge', 'leg_press', 'leg_swings',
+  'march_in_place', 'meditation', 'mountain_climber', 'one_arm_db_row', 'pallof_press_overhead', 'plank_shoulder_tap',
+  'rowing_machine', 'scapular_roll', 'shadow_boxing', 'ski_erg', 'sl_bridge_bench', 'slam_hop_over', 'sled_push',
+  'stationary_bike', 'step_jack', 'straight_arm_pulldown', 'swiss_ball_leg_curl', 'thread_the_needle', 'thruster',
+  'track_run', 'treadmill_push', 'wall_ball',
+]
+
+/** The male set; a move not in it yet shows the female set. */
+export const EXERCISE_PHOTO_LOOPS_MALE: string[] = [
+  'arabesque', 'arm_circles', 'arnold_press', 'assault_bike', 'ball_back_extension', 'ball_slam', 'band_monster_walk',
+  'battle_rope', 'bb_back_squat', 'bb_bench_press', 'bb_hang_pull', 'bb_row', 'bb_sumo_deadlift', 'bike_climb',
+  'burpee', 'butterfly_stretch', 'cat_cow', 'childs_pose', 'cobra_pose', 'db_fly', 'db_overhead_triceps',
+  'db_pullover_bridge', 'db_standing_press', 'double_under', 'glute_bridge', 'hamstring_stretch', 'hip_circles',
+  'hip_thrust', 'incline_walk', 'jump_rope', 'kb_bottoms_up_press', 'kb_halo', 'kb_rdl', 'kb_suitcase_squat',
+  'kb_swing', 'kneeling_hip_thrust', 'landmine_lunge_press', 'lateral_lunge', 'leg_press', 'leg_swings',
+  'march_in_place', 'meditation', 'mountain_climber', 'one_arm_db_row', 'pallof_press_overhead', 'plank_shoulder_tap',
+  'rowing_machine', 'scapular_roll', 'shadow_boxing', 'ski_erg', 'sl_bridge_bench', 'slam_hop_over', 'sled_push',
+  'stationary_bike', 'step_jack', 'straight_arm_pulldown', 'swiss_ball_leg_curl', 'thread_the_needle', 'thruster',
+  'track_run', 'treadmill_push', 'wall_ball',
+]
+
+/** Which set of photos a user sees: the man for a male profile, otherwise the woman. */
+export type PhotoModel = 'f' | 'm'
+export function photoModelFor(sex: string | null | undefined): PhotoModel {
+  return sex === 'male' ? 'm' : 'f'
+}
+
+const movesUrl = (file: string) => `${import.meta.env.BASE_URL}moves/${file}`
+
 /** One Workout Guide frame as a URL. */
 export function artFrameUrl(slug: string, frame: number): string {
   return `${EXERCISE_ART_BASE}/${slug}/frame-${frame}.svg`
@@ -206,15 +249,28 @@ export interface ExerciseMedia {
   art: string | null
   /** Every frame of the drawing in play order (`art` first); [] without one. */
   artFrames: string[]
+  /** Looping AI photo SVG, or null. It replaces every other picture of the move. */
+  photoLoop: string | null
+  /** Its first frame, for thumbnails and reduced motion. */
+  photoStill: string | null
   source: string | null
 }
 
-/** Animation + photos for one of OUR exercise ids (unknown ids get neither). A drawing loop replaces both. */
-export function exerciseMedia(id: string): ExerciseMedia {
+const NO_PHOTO_LOOP = { photoLoop: null, photoStill: null }
+
+/**
+ * Animation + photos for one of OUR exercise ids (unknown ids get neither). A photo loop replaces all, then a drawing
+ * loop. `model` picks the woman or the man of the photo loops.
+ */
+export function exerciseMedia(id: string, model: PhotoModel = 'f'): ExerciseMedia {
+  if (EXERCISE_PHOTO_LOOPS.includes(id)) {
+    const set = model === 'm' && EXERCISE_PHOTO_LOOPS_MALE.includes(id) ? 'm' : 'f'
+    return { animation: null, images: [], art: null, artFrames: [], photoLoop: movesUrl(`loop/${set}/${id}.svg`), photoStill: movesUrl(`still/${set}/${id}.svg`), source: EXERCISE_PHOTO_SOURCE }
+  }
   const loop = EXERCISE_ART_LOOPS[id]
   if (loop) {
     const artFrames = loop[1].map((n) => artFrameUrl(loop[0], n))
-    return { animation: null, images: [], art: artFrames[0], artFrames, source: null }
+    return { animation: null, images: [], art: artFrames[0], artFrames, ...NO_PHOTO_LOOP, source: null }
   }
   const animId = EXERCISE_ANIMATION_IDS[id]
   const photoId = EXERCISE_PHOTO_IDS[id]
@@ -225,6 +281,7 @@ export function exerciseMedia(id: string): ExerciseMedia {
     images,
     art: artFrame ? `${EXERCISE_ART_BASE}/${artFrame}.svg` : null,
     artFrames: artFrame ? [`${EXERCISE_ART_BASE}/${artFrame}.svg`] : [],
+    ...NO_PHOTO_LOOP,
     source: photoId ? EXERCISE_MEDIA_SOURCE : null,
   }
 }
