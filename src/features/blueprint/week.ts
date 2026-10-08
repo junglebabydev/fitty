@@ -1,25 +1,25 @@
-// The Blueprint week (src/data/programs/blueprint.ts) as Today shows it: which session a date gets, what kind of day
-// it is, and the session's blocks as headed sections with one plain line each. Pure.
+// The week Today runs (the BFT week, src/data/programs/bft.ts) as Today shows it: which session a date gets, what kind
+// of day it is, and the session's blocks as headed sections with one plain line each. Pure.
 import type { Block, CircuitStation, ProgramSession } from '../../domain/programs'
 import { parseProgramKey } from '../../domain/programs'
 import type { WorkoutSession } from '../../domain/types'
 import { addDays, parseDate, startOfWeek } from '../../lib/util'
-import { artFrameUrl } from '../../data/exerciseMedia'
+export const WEEK_PROGRAM_ID = 'bft' as const
 
-export const BLUEPRINT_ID = 'blueprint' as const
+export type DayKind = 'strength' | 'summit' | 'pump' | 'hiit' | 'balanced' | 'power' | 'recovery'
 
-export type DayKind = 'strength' | 'hiit' | 'yoga' | 'play' | 'recovery'
+/** Monday first, matching the programme's session keys w1d1 … w1d7: BFT's class of each day, then Sunday off. */
+const WEEK_KINDS: DayKind[] = ['strength', 'summit', 'pump', 'hiit', 'balanced', 'power', 'recovery']
 
-/** Monday first, matching the programme's session keys w1d1 … w1d7. */
-const WEEK_KINDS: DayKind[] = ['strength', 'hiit', 'yoga', 'hiit', 'strength', 'play', 'recovery']
-
-export const KIND_META: Record<DayKind, { label: string; color: string; art: string }> = {
-  // Deep hues so the white drawing reads on them in both themes.
-  strength: { label: 'Strength', color: '#c93400', art: artFrameUrl('kettlebell-swing', 1) },
-  hiit: { label: 'HIIT', color: '#d70015', art: artFrameUrl('assault-bike', 1) },
-  yoga: { label: 'Strength + yoga', color: '#248a3d', art: artFrameUrl('cat-cow-stretch', 1) },
-  play: { label: 'Play', color: '#1d6fd1', art: artFrameUrl('jumping-jack', 1) },
-  recovery: { label: 'Recovery', color: '#8944ab', art: artFrameUrl('butterfly-stretch', 1) },
+export const KIND_META: Record<DayKind, { label: string; color: string }> = {
+  // Deep hues so white type reads on them in both themes.
+  strength: { label: 'Strength', color: '#c93400' },
+  summit: { label: 'Summit', color: '#1d6fd1' },
+  pump: { label: 'Pump', color: '#8944ab' },
+  hiit: { label: 'HIIT', color: '#d70015' },
+  balanced: { label: 'Balanced', color: '#248a3d' },
+  power: { label: 'Power', color: '#b25000' },
+  recovery: { label: 'Recovery', color: '#5e5ce6' },
 }
 
 /** 0 = Monday … 6 = Sunday. */
@@ -43,14 +43,14 @@ export function weekDates(date: string): string[] {
 }
 
 export function isBlueprintRow(s: Pick<WorkoutSession, 'templateKey'>): boolean {
-  return parseProgramKey(s.templateKey)?.programId === BLUEPRINT_ID
+  return parseProgramKey(s.templateKey)?.programId === WEEK_PROGRAM_ID
 }
 
 type RowLike = Pick<WorkoutSession, 'templateKey' | 'scheduledDate' | 'status' | 'id'>
 
 /**
  * The row Today acts on for a session key on a date: in progress first, then completed, then an untouched planned
- * one. Without a key, any Blueprint row that date.
+ * one. Without a key, any row of the week's programme that date.
  */
 export function rowForDate<T extends RowLike>(rows: T[], date: string, key?: string): T | null {
   const rank = { in_progress: 0, completed: 1, planned: 2, skipped: 3 } as const
@@ -58,7 +58,7 @@ export function rowForDate<T extends RowLike>(rows: T[], date: string, key?: str
   return own.sort((a, b) => rank[a.status] - rank[b.status] || b.id - a.id)[0] ?? null
 }
 
-/** A day is done once any Blueprint session scheduled on it is finished (a day's own, or one moved to it). */
+/** A day is done once any session of the week scheduled on it is finished (a day's own, or one moved to it). */
 export function doneOn(rows: RowLike[], date: string): boolean {
   return rows.some((r) => r.scheduledDate === date && isBlueprintRow(r) && r.status === 'completed')
 }

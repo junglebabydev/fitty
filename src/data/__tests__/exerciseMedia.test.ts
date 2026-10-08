@@ -1,10 +1,14 @@
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { EXERCISES, EXERCISE_BY_ID } from '../exercises'
 import {
   EXERCISE_ANIMATION_BASE, EXERCISE_ANIMATION_IDS, EXERCISE_ART_BASE, EXERCISE_ART_FRAMES, EXERCISE_ART_LOOPS, EXERCISE_MEDIA_BASE,
-  EXERCISE_PHOTO_IDS, exerciseMedia,
+  EXERCISE_PHOTO_IDS, EXERCISE_PHOTO_LOOPS, EXERCISE_PHOTO_LOOPS_MALE, exerciseMedia, photoModelFor,
 } from '../exerciseMedia'
+import { getProgram } from '../programs'
 import { SESSION_TEMPLATES } from '../../engine/planner'
+import { expandSessions, sessionOnPath, toPlannedExercises } from '../../engine/programs'
 
 describe('exerciseMedia', () => {
   it('only maps exercise ids that exist in our library', () => {
@@ -101,13 +105,49 @@ describe('exerciseMedia', () => {
   })
 
   it('shows a drawing loop instead of the animation and photos, first frame as the still', () => {
-    const m = exerciseMedia('kb_swing')
+    const m = exerciseMedia('dead_bug')
     expect(m.animation).toBeNull()
     expect(m.images).toEqual([])
     expect(m.source).toBeNull()
-    expect(m.artFrames).toEqual([1, 2, 3, 2].map((n) => `${EXERCISE_ART_BASE}/kettlebell-swing/frame-${n}.svg`))
+    expect(m.artFrames).toEqual([1, 3].map((n) => `${EXERCISE_ART_BASE}/dead-bug/frame-${n}.svg`))
     expect(m.art).toBe(m.artFrames[0])
     expect(exerciseMedia('bird_dog').artFrames).toEqual([`${EXERCISE_ART_BASE}/bird-dog/frame-1.svg`])
     expect(exerciseMedia('incline_db_press').artFrames).toEqual([])
+  })
+
+  it('ships a loop and a still for every photo-loop move in each set, and nothing else for it', () => {
+    const dir = join(__dirname, '../../../public/moves')
+    for (const [set, list] of [['f', EXERCISE_PHOTO_LOOPS], ['m', EXERCISE_PHOTO_LOOPS_MALE]] as const) {
+      expect(new Set(list).size, set).toBe(list.length)
+      for (const id of list) {
+        expect(EXERCISE_BY_ID[id], id).toBeDefined()
+        expect(existsSync(join(dir, 'loop', set, `${id}.svg`)), `loop/${set}/${id}.svg`).toBe(true)
+        expect(existsSync(join(dir, 'still', set, `${id}.svg`)), `still/${set}/${id}.svg`).toBe(true)
+        const m = exerciseMedia(id, set)
+        expect(m.photoLoop, id).toBe(`/moves/loop/${set}/${id}.svg`)
+        expect(m.photoStill, id).toBe(`/moves/still/${set}/${id}.svg`)
+        expect([m.animation, m.art, ...m.images], id).toEqual([null, null])
+      }
+    }
+    // Every male move has a female one (the female set is the fallback), and a missing male move falls back to it.
+    for (const id of EXERCISE_PHOTO_LOOPS_MALE) expect(EXERCISE_PHOTO_LOOPS, id).toContain(id)
+    const femaleOnly = EXERCISE_PHOTO_LOOPS.find((id) => !EXERCISE_PHOTO_LOOPS_MALE.includes(id))
+    if (femaleOnly) expect(exerciseMedia(femaleOnly, 'm').photoLoop).toBe(`/moves/loop/f/${femaleOnly}.svg`)
+    expect(exerciseMedia('bird_dog').photoLoop).toBeNull()
+    expect([photoModelFor('male'), photoModelFor('female'), photoModelFor('other'), photoModelFor(null)]).toEqual(['m', 'f', 'f', 'f'])
+  })
+
+  it('gives every move of the BFT week a photo loop: standard, knee and back paths, alone and together', () => {
+    // The no-overhead swaps (neck or shoulder flags) keep their drawings and GIFs for now.
+    const p = getProgram('bft')!
+    const named = ['low-impact', 'back']
+    const lists = [['standard'], ...named.map((x) => [x]), ...named.flatMap((a) => named.filter((b) => b !== a).map((b) => [a, b]))]
+    const missing = new Set<string>()
+    for (const paths of lists) {
+      for (const s of expandSessions(p).filter((x) => x.week === 1)) {
+        for (const e of toPlannedExercises(p, sessionOnPath(p, s, paths, EXERCISES))) if (!EXERCISE_PHOTO_LOOPS.includes(e.exerciseId)) missing.add(e.exerciseId)
+      }
+    }
+    expect([...missing].sort()).toEqual([])
   })
 })

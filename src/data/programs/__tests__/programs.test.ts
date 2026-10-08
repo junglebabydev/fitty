@@ -7,7 +7,7 @@ import { EXERCISES, EXERCISE_BY_ID } from '../../exercises'
 import { PROGRAM_LIST, getProgram } from '../index'
 import { expandSessions, programWeekSessions, sessionsForWeek, toPlannedExercises } from '../../../engine/programs'
 
-const READY = ['blueprint', 'gym-strength', 'home-dumbbells', 'bodyweight']
+const READY = ['bft', 'blueprint', 'gym-strength', 'home-dumbbells', 'bodyweight']
 const TODAY = '2026-10-04'
 
 /**

@@ -2,9 +2,9 @@
 // docs/programs/<id>.md; the AI only matches a prompt to one and explains it. Nothing here touches the database.
 import type { Region, SafetyTag, SessionType, WorkoutSession } from './types'
 
-export type ProgramId = 'blueprint' | 'gym-strength' | 'home-dumbbells' | 'hiit' | 'postpartum' | 'start-running' | 'bodyweight'
+export type ProgramId = 'bft' | 'blueprint' | 'gym-strength' | 'home-dumbbells' | 'hiit' | 'postpartum' | 'start-running' | 'bodyweight'
 
-export const PROGRAM_IDS: ProgramId[] = ['blueprint', 'gym-strength', 'home-dumbbells', 'bodyweight', 'hiit', 'start-running', 'postpartum']
+export const PROGRAM_IDS: ProgramId[] = ['bft', 'blueprint', 'gym-strength', 'home-dumbbells', 'bodyweight', 'hiit', 'start-running', 'postpartum']
 
 /**
  * `ready`: can be started. `preview`: intro and sources show, Start is replaced by "Coming soon"

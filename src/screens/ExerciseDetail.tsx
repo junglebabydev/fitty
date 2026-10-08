@@ -72,6 +72,7 @@ export default function ExerciseDetailScreen() {
         {/* Hero: the movement itself (animation, photos or muscle map) */}
         <div className="anim-rise">
           <ExerciseVisual exercise={exercise} size="hero" />
+          {media.photoLoop && <p className="mt-1.5 px-1 text-[12px] text-faint">Photo: AI-generated</p>}
           {media.animation && <p className="mt-1.5 px-1 text-[12px] text-faint">Animation: ExerciseDB</p>}
           {media.art && (
             <p className="mt-1.5 px-1 text-[12px] text-faint">

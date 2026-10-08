@@ -59,7 +59,13 @@ export default defineConfig({
           urlPattern: /^https:\/\/raw\.githubusercontent\.com\/bryllim\/workout-guide\/.*\.svg$/,
           handler: 'CacheFirst',
           options: { cacheName: 'exercise-art', expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 90 }, cacheableResponse: { statuses: [0, 200] } },
-        }],maximumFileSizeToCacheInBytes: 6 * 1024 * 1024, globPatterns: ['**/*.{js,css,html,svg,png,wasm,woff2}'] },
+        }, {
+          // Exercise photo loops (public/moves/loop, two sets of about 4 MB): cached on first view rather than precached.
+          // Their small stills (public/moves/still) are precached, so thumbnails work offline from the first launch.
+          urlPattern: /\/moves\/loop\/[fm]\/[a-z0-9_]+\.svg$/,
+          handler: 'CacheFirst',
+          options: { cacheName: 'exercise-loops', expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 90 }, cacheableResponse: { statuses: [0, 200] } },
+        }],maximumFileSizeToCacheInBytes: 6 * 1024 * 1024, globPatterns: ['**/*.{js,css,html,svg,png,wasm,woff2}'], globIgnores: ['moves/loop/**'] },
     }),
   ],
   // sql.js ships CJS/UMD only; pre-bundling makes its default import work in dev.

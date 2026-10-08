@@ -1,5 +1,5 @@
-// Today on the Blueprint week (FEATURES.blueprint; data in src/data/programs/blueprint.ts): the week as a strip, the
-// day's session with a drawing of every move, and two ways to do it. Start runs it in Focus Mode the same way "Start
+// Today on the BFT week (FEATURES.blueprint; data in src/data/programs/bft.ts): the week as a strip, the day's class
+// with a picture of every move, and two ways to do it. Start runs it in Focus Mode the same way "Start
 // now" does (the series' safety questions once, then the symptom gate); "Do it with Coach" runs the same session as a
 // chat (screens/CoachWorkout.tsx). Tap another day to see it, or do it today.
 import { useState, type ReactNode } from 'react'
@@ -74,8 +74,8 @@ export default function BlueprintScreen() {
       pillar="today"
       large
       eyebrow={`${dayName(today, false)} · ${fmtDate(today)}`}
-      title="Blueprint"
-      subtitle={<span className="text-[15px] text-muted">Bryan Johnson's week</span>}
+      title={program.title}
+      subtitle={<span className="text-[15px] text-muted">Six classes, one a day</span>}
       right={<IconButton icon={<Settings size={22} />} label="Settings" onClick={() => navigate('/settings')} />}
     >
       <div className="flex flex-col gap-6 pb-4">
@@ -89,7 +89,7 @@ export default function BlueprintScreen() {
             minutes={data.session.minutes}
             moves={sessionExerciseIds(data.session).length}
             button={button}
-            note={kind === 'hiit' ? 'Finish at least 4 hours before bed.' : null}
+            note={kind === 'hiit' || kind === 'summit' ? 'Finish at least 4 hours before bed.' : null}
           />
         )}
 
@@ -160,13 +160,12 @@ function WeekStrip({ dates, today, picked, rows, onPick }: { dates: string[]; to
 
 // --- day card --------------------------------------------------------------------------------------------------
 
-/** The day type's drawing, white on its colour. */
+/** The class name, big and white on its colour, as the studio screens show it. */
 function KindArt({ kind, className }: { kind: DayKind; className?: string }) {
   const meta = KIND_META[kind]
   return (
     <span aria-hidden className={cx('flex items-center justify-center overflow-hidden', className)} style={{ background: meta.color }}>
-      {/* Offline before the drawing was ever cached: the colour alone, not a broken-image icon. */}
-      <img src={meta.art} alt="" draggable={false} decoding="async" className="h-[86%] w-auto object-contain" onError={(e) => { e.currentTarget.style.visibility = 'hidden' }} />
+      <span className="font-display text-[56px] font-black uppercase italic leading-none tracking-tight text-white">{meta.label}</span>
     </span>
   )
 }
@@ -210,7 +209,7 @@ const PATTERN_ICON: Record<string, LucideIcon> = { mobility: StretchHorizontal, 
 
 function MoveRow({ exercise, line }: { exercise: Exercise; line: string }) {
   const m = exerciseMedia(exercise.id)
-  const hasPicture = !!(m.art || m.animation || m.images.length)
+  const hasPicture = !!(m.photoLoop || m.art || m.animation || m.images.length)
   const Icon = PATTERN_ICON[exercise.pattern] ?? Dumbbell
   return (
     <li>
