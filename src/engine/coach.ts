@@ -2,6 +2,7 @@
 // Demanding on adherence, conservative on symptoms, never guilt. The LLM system prompt lives in the coach Worker
 // (coach/, docs/PRD_COACH_CHAT.md §13).
 import type { CoachDecision, Evidence, Macros, NutritionTarget, WorkoutSession } from '../domain/types'
+import { isProgramDerived } from '../domain/programs'
 import { addDays, dayName, fmtDuration, startOfWeek } from '../lib/util'
 import { HIGH_STRESS, LOW_VALENCE, VALENCE_WORDS, breathingTechnique, suggestTechnique } from './mind'
 import type { TrendResult } from './nutrition'
@@ -63,7 +64,8 @@ export function sessionShortName(s: WorkoutSession): string {
     case 'mobility_hips': return 'hip mobility block'
     case 'mobility_upper': return 'upper-body mobility block'
     default:
-      if (s.type === 'strength') return `${s.name.toLowerCase().replace(/\s*strength\s*/g, ' ').trim()} strength session`
+      // Programme names read as they are ("strength + zone 2 session").
+      if (s.type === 'strength' && !isProgramDerived(s)) return `${s.name.toLowerCase().replace(/\s*strength\s*/g, ' ').trim()} strength session`
       return `${s.name.toLowerCase()} session`
   }
 }
@@ -164,8 +166,18 @@ export function computeDailyPriority(f: CoachFacts): CoachPriority {
     return { headline, directives, evidence: [...f.readiness.reasons.map((r) => ({ label: 'Readiness', value: r })), ...evidence], tone: 'protect' }
   }
 
+  // --- 8 PM, programme intervals: easy cardio instead (programme sessions are never shortened, PRD §6.5) ---------
+  if (f.hourNow >= LATE_HOUR && plannedPending && isProgramDerived(planned!) && planned!.type === 'conditioning') {
+    const headline = `It's ${f.hourNow}:00 — too late for hard intervals.`
+    directives.push('Hard efforts this close to bed can cost sleep: an easy 20–30 minute ride or walk is fine tonight, or do the intervals tomorrow.')
+    if (protein) directives.push(protein)
+    if (breathe) directives.push(breathe.directive)
+    evidence.unshift({ label: 'Time', value: `${f.hourNow}:00, ${planned!.name} not started` })
+    return { headline, directives, evidence, tone: 'steady' }
+  }
+
   // --- 8 PM rule: shortened version before any skip --------------------------------------
-  if (f.hourNow >= LATE_HOUR && plannedPending) {
+  if (f.hourNow >= LATE_HOUR && plannedPending && !isProgramDerived(planned!)) {
     const headline = `It's ${f.hourNow}:00 — do the 25–35 minute version of the ${sessionShortName(planned!)}.`
     directives.push('Four compounds, two sets each, rest capped at 90 s. Start within 15 minutes.')
     if (mods.lowImpactOnly) directives.push('Keep it low impact and skip anything the gate flagged.')
@@ -280,7 +292,7 @@ export function generateProposals(f: CoachFacts): ProposalDraft[] {
     })
   }
 
-  if (f.readiness.state === 'AMBER' && f.readiness.modifiers.reduceVolume && f.plannedToday?.status === 'planned' && f.plannedToday.type === 'strength') {
+  if (f.readiness.state === 'AMBER' && f.readiness.modifiers.reduceVolume && f.plannedToday?.status === 'planned' && f.plannedToday.type === 'strength' && f.plannedToday.id > 0) {
     out.push({
       kind: 'volume',
       title: `Trim today's ${f.plannedToday.name} by one set per exercise`,

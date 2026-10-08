@@ -36,6 +36,7 @@ const MindBreatheScreen = lazy(() => import('./screens/MindBreathe'))
 const MindJournalScreen = lazy(() => import('./screens/MindJournal'))
 const ProgressScreen = lazy(() => import('./screens/Progress'))
 const CoachScreen = lazy(() => import('./screens/Coach'))
+const CoachWorkoutScreen = lazy(() => import('./screens/CoachWorkout'))
 const SettingsScreen = lazy(() => import('./screens/Settings'))
 const PrivacyLedgerScreen = lazy(() => import('./screens/PrivacyLedger'))
 const HealthSettingsScreen = lazy(() => import('./screens/HealthSettings'))
@@ -44,7 +45,7 @@ const ReportsScreen = lazy(() => import('./screens/Reports'))
 const ReportDetailScreen = lazy(() => import('./screens/ReportDetail'))
 
 /** Routes where the bottom tab bar is hidden (full-screen flows). */
-const HIDE_TABS_PATTERNS = ['/onboarding', '/train/session/:id', '/mind/breathe']
+const HIDE_TABS_PATTERNS = ['/onboarding', '/train/session/:id', '/coach/workout/:id', '/mind/breathe']
 
 // --- boot ---------------------------------------------------------------------------
 
@@ -269,6 +270,7 @@ function AppRoutes() {
       <Route path="/mind/journal" element={<MindJournalScreen />} />
       <Route path="/progress" element={<ProgressScreen />} />
       <Route path="/coach" element={<CoachScreen />} />
+      <Route path="/coach/workout/:id" element={<RequireSetup action="workout"><CoachWorkoutScreen /></RequireSetup>} />
       <Route path="/settings" element={<SettingsScreen />} />
       <Route path="/settings/privacy" element={<PrivacyLedgerScreen />} />
       <Route path="/settings/health" element={<HealthSettingsScreen />} />

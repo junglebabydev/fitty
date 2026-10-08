@@ -44,6 +44,18 @@ describe('computeDailyPriority (PRD §13)', () => {
     expect(p.evidence[0].label).toBe('Time')
   })
 
+  it('8 PM on a programme day: never the shortened version, and no hard intervals', () => {
+    const strength = { ...session('upper_a', TODAY, 'planned'), templateKey: 'work:blueprint:w1d1', name: 'Strength + zone 2' }
+    const s = computeDailyPriority(seedFacts({ hourNow: 21, plannedToday: strength }))
+    expect(s.headline).not.toMatch(/25–35/)
+    expect(s.headline).toBe('Do the strength + zone 2 session today.')
+    const sprints = { ...session('conditioning_bike', TODAY, 'planned'), templateKey: 'work:blueprint:w1d2', name: 'Sprints + zone 2' }
+    const late = seedFacts({ hourNow: 21, plannedToday: sprints })
+    expect(computeDailyPriority(late).headline).toBe("It's 21:00 — too late for hard intervals.")
+    expect(answerLocally('Should I train today?', late).content).not.toMatch(/25–35|four compounds/i)
+    expect(computeDailyPriority(seedFacts({ hourNow: 12, plannedToday: sprints })).headline).toBe('Do the sprints + zone 2 session today.')
+  })
+
   it('8 PM with the workout already done does not nag', () => {
     const p = computeDailyPriority(seedFacts({ hourNow: 21, plannedToday: session('upper_a', TODAY, 'completed') }))
     expect(p.headline).toMatch(/done/i)
