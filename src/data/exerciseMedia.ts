@@ -171,6 +171,32 @@ export const EXERCISE_ART_FRAMES: Record<string, string> = {
   assault_bike: 'assault-bike/frame-1',
 }
 
+// Drawings first (2026-10-04, for the Blueprint week): these exercises show Workout Guide line art even when they
+// also have an animation or a photo, so a whole session reads in one style. Each entry lists frames in play order and
+// the first is the still (thumbnails, reduced motion); the frames of one exercise form a movement loop. Picked by eye
+// on 2026-10-04. Frame 2 of push-up, reverse lunge and step-up is drawn in a heavier stroke, so it is skipped. The
+// range-limited moves stay out (goblet squat, low step-up keep their photos). Judgement calls: the single-leg RDL is
+// drawn holding dumbbells, single-leg balance uses the single-leg calf raise drawing (one leg, hand on a support), and
+// zone 2 cardio shows walking.
+export const EXERCISE_ART_LOOPS: Record<string, [slug: string, frames: number[]]> = {
+  push_up: ['push-up', [1, 3]], one_arm_db_row: ['one-arm-dumbbell-row', [1, 3]], kb_swing: ['kettlebell-swing', [1, 2, 3, 2]],
+  farmers_carry: ['farmer-carry', [1, 3]], plank: ['plank', [1]], side_plank: ['side-plank', [1]],
+  single_leg_balance: ['single-leg-calf-raise', [2]], single_leg_rdl_bw: ['single-leg-romanian-deadlift', [1, 3]],
+  dead_bug: ['dead-bug', [1, 3]], plank_shoulder_tap: ['plank-shoulder-tap', [1, 2, 3, 2]],
+  reverse_lunge: ['reverse-lunge', [1, 3]], db_shoulder_press: ['seated-dumbbell-press', [1, 3]],
+  db_bench_press: ['dumbbell-bench-press', [3, 1]], db_rdl: ['dumbbell-romanian-deadlift', [1, 3]],
+  bent_over_db_row: ['dumbbell-bent-over-row', [1, 3]], glute_bridge: ['glute-bridge', [1, 3]],
+  stationary_bike: ['cycling', [1]], bike_intervals: ['cycling', [1]], zone2_cardio: ['walking', [1]],
+  arm_circles: ['arm-circles', [1]], leg_swings: ['leg-swings-stretch', [1, 2, 3, 2]], high_knees: ['high-knees', [1, 3]],
+  lateral_lunge: ['lateral-lunge', [1, 2, 3, 2]], cat_cow: ['cat-cow-stretch', [1, 3]], butterfly_stretch: ['butterfly-stretch', [1]],
+  childs_pose: ['childs-pose', [1]], hamstring_stretch: ['hamstring-stretch', [1]],
+}
+
+/** One Workout Guide frame as a URL. */
+export function artFrameUrl(slug: string, frame: number): string {
+  return `${EXERCISE_ART_BASE}/${slug}/frame-${frame}.svg`
+}
+
 export interface ExerciseMedia {
   /** Looping GIF of the movement, or null when the exercise has no checked animation. */
   animation: string | null
@@ -178,11 +204,18 @@ export interface ExerciseMedia {
   images: string[]
   /** One white line-art frame (SVG), or null when the exercise has no checked illustration. */
   art: string | null
+  /** Every frame of the drawing in play order (`art` first); [] without one. */
+  artFrames: string[]
   source: string | null
 }
 
-/** Animation + photos for one of OUR exercise ids (unknown ids get neither). */
+/** Animation + photos for one of OUR exercise ids (unknown ids get neither). A drawing loop replaces both. */
 export function exerciseMedia(id: string): ExerciseMedia {
+  const loop = EXERCISE_ART_LOOPS[id]
+  if (loop) {
+    const artFrames = loop[1].map((n) => artFrameUrl(loop[0], n))
+    return { animation: null, images: [], art: artFrames[0], artFrames, source: null }
+  }
   const animId = EXERCISE_ANIMATION_IDS[id]
   const photoId = EXERCISE_PHOTO_IDS[id]
   const artFrame = EXERCISE_ART_FRAMES[id]
@@ -191,6 +224,7 @@ export function exerciseMedia(id: string): ExerciseMedia {
     animation: animId ? `${EXERCISE_ANIMATION_BASE}/${animId}.gif` : null,
     images,
     art: artFrame ? `${EXERCISE_ART_BASE}/${artFrame}.svg` : null,
+    artFrames: artFrame ? [`${EXERCISE_ART_BASE}/${artFrame}.svg`] : [],
     source: photoId ? EXERCISE_MEDIA_SOURCE : null,
   }
 }

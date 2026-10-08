@@ -29,6 +29,10 @@ import { circuitRestAfter, focusIndex, nextFocusIndex, remainingPlan } from '../
 import type { LoggedSet } from '../features/workout/useSetLogger'
 import { isStaleSession, staleWrapUp } from '../features/workout/stale'
 import { StaleSessionSheet } from '../features/workout/StaleSessionSheet'
+import { FEATURES } from '../config/features'
+
+/** Every exit goes to /train, which sends you to Today while the Train tab is off. */
+const BACK_LABEL = FEATURES.train ? 'Back to Train' : 'Back to Today'
 
 function safeReadiness(): Readiness | null {
   try { return todayReadiness().state } catch { return null }
@@ -234,7 +238,7 @@ export default function WorkoutScreen() {
           icon={<CircleAlert size={28} />}
           title="Session not found"
           body="It may have been removed from the plan."
-          action={<Button variant="primary" onClick={() => navigate('/train')}>Back to Train</Button>}
+          action={<Button variant="primary" onClick={() => navigate('/train')}>{BACK_LABEL}</Button>}
         />
       </Screen>
     )
@@ -254,7 +258,7 @@ export default function WorkoutScreen() {
           action={
             <div className="flex flex-col gap-2 items-center">
               <Button variant="primary" icon={<Play size={18} />} onClick={() => updateSession(session.id, { status: 'planned', scheduledDate: today })}>Bring it back today</Button>
-              <Button variant="ghost" onClick={() => navigate('/train')}>Back to Train</Button>
+              <Button variant="ghost" onClick={() => navigate('/train')}>{BACK_LABEL}</Button>
             </div>
           }
         />
@@ -420,7 +424,7 @@ export default function WorkoutScreen() {
         style={{ marginTop: 'calc(env(safe-area-inset-top, 0px) * -1)', paddingTop: 'env(safe-area-inset-top, 0px)' }}
       >
         <div className="flex items-center gap-1 pl-1 pr-3 h-14">
-          <IconButton icon={<ChevronLeft size={24} />} label="Back to Train" onClick={() => navigate('/train')} />
+          <IconButton icon={<ChevronLeft size={24} />} label={BACK_LABEL} onClick={() => navigate('/train')} />
           <div className="min-w-0 flex-1">
             <h1 className="text-[15px] font-semibold leading-tight truncate">{session.name.replace(/\s*\(.*\)$/, '')}</h1>
             <div className="text-[13px] text-muted tnum" role="timer" aria-label={`Elapsed ${fmtElapsed(elapsedSec)}`}>{fmtElapsed(elapsedSec)}</div>
@@ -827,7 +831,7 @@ function CompletedView({ session, sets, library, today }: { session: WorkoutSess
           <Card eyebrow="Notes"><p className="text-[15px] whitespace-pre-wrap leading-snug">{session.notes}</p></Card>
         )}
 
-        <Button variant="secondary" full onClick={() => navigate('/train')} className="mt-2">Back to Train</Button>
+        <Button variant="secondary" full onClick={() => navigate('/train')} className="mt-2">{BACK_LABEL}</Button>
       </div>
     </Screen>
   )

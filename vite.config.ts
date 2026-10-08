@@ -58,7 +58,7 @@ export default defineConfig({
           // Exercise line illustrations (Workout Guide, CC BY-SA 4.0, pinned commit): same rule, their own cache.
           urlPattern: /^https:\/\/raw\.githubusercontent\.com\/bryllim\/workout-guide\/.*\.svg$/,
           handler: 'CacheFirst',
-          options: { cacheName: 'exercise-art', expiration: { maxEntries: 100, maxAgeSeconds: 60 * 60 * 24 * 90 }, cacheableResponse: { statuses: [0, 200] } },
+          options: { cacheName: 'exercise-art', expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 90 }, cacheableResponse: { statuses: [0, 200] } },
         }],maximumFileSizeToCacheInBytes: 6 * 1024 * 1024, globPatterns: ['**/*.{js,css,html,svg,png,wasm,woff2}'] },
     }),
   ],

@@ -1,6 +1,7 @@
 // Programme registry. Each series is transcribed from docs/programs/<id>.md into its own file.
 import type { Program, ProgramId } from '../../domain/programs'
 import { PROGRAM_IDS } from '../../domain/programs'
+import { program as blueprint } from './blueprint'
 import { program as gymStrength } from './gym-strength'
 import { program as homeDumbbells } from './home-dumbbells'
 import { program as hiit } from './hiit'
@@ -9,6 +10,7 @@ import { program as startRunning } from './start-running'
 import { program as bodyweight } from './bodyweight'
 
 export const PROGRAMS: Record<ProgramId, Program> = {
+  blueprint,
   'gym-strength': gymStrength,
   'home-dumbbells': homeDumbbells,
   hiit,

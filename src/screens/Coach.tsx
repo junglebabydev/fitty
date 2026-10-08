@@ -28,6 +28,7 @@ import { COMPOSER_CLEARANCE, Composer } from '../features/composer'
 import { reportContextLines } from '../features/reports'
 import { addDays, cx, dateOf, fmtDate, fmtTime, nowIso, todayStr } from '../lib/util'
 import { buildCoachFacts } from '../features/coach/facts'
+import { FEATURES } from '../config/features'
 import {
   acceptDecision, decisionKindLabel, extractProposalLine, isReversible, numberOr, rejectDecision, revertDecision, syncProposals,
 } from '../features/coach/apply'
@@ -453,6 +454,7 @@ export default function CoachScreen() {
 
   // Proposals are generated deterministically from today's facts; duplicates are filtered in syncProposals.
   useEffect(() => {
+    if (!FEATURES.coachBrief) return
     try {
       syncProposals()
     } catch (e) {
@@ -625,7 +627,7 @@ export default function CoachScreen() {
             <p className="m-0 text-[17px] font-semibold leading-snug text-pretty">I need your profile and targets before I can coach from your data.</p>
             <Link to="/onboarding" className="mt-4 block"><Button variant="primary" full>Finish setup</Button></Link>
           </div>
-        ) : (
+        ) : FEATURES.coachBrief && (
           <button
             type="button"
             onClick={() => setDetailsOpen(true)}
@@ -640,7 +642,7 @@ export default function CoachScreen() {
           </button>
         )}
 
-        {proposals && (
+        {FEATURES.coachBrief && proposals && (
           <button
             type="button"
             onClick={() => setProposalsOpen(true)}

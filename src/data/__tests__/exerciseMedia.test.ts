@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { EXERCISES, EXERCISE_BY_ID } from '../exercises'
 import {
-  EXERCISE_ANIMATION_BASE, EXERCISE_ANIMATION_IDS, EXERCISE_ART_BASE, EXERCISE_ART_FRAMES, EXERCISE_MEDIA_BASE, EXERCISE_PHOTO_IDS,
-  exerciseMedia,
+  EXERCISE_ANIMATION_BASE, EXERCISE_ANIMATION_IDS, EXERCISE_ART_BASE, EXERCISE_ART_FRAMES, EXERCISE_ART_LOOPS, EXERCISE_MEDIA_BASE,
+  EXERCISE_PHOTO_IDS, exerciseMedia,
 } from '../exerciseMedia'
 import { SESSION_TEMPLATES } from '../../engine/planner'
 
@@ -18,10 +18,10 @@ describe('exerciseMedia', () => {
   })
 
   it('returns two photo URLs and the source for a mapped exercise', () => {
-    const m = exerciseMedia('db_bench_press')
+    const m = exerciseMedia('incline_db_press')
     expect(m.images).toEqual([
-      `${EXERCISE_MEDIA_BASE}/Dumbbell_Bench_Press/0.jpg`,
-      `${EXERCISE_MEDIA_BASE}/Dumbbell_Bench_Press/1.jpg`,
+      `${EXERCISE_MEDIA_BASE}/Incline_Dumbbell_Press/0.jpg`,
+      `${EXERCISE_MEDIA_BASE}/Incline_Dumbbell_Press/1.jpg`,
     ])
     expect(m.source).toContain('free-exercise-db')
   })
@@ -54,7 +54,7 @@ describe('exerciseMedia', () => {
       expect(EXERCISE_BY_ID[id], id).toBeDefined()
       expect(animId, id).toMatch(/^[A-Za-z0-9]{7}$/)
     }
-    expect(exerciseMedia('db_bench_press').animation).toBe(`${EXERCISE_ANIMATION_BASE}/${EXERCISE_ANIMATION_IDS.db_bench_press}.gif`)
+    expect(exerciseMedia('incline_db_press').animation).toBe(`${EXERCISE_ANIMATION_BASE}/${EXERCISE_ANIMATION_IDS.incline_db_press}.gif`)
     expect(exerciseMedia('bird_dog').animation).toBeNull()
     expect(exerciseMedia('not_a_real_exercise').animation).toBeNull()
   })
@@ -68,6 +68,7 @@ describe('exerciseMedia', () => {
       expect(EXERCISE_BY_ID[id], id).toBeDefined()
       expect(EXERCISE_ANIMATION_IDS[id], id).toBeUndefined()
       expect(EXERCISE_ART_FRAMES[id], id).toBeUndefined()
+      expect(EXERCISE_ART_LOOPS[id], id).toBeUndefined()
     }
   })
 
@@ -78,7 +79,7 @@ describe('exerciseMedia', () => {
       expect(frame, id).toMatch(/^[a-z0-9]+(-[a-z0-9]+)*\/frame-[123]$/)
     }
     expect(exerciseMedia('bird_dog').art).toBe(`${EXERCISE_ART_BASE}/bird-dog/frame-1.svg`)
-    expect(exerciseMedia('db_bench_press').art).toBeNull()
+    expect(exerciseMedia('incline_db_press').art).toBeNull()
     expect(exerciseMedia('not_a_real_exercise').art).toBeNull()
   })
 
@@ -87,5 +88,26 @@ describe('exerciseMedia', () => {
       expect(EXERCISE_ANIMATION_IDS[id], id).toBeUndefined()
       expect(EXERCISE_PHOTO_IDS[id], id).toBeUndefined()
     }
+  })
+
+  it('maps drawing loops only for library exercises, to Workout Guide frames 1-3, never alongside a single frame', () => {
+    for (const [id, [slug, frames]] of Object.entries(EXERCISE_ART_LOOPS)) {
+      expect(EXERCISE_BY_ID[id], id).toBeDefined()
+      expect(slug, id).toMatch(/^[a-z0-9]+(-[a-z0-9]+)*$/)
+      expect(frames.length, id).toBeGreaterThan(0)
+      for (const f of frames) expect([1, 2, 3], id).toContain(f)
+      expect(EXERCISE_ART_FRAMES[id], id).toBeUndefined()
+    }
+  })
+
+  it('shows a drawing loop instead of the animation and photos, first frame as the still', () => {
+    const m = exerciseMedia('kb_swing')
+    expect(m.animation).toBeNull()
+    expect(m.images).toEqual([])
+    expect(m.source).toBeNull()
+    expect(m.artFrames).toEqual([1, 2, 3, 2].map((n) => `${EXERCISE_ART_BASE}/kettlebell-swing/frame-${n}.svg`))
+    expect(m.art).toBe(m.artFrames[0])
+    expect(exerciseMedia('bird_dog').artFrames).toEqual([`${EXERCISE_ART_BASE}/bird-dog/frame-1.svg`])
+    expect(exerciseMedia('incline_db_press').artFrames).toEqual([])
   })
 })

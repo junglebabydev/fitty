@@ -2,9 +2,9 @@
 // docs/programs/<id>.md; the AI only matches a prompt to one and explains it. Nothing here touches the database.
 import type { Region, SafetyTag, SessionType, WorkoutSession } from './types'
 
-export type ProgramId = 'gym-strength' | 'home-dumbbells' | 'hiit' | 'postpartum' | 'start-running' | 'bodyweight'
+export type ProgramId = 'blueprint' | 'gym-strength' | 'home-dumbbells' | 'hiit' | 'postpartum' | 'start-running' | 'bodyweight'
 
-export const PROGRAM_IDS: ProgramId[] = ['gym-strength', 'home-dumbbells', 'bodyweight', 'hiit', 'start-running', 'postpartum']
+export const PROGRAM_IDS: ProgramId[] = ['blueprint', 'gym-strength', 'home-dumbbells', 'bodyweight', 'hiit', 'start-running', 'postpartum']
 
 /**
  * `ready`: can be started. `preview`: intro and sources show, Start is replaced by "Coming soon"
@@ -19,7 +19,10 @@ export type Range = [number, number]
 /** Warm-up, cool-down and interval rest blocks: not logged, exempt from the no-duplicate-id rule. */
 export type BlockRole = 'warmup' | 'cooldown' | 'rest'
 
-export interface SetsBlock {
+/** Optional heading for display ('Strength', 'Yoga'); consecutive blocks with the same section show under one heading. */
+interface Sectioned { section?: string }
+
+export interface SetsBlock extends Sectioned {
   shape: 'sets'
   exerciseId: string
   sets: number
@@ -33,7 +36,7 @@ export interface SetsBlock {
   slot?: string
 }
 
-export interface IntervalsBlock {
+export interface IntervalsBlock extends Sectioned {
   shape: 'intervals'
   rounds: number
   work: { exerciseId: string; seconds: number; effort?: string }
@@ -49,7 +52,7 @@ export interface CircuitStation {
   slot?: string
 }
 
-export interface CircuitBlock {
+export interface CircuitBlock extends Sectioned {
   shape: 'circuit'
   rounds: number
   stations: CircuitStation[]
@@ -58,7 +61,7 @@ export interface CircuitBlock {
   role?: BlockRole
 }
 
-export interface SteadyBlock {
+export interface SteadyBlock extends Sectioned {
   shape: 'steady'
   exerciseId: string
   minutes: number
