@@ -26,6 +26,7 @@ import { useRestTimer } from '../features/workout/useRestTimer'
 import { MuscleSummary } from '../features/workout/PlanVisuals'
 import { FocusDone, FocusMode } from '../features/workout/FocusMode'
 import { circuitRestAfter, focusIndex, nextFocusIndex, remainingPlan } from '../features/workout/focus'
+import { autoBlock } from '../features/workout/autoRun'
 import type { LoggedSet } from '../features/workout/useSetLogger'
 import { isStaleSession, staleWrapUp } from '../features/workout/stale'
 import { StaleSessionSheet } from '../features/workout/StaleSessionSheet'
@@ -98,6 +99,9 @@ export default function WorkoutScreen() {
   const stoppedKey = `workout-stopped-${sessionId}`
   const [stopped, setStopped] = useState<string[]>(() => readSessionFlag<string[]>(stoppedKey, []))
   const timer = useRestTimer()
+  // The block running on its own in Focus Mode (autoRun.ts), or null. Kept for this visit only: a reload never
+  // starts a countdown by itself.
+  const [autoRun, setAutoRun] = useState<string | null>(null)
 
   const inProgress = session?.status === 'in_progress'
 
@@ -390,20 +394,22 @@ export default function WorkoutScreen() {
           index={idx}
           segments={segments}
           nextName={nextIdx != null ? byId.get(session.exercises[nextIdx].exerciseId)?.name ?? null : null}
-          onPrev={prevIdx != null ? () => { timer.skip(); setBrowseIdx(prevIdx) } : null}
-          onNext={nextIdx != null ? () => { timer.skip(); setBrowseIdx(nextIdx) } : null}
+          onPrev={prevIdx != null ? () => { timer.skip(); setAutoRun(null); setBrowseIdx(prevIdx) } : null}
+          onNext={nextIdx != null ? () => { timer.skip(); setAutoRun(null); setBrowseIdx(nextIdx) } : null}
           progress={{ logged: sets.length, total: plannedTotal }}
           elapsed={fmtElapsed(elapsedSec)}
           remaining={remainingLabel}
           timer={timer}
           gate={gate}
           onLogged={(s) => onLogged(focusPlanned, idx, s)}
-          onList={() => setParams({ view: 'list' })}
-          onPain={() => setPainIndex(idx)}
-          onSubstitute={() => { setSubReason(undefined); setSubIndex(idx) }}
+          onList={() => { setAutoRun(null); setParams({ view: 'list' }) }}
+          onPain={() => { setAutoRun(null); setPainIndex(idx) }}
+          onSubstitute={() => { setAutoRun(null); setSubReason(undefined); setSubIndex(idx) }}
+          autoRun={autoRun != null && autoRun === autoBlock(focusPlanned, idx)}
+          onAutoRun={(on) => setAutoRun(on ? autoBlock(focusPlanned, idx) : null)}
           onOptions={() => setMoreOpen(true)}
           // Nothing logged yet: ending means skipping (it can be brought back from the session page).
-          onFinish={() => (sets.length > 0 ? setFinishOpen(true) : doSkip())}
+          onFinish={() => { setAutoRun(null); if (sets.length > 0) setFinishOpen(true); else doSkip() }}
         />
       ) : (
         <FocusDone onFinish={() => setFinishOpen(true)} onList={() => setParams({ view: 'list' })} />

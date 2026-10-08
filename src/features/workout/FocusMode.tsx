@@ -3,12 +3,16 @@
 // a segment per exercise, quiet Prev / Next, and one full-width primary button. Pain is a quiet one-tap text
 // button; everything else lives behind ···. Logging goes through useSetLogger, so rows match the list view exactly.
 // Rendered by WorkoutScreen, which owns the gate, rest timer, pain, substitute and finish handlers.
+// Interval rounds and timed circuit stations run on their own once started (autoRun.ts): after each rest the next
+// one starts, with beeps and one spoken word, until the block is done or you pause.
 import { useEffect, useState, type TouchEvent } from 'react'
-import { ArrowLeftRight, Bandage, Check, ChevronLeft, ChevronRight, Ellipsis, Flag, List, Play, ShieldAlert, TriangleAlert } from 'lucide-react'
+import { ArrowLeftRight, Bandage, Check, ChevronLeft, ChevronRight, Ellipsis, Flag, List, Pause, Play, ShieldAlert, TriangleAlert } from 'lucide-react'
 import type { Exercise, ExerciseSet, PlannedExercise, WorkoutSession } from '../../domain/types'
 import type { GateResult } from '../../engine'
 import { Button, ExerciseVisual, Field, IconButton, ListRow, NumberInput, Sheet } from '../../components'
 import { cx } from '../../lib/util'
+import { beep, speak, unlockCues } from '../../native/cues'
+import { autoBlock, restWord, startWord } from './autoRun'
 import { fmtClock, fmtLoad } from './helpers'
 import type { RestTimer } from './useRestTimer'
 import { useSetLogger, type LoggedSet } from './useSetLogger'
@@ -40,6 +44,9 @@ export interface FocusModeProps {
   onSubstitute(): void
   onOptions(): void
   onFinish(): void
+  /** This entry's block is running on its own (started with a tap, not paused). */
+  autoRun: boolean
+  onAutoRun(on: boolean): void
 }
 
 function useCountdown(endAt: number | null, onZero: () => void): number {
@@ -69,6 +76,9 @@ export function FocusMode(p: FocusModeProps) {
   const [gateOpen, setGateOpen] = useState(false)
   const [timedEndAt, setTimedEndAt] = useState<number | null>(null)
   const [timedStartAt, setTimedStartAt] = useState<number | null>(null)
+  // Seconds set in Adjust during this visit. A running block uses them, else the planned time (never the prefill,
+  // which copies the last set and would shrink every round after one early finish).
+  const [chosenSec, setChosenSec] = useState<number | null>(null)
 
   const commit = (override?: { durationSec?: number }) => {
     const logged = logger.log({ override })
@@ -76,10 +86,43 @@ export function FocusMode(p: FocusModeProps) {
     setTimedStartAt(null)
     if (logged) p.onLogged(logged)
   }
-  const timedLeft = useCountdown(timedEndAt, () => commit({ durationSec: duration ?? undefined }))
-
   const resting = p.timer.running
   const setNo = Math.min(p.sets.length + 1, p.planned.sets)
+  const auto = timed && autoBlock(p.planned, p.index) != null
+  const roundsLeft = p.planned.sets - p.sets.length - 1
+
+  const startCountdown = (sec: number) => {
+    const t = Date.now()
+    setTimedStartAt(t)
+    setTimedEndAt(t + sec * 1000)
+  }
+  // At zero the set is logged at the countdown's own length (not the prefill, which copies the last set).
+  const timedLeft = useCountdown(timedEndAt, () => {
+    const sec = timedStartAt != null && timedEndAt != null ? Math.round((timedEndAt - timedStartAt) / 1000) : duration ?? undefined
+    if (p.autoRun) {
+      beep(true)
+      speak(p.planned.restExerciseId && roundsLeft > 0 ? restWord(p.planned, null) : roundsLeft > 0 || p.planned.circuit ? restWord(p.planned, p.nextName) : 'Done')
+    }
+    commit({ durationSec: sec })
+  })
+
+  // A running block starts its next round or station by itself once the rest is over, at the planned time.
+  useEffect(() => {
+    if (!p.autoRun || !auto || resting || timedEndAt != null || p.stopped || p.sets.length >= p.planned.sets) return
+    startCountdown(chosenSec ?? p.planned.repMin)
+    speak(startWord(p.planned, setNo, p.exercise.name))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [p.autoRun, auto, resting, timedEndAt, p.stopped, p.sets.length])
+
+  // Short beeps on the last three seconds of a running block's work and rest.
+  useEffect(() => { if (p.autoRun && timedEndAt != null && timedLeft > 0 && timedLeft <= 3) beep() }, [timedLeft, p.autoRun, timedEndAt])
+  useEffect(() => { if (p.autoRun && resting && p.timer.remaining > 0 && p.timer.remaining <= 3) beep() }, [p.timer.remaining, p.autoRun, resting])
+
+  const pause = () => {
+    p.onAutoRun(false)
+    setTimedEndAt(null)
+    setTimedStartAt(null)
+  }
 
   const primary = () => {
     if (timed) {
@@ -89,9 +132,13 @@ export function FocusMode(p: FocusModeProps) {
         commit({ durationSec: held })
         return
       }
-      const sec = duration ?? p.planned.repMin
-      setTimedStartAt(Date.now())
-      setTimedEndAt(Date.now() + sec * 1000)
+      unlockCues()
+      if (auto) {
+        // The first tap of a block starts the run: rounds and stations go on by themselves from here.
+        p.onAutoRun(true)
+        speak(startWord(p.planned, setNo, p.exercise.name))
+      }
+      startCountdown(auto ? chosenSec ?? p.planned.repMin : duration ?? p.planned.repMin)
       return
     }
     commit()
@@ -100,7 +147,7 @@ export function FocusMode(p: FocusModeProps) {
   const station = p.index + 1
   const main = resting ? fmtClock(p.timer.remaining) : timedEndAt != null ? fmtClock(timedLeft) : timed ? `${duration ?? p.planned.repMin}` : `${reps ?? p.planned.repMin}`
   const side = p.planned.perSide
-  const mainUnit = resting ? 'rest' : timedEndAt != null ? `of ${duration ?? p.planned.repMin} s` : timed ? (side ? 's a side' : 'seconds') : `${side ? 'reps a side' : 'reps'}${loadable && load != null ? ` · ${fmtLoad(load)}` : ''}`
+  const mainUnit = resting ? (p.autoRun ? 'rest, then it starts' : 'rest') : timedEndAt != null ? `of ${duration ?? p.planned.repMin} s` : timed ? (side ? 's a side' : 'seconds') : `${side ? 'reps a side' : 'reps'}${loadable && load != null ? ` · ${fmtLoad(load)}` : ''}`
   const roleLabel = p.planned.role === 'warmup' ? 'Warm-up' : p.planned.role === 'cooldown' ? 'Cool-down' : null
   const primaryLabel = resting ? 'Skip rest' : timed ? (timedEndAt != null ? 'Done early' : `Start ${duration ?? p.planned.repMin} s`) : 'Done set'
 
@@ -136,10 +183,17 @@ export function FocusMode(p: FocusModeProps) {
         <div className="shrink-0 px-4 pb-2 pt-2">
           <div className="flex items-center justify-between gap-3">
             <div className="eyebrow opacity-60">{resting ? 'Up next' : roleLabel ?? `${station} of ${p.segments.length}`}</div>
-            {/* Pain stays one tap away (DESIGN §11 invariant). */}
-            <button type="button" onClick={p.onPain} aria-label="Report pain or an issue" className="press -mr-2 inline-flex h-11 items-center gap-1.5 px-2 text-[15px] font-medium opacity-60">
-              <Bandage size={16} aria-hidden />Pain
-            </button>
+            <div className="-mr-2 flex items-center">
+              {p.autoRun && auto && (
+                <button type="button" onClick={pause} aria-label="Pause: stop starting rounds by themselves" className="press inline-flex h-11 items-center gap-1.5 px-2 text-[15px] font-medium opacity-60">
+                  <Pause size={16} aria-hidden />Pause
+                </button>
+              )}
+              {/* Pain stays one tap away (DESIGN §11 invariant). */}
+              <button type="button" onClick={p.onPain} aria-label="Report pain or an issue" className="press inline-flex h-11 items-center gap-1.5 px-2 text-[15px] font-medium opacity-60">
+                <Bandage size={16} aria-hidden />Pain
+              </button>
+            </div>
           </div>
           <h1 className="display text-[1.75rem] leading-[1.1] line-clamp-2">{p.exercise.name}</h1>
           {/* The cue belongs to the planned movement; a swap (manual or gate) keeps the entry, so hide it then. */}
@@ -234,7 +288,7 @@ export function FocusMode(p: FocusModeProps) {
       <Sheet open={adjustOpen} onClose={() => setAdjustOpen(false)} title="Adjust this set" footer={<Button full onClick={() => setAdjustOpen(false)}>Done</Button>}>
         <div className="flex flex-col gap-4 pt-1">
           {timed ? (
-            <Field label="Seconds" htmlFor="focus-seconds"><NumberInput id="focus-seconds" value={duration} onChange={setDuration} unit="s" min={5} max={3600} step={5} /></Field>
+            <Field label="Seconds" htmlFor="focus-seconds"><NumberInput id="focus-seconds" value={duration} onChange={(v) => { setDuration(v); setChosenSec(v) }} unit="s" min={5} max={3600} step={5} /></Field>
           ) : (
             <Field label="Reps" htmlFor="focus-reps"><NumberInput id="focus-reps" value={reps} onChange={setReps} unit="reps" min={1} max={100} step={1} /></Field>
           )}
