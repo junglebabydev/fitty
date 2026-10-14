@@ -3,7 +3,7 @@
 //             dev/preview server (server/aiBridge.ts)
 //   'cloud' — the hosted Cloudflare Worker, which holds GEMINI_API_KEY or ANTHROPIC_API_KEY plus COACH_BRIDGE_PIN
 //             as Worker secrets and always needs the PIN
-import { MEAL_RECOGNITION_SCHEMA, MEAL_SYSTEM_PROMPT, parseMealRecognition, stripDataUrl } from './anthropic'
+import { MEAL_RECOGNITION_SCHEMA, MEAL_SYSTEM_PROMPT, mealUserPrompt, parseMealRecognition, stripDataUrl } from './anthropic'
 import type { CoachTurnRequest, CoachTurnResponse } from '../../coach/contract'
 import { AIError, type AIProvider, type ChatTurn, type JsonRequest, type MealContext, type MealImage, type MealRecognition } from './types'
 
@@ -137,12 +137,9 @@ export class BridgeProvider implements AIProvider {
   }
 
   async recognizeMeal(img: MealImage, context: MealContext): Promise<MealRecognition> {
-    const parts = ['Identify the foods in this photo and estimate portions and nutrition.']
-    if (context.mealType) parts.push(`Meal type: ${context.mealType}.`)
-    if (context.hint?.trim()) parts.push(`User note: ${context.hint.trim()}`)
     const data = await this.completeJson({
       system: MEAL_SYSTEM_PROMPT,
-      prompt: parts.join(' '),
+      prompt: mealUserPrompt(context),
       schema: MEAL_RECOGNITION_SCHEMA,
       attachments: [{ base64: img.base64, mediaType: img.mediaType, name: 'meal' }],
     })
