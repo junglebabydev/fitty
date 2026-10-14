@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { getProgram } from '../../../data/programs'
 import { EXERCISES } from '../../../data/exercises'
 import { sessionsForWeek, toPlannedExercises } from '../../../engine/programs'
-import { blockLine, dayKey, dayKind, doneOn, fmtSeconds, rowForDate, sections, sessionExerciseIds, stationLine, weekDates } from '../week'
+import { blockLine, dayKey, dayKind, doneOn, fmtSeconds, keyKind, rowForDate, sections, sessionExerciseIds, stationLine, weekDates } from '../week'
 
 const blueprint = getProgram('bft')!
 
@@ -13,6 +13,8 @@ describe('BFT week', () => {
     expect(dayKey('2026-10-06')).toBe('w1d2')
     expect(dayKey('2026-10-11')).toBe('w1d7')
     expect(['2026-10-05', '2026-10-06', '2026-10-07', '2026-10-08', '2026-10-09', '2026-10-10', '2026-10-11'].map(dayKind))
+      .toEqual(['strength', 'summit', 'pump', 'hiit', 'balanced', 'power', 'recovery'])
+    expect(['w1d1', 'w1d2', 'w1d3', 'w1d4', 'w1d5', 'w1d6', 'w1d7'].map(keyKind))
       .toEqual(['strength', 'summit', 'pump', 'hiit', 'balanced', 'power', 'recovery'])
   })
 
@@ -38,6 +40,9 @@ describe('BFT week', () => {
     // With a key, only that session: Tuesday's workout done on Sunday is not Sunday's.
     expect(rowForDate([row(1, 'in_progress', 'work:bft:w1d2')], '2026-10-04', 'w1d7')).toBeNull()
     expect(rowForDate([row(1, 'in_progress', 'work:bft:w1d2')], '2026-10-04', 'w1d2')?.id).toBe(1)
+    // Another series' workout from "More workouts", by its programme.
+    expect(rowForDate([row(1, 'in_progress', 'work:gym-strength:w2d2')], '2026-10-04', 'w2d2', 'gym-strength')?.id).toBe(1)
+    expect(rowForDate([row(1, 'in_progress', 'work:gym-strength:w2d2')], '2026-10-04', 'w2d2')).toBeNull()
     expect(doneOn([row(1, 'completed', 'work:bft:w1d2'), row(2, 'in_progress')], '2026-10-04')).toBe(true)
     expect(doneOn([row(1, 'in_progress')], '2026-10-04')).toBe(false)
   })

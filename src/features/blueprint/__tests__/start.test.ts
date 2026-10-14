@@ -44,4 +44,14 @@ describe('startToday', () => {
     expect(startNow(id)).toBe(id)
     expect(getSession(id)!.status).toBe('completed')
   })
+
+  it("starts another series' workout from More workouts the same way", () => {
+    const today = todayStr()
+    const id = startToday('w2d2', today, 'gym-strength')
+    const row = getSession(id)!
+    expect(row.status).toBe('in_progress')
+    expect(row.templateKey).toBe('work:gym-strength:w2d2')
+    expect(startToday('w2d2', today, 'gym-strength')).toBe(id)
+    expect(getSymptomChecks(1)).toEqual([])
+  })
 })

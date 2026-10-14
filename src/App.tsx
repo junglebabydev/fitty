@@ -21,6 +21,7 @@ import { FEATURES } from './config/features'
 const OnboardingScreen = lazy(() => import('./screens/Onboarding'))
 const TodayScreen = lazy(() => import('./screens/Today'))
 const BlueprintScreen = lazy(() => import('./screens/Blueprint'))
+const WorkoutIntroScreen = lazy(() => import('./screens/WorkoutIntro'))
 const SleepScreen = lazy(() => import('./screens/Sleep'))
 const CheckInScreen = lazy(() => import('./screens/CheckIn'))
 const TrainScreen = lazy(() => import('./screens/Train'))
@@ -260,6 +261,7 @@ function AppRoutes() {
       <Route path="/train" element={FEATURES.train ? <TrainScreen /> : <Navigate to="/" replace />} />
       <Route path="/train/program/:id" element={<ProgramIntroScreen />} />
       <Route path="/train/session/:id" element={<RequireSetup action="workout"><WorkoutScreen /></RequireSetup>} />
+      <Route path="/workout/:programId/:key" element={<WorkoutIntroScreen />} />
       <Route path="/train/exercise/:id" element={<ExerciseDetailScreen />} />
       <Route path="/train/mobility" element={<RequireSetup action="mobility"><MobilityScreen /></RequireSetup>} />
       <Route path="/eat" element={<EatScreen />} />
