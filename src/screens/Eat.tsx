@@ -1,18 +1,18 @@
 import { useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Camera, ChevronLeft, ChevronRight, Ellipsis, Flame, Plus, Search, Sparkles } from 'lucide-react'
+import { Camera, ChevronLeft, ChevronRight, Ellipsis, Flame, ImageUp, Search, Sparkles } from 'lucide-react'
 import type { Macros, Meal, NutritionTarget } from '../domain/types'
-import { Button, Field, IconButton, Illustration, NumberInput, Screen, Sheet, fmtInt, useToast } from '../components'
+import { Button, Field, IconButton, Illustration, NumberInput, Ring, Screen, Sheet, fmtInt, useToast } from '../components'
 import { useNow, useQuery } from '../hooks'
 import {
-  addMeal, cloneMeal, dailyTotals, dailyTotalsRange, getBodyMetrics, getGoals, getMealsForDate, getNutritionTarget,
+  addMeal, dailyTotals, dailyTotalsRange, getBodyMetrics, getGoals, getMealsForDate, getNutritionTarget,
   getProfile, getSavedMeals, getSetting, latestBodyMetric, recentFoods, setNutritionTarget, setSetting,
 } from '../db/repositories'
 import { estimateTargets, evaluateNutritionTrend, type TrendFlag } from '../engine/nutrition'
 import { inferMealType } from '../engine/voice'
 import { addDays, cx, dayName, fmtDate, fmtTime, todayStr } from '../lib/util'
 import { draftFromMeal, draftTotals, fmtG, mealTsForDate, nutritionLine, saveDraft, type NewFoodItem } from '../features/meal/draft'
-import { FoodRow, IntakeStrip, MealThumb, RowList, SectionLabel, intakeAverage } from '../features/meal/ui'
+import { IntakeStrip, MealThumb, RowList, SectionLabel, intakeAverage } from '../features/meal/ui'
 import { captureMealFromFile } from '../features/meal/captureMeal'
 import { usePhotoPicker } from '../native/PhotoInput'
 import { Composer } from '../features/composer'
@@ -64,18 +64,9 @@ function mealName(meal: Meal): string {
   return names.length === 1 ? names[0] : `${names[0]} +${names.length - 1}`
 }
 
-// --- sections --------------------------------------------------------------------
+// --- meals -----------------------------------------------------------------------
 
-/** MyFitnessPal-style sections, derived from the meal's time (not the stored type). */
-type Section = 'breakfast' | 'lunch' | 'dinner' | 'snack'
-const SECTIONS: Section[] = ['breakfast', 'lunch', 'dinner', 'snack']
-const SECTION_LABEL: Record<Section, string> = { breakfast: 'Breakfast', lunch: 'Lunch', dinner: 'Dinner', snack: 'Snacks' }
-const sectionOf = (ts: string): Section => {
-  const t = inferMealType(ts)
-  return t === 'drink' ? 'snack' : t
-}
-
-/** One row in a section: thumbnail, name, time, kcal and protein. Tapping opens the meal. */
+/** One logged meal: its photo, name, time, kcal and protein. Tapping opens the meal. */
 function MealRow({ meal, onOpen }: { meal: Meal; onOpen: () => void }) {
   const t = draftTotals(meal.items)
   const name = mealName(meal)
@@ -100,19 +91,24 @@ function MealRow({ meal, onOpen }: { meal: Meal; onOpen: () => void }) {
   )
 }
 
-// --- calorie equation ------------------------------------------------------------
+// --- calories and macros (photo-first, like Cal AI) ------------------------------
 
-/** One term of "Goal − Food = Remaining": a rounded numeral with a small label under it. */
-function Term({ value, label, strong }: { value: string; label: string; strong?: boolean }) {
+/** One macro: a small ring in its colour around the grams left (or over), its name, and eaten of target. */
+function MacroTile({ label, eaten, target, tone }: { label: string; eaten: number; target: number; tone: string }) {
+  const e = Math.round(eaten)
+  const t = Math.round(target)
+  const left = t - e
   return (
-    <span className="flex flex-col items-center min-w-0">
-      <span className={cx('num leading-none', strong ? 'text-[30px] text-app' : 'text-[26px] text-app')}>{value}</span>
-      <span className="text-[12px] text-muted mt-1.5">{label}</span>
-    </span>
+    <div className="flex flex-col items-center gap-1.5 rounded-[1.25rem] bg-surface px-2 py-3">
+      <Ring value={e} max={Math.max(t, 1)} size={58} stroke={6} tone={tone} ariaLabel={`${label}: ${e} of ${t} g, ${left < 0 ? `${-left} g over` : `${left} g left`}`}>
+        <span className="num text-[16px] leading-none">{left < 0 ? `+${-left}` : left}</span>
+        <span className="text-[10px] text-muted">{left < 0 ? 'over' : 'g left'}</span>
+      </Ring>
+      <span className="text-[13px] font-medium leading-tight">{label}</span>
+      <span className="tnum text-[12px] text-muted leading-tight">{e} / {t} g</span>
+    </div>
   )
 }
-
-const Op = ({ children }: { children: string }) => <span className="num text-[22px] text-faint pb-5" aria-hidden>{children}</span>
 
 // --- protein split ---------------------------------------------------------------
 
@@ -205,7 +201,6 @@ export default function EatScreen() {
 
   const [moreOpen, setMoreOpen] = useState(false)
   const [targetOpen, setTargetOpen] = useState(false)
-  const [addOpen, setAddOpen] = useState(false)
   const [quick, setQuick] = useState<{ kcal: number | null; proteinG: number | null } | null>(null)
   const [openFlag, setOpenFlag] = useState<TrendFlag['kind'] | null>(null)
 
@@ -252,17 +247,11 @@ export default function EatScreen() {
   const shownFlag = trendFlags.find((f) => f.kind === openFlag)
   const avg = intakeAverage(week)
 
-  const sections = SECTIONS
-    .map((s) => ({ key: s, meals: meals.filter((m) => sectionOf(m.ts) === s) }))
-    .filter((s) => s.meals.length > 0)
+  const ordered = [...meals].sort((a, b) => a.ts.localeCompare(b.ts))
 
   const food = Math.round(totals.kcal)
   const goal = Math.round(target.kcal)
   const left = goal - food
-  const proteinLeft = Math.round(target.proteinG - totals.proteinG)
-  const proteinPct = target.proteinG > 0 ? Math.min(100, (totals.proteinG / target.proteinG) * 100) : 0
-  const carbs = Math.round(totals.carbsG)
-  const fat = Math.round(totals.fatG)
 
   const setDate = (d: string) => {
     if (d === today) setParams({}, { replace: true })
@@ -285,22 +274,6 @@ export default function EatScreen() {
     navigate('/eat/review')
   }
 
-  const closeAdd = () => {
-    setAddOpen(false)
-    setQuick(null)
-  }
-
-  const logSaved = (meal: Meal) => {
-    try {
-      cloneMeal(meal.id, mealTsForDate(date, today))
-      toast.show(`Logged ${meal.savedName ?? 'saved meal'}`, 'success')
-    } catch (e) {
-      console.error(e)
-      toast.show('Could not log that meal', 'error')
-    }
-    closeAdd()
-  }
-
   const logItem = (item: NewFoodItem) => {
     const ts = mealTsForDate(date, today)
     try {
@@ -310,7 +283,7 @@ export default function EatScreen() {
       console.error(e)
       toast.show('Could not log that food', 'error')
     }
-    closeAdd()
+    setQuick(null)
   }
 
   const logQuick = () => {
@@ -321,17 +294,12 @@ export default function EatScreen() {
     })
   }
 
-  const snap = () => {
-    photos.openCamera() // first statement: iOS only opens the camera from the tap itself
-    closeAdd()
-  }
+  // Each opens its picker as the tap's first statement: iOS only opens the camera or library from the tap itself.
+  const snap = () => photos.openCamera()
+  const upload = () => photos.openLibrary()
+  const openSearch = () => navigate('/eat/search', { state: { date } })
 
-  const openSearch = () => {
-    closeAdd()
-    navigate('/eat/search', { state: { date } })
-  }
-
-  const ACTION = 'press flex flex-col items-center justify-center gap-1.5 h-[76px] rounded-2xl bg-surface-2 text-[14px] font-medium active:bg-surface-3'
+  const ACTION = 'press flex items-center justify-center gap-1.5 h-11 rounded-full bg-surface text-[14px] font-medium active:bg-surface-2'
 
   return (
     <Screen
@@ -350,122 +318,67 @@ export default function EatScreen() {
     >
       {photos.inputs}
       <div className="flex flex-col gap-6 pb-40">
-        <section aria-label="Calories and protein" className="flex flex-col gap-4">
-          <div
-            role="group"
-            className="grid grid-cols-[1fr_auto_1fr_auto_1fr] items-end gap-1"
-            aria-label={`Goal ${fmtInt(goal)} minus food ${fmtInt(food)} equals ${left < 0 ? `${fmtInt(-left)} kcal over` : `${fmtInt(left)} kcal remaining`}`}
+        <section aria-label="Calories and macros" className="flex flex-col gap-2">
+          <button
+            type="button"
+            onClick={() => setTargetOpen(true)}
+            aria-label={`${left < 0 ? `${fmtInt(-left)} kcal over` : `${fmtInt(left)} kcal left`}: ${fmtInt(food)} of ${fmtInt(goal)}. Edit daily targets`}
+            className="press flex items-center justify-between gap-4 rounded-[1.25rem] bg-surface p-4 text-left"
           >
-            <button type="button" onClick={() => setTargetOpen(true)} aria-label={`Goal ${fmtInt(goal)} kcal. Edit daily targets`} className="press rounded-xl py-1">
-              <Term value={fmtInt(goal)} label={target.missing ? 'Goal (est.)' : 'Goal'} />
-            </button>
-            <Op>−</Op>
-            <span className="py-1"><Term value={fmtInt(food)} label="Food" /></span>
-            <Op>=</Op>
-            <span className="py-1"><Term value={left < 0 ? `+${fmtInt(-left)}` : fmtInt(left)} label={left < 0 ? 'Over' : 'Remaining'} strong /></span>
-          </div>
-
-          <div>
-            <div className="h-1.5 rounded-full bg-surface-2 overflow-hidden" aria-hidden>
-              <div className="h-full rounded-full bg-protein" style={{ width: `${proteinPct}%`, transition: 'width 600ms var(--ease-out-soft)' }} />
-            </div>
-            <p className="flex items-baseline justify-between gap-3 mt-2 text-[14px] tnum">
-              <span className="text-muted"><span className="font-semibold text-protein">{fmtInt(totals.proteinG)}</span> of {fmtInt(target.proteinG)} g protein</span>
-              <span className="text-muted">{proteinLeft >= 0 ? `${proteinLeft} g left` : `+${-proteinLeft} g`}</span>
-            </p>
-            {(carbs > 0 || fat > 0) && (
-              <p className="tnum text-[13px] text-faint mt-0.5">Carbs {carbs} g · Fat {fat} g</p>
-            )}
+            <span className="min-w-0">
+              <span className="block num text-[44px] leading-none">{left < 0 ? `+${fmtInt(-left)}` : fmtInt(left)}</span>
+              <span className="mt-1.5 block text-[15px] text-muted">{left < 0 ? 'kcal over' : 'kcal left'}</span>
+              <span className="mt-0.5 block tnum text-[13px] text-faint">{fmtInt(food)} of {fmtInt(goal)}{target.missing ? ' (estimated)' : ''}</span>
+            </span>
+            <Ring value={food} max={Math.max(goal, 1)} size={96} stroke={10} pillar="eat" ariaLabel="">
+              <Flame size={24} className="text-pillar" aria-hidden />
+            </Ring>
+          </button>
+          <div className="grid grid-cols-3 gap-2">
+            <MacroTile label="Protein" eaten={totals.proteinG} target={target.proteinG} tone="stroke-protein" />
+            <MacroTile label="Carbs" eaten={totals.carbsG} target={target.carbsG} tone="stroke-carbs" />
+            <MacroTile label="Fat" eaten={totals.fatG} target={target.fatG} tone="stroke-fat" />
           </div>
         </section>
 
-        {sections.map((s) => (
-          <section key={s.key} aria-label={SECTION_LABEL[s.key]}>
-            <SectionLabel note={<span className="tnum">{fmtInt(draftTotals(s.meals.flatMap((m) => m.items)).kcal)} kcal</span>}>
-              {SECTION_LABEL[s.key]}
-            </SectionLabel>
+        <div className="flex flex-col gap-2">
+          <Button size="lg" full icon={<Camera size={20} />} onClick={snap}>Snap a meal</Button>
+          <div className="grid grid-cols-3 gap-2">
+            <button type="button" onClick={upload} className={ACTION}><ImageUp size={17} aria-hidden />Upload</button>
+            <button type="button" onClick={openSearch} className={ACTION}><Search size={17} aria-hidden />Search</button>
+            <button type="button" onClick={() => setQuick({ kcal: null, proteinG: null })} className={ACTION}><Flame size={17} aria-hidden />Quick add</button>
+          </div>
+        </div>
+
+        {logged ? (
+          <section aria-label="Meals">
+            <SectionLabel>{isToday ? 'Today' : 'Meals'}</SectionLabel>
             <RowList>
-              {s.meals.map((meal) => <MealRow key={meal.id} meal={meal} onOpen={() => openMeal(meal)} />)}
+              {ordered.map((meal) => <MealRow key={meal.id} meal={meal} onOpen={() => openMeal(meal)} />)}
             </RowList>
           </section>
-        ))}
-
-        {!logged && (
+        ) : (
           <div className="flex flex-col items-center text-center px-4 text-muted">
             <Illustration name="plate" size={96} />
             <p className="text-[15px] mt-2">
-              {dayNote === 'fasting' ? 'Noted as a fasting day.' : isPast ? 'Nothing logged on this day.' : 'Nothing logged yet.'}
+              {dayNote === 'fasting' ? 'Noted as a fasting day.' : isPast ? 'Nothing logged on this day.' : 'Nothing logged yet. Snap your first meal.'}
             </p>
           </div>
         )}
-
-        <Button size="lg" full icon={<Plus size={20} />} onClick={() => setAddOpen(true)}>Add food</Button>
       </div>
 
       <Composer context="eat" />
 
       <Sheet
-        open={addOpen}
-        onClose={closeAdd}
-        title={quick ? 'Quick add' : isToday ? 'Add food' : `Add to ${fmtDate(date)}`}
-        footer={quick ? (
-          <Button size="lg" full disabled={!quick.kcal || quick.kcal <= 0} onClick={logQuick}>Log</Button>
-        ) : undefined}
+        open={quick !== null}
+        onClose={() => setQuick(null)}
+        title={isToday ? 'Quick add' : `Quick add to ${fmtDate(date)}`}
+        footer={<Button size="lg" full disabled={!quick?.kcal || quick.kcal <= 0} onClick={logQuick}>Log</Button>}
       >
-        {quick ? (
+        {quick && (
           <div className="grid grid-cols-2 gap-3">
             <Field label="Calories"><NumberInput value={quick.kcal} onChange={(n) => setQuick({ ...quick, kcal: n })} unit="kcal" min={0} max={5000} step={10} autoFocus /></Field>
             <Field label="Protein" hint="Optional"><NumberInput value={quick.proteinG} onChange={(n) => setQuick({ ...quick, proteinG: n })} unit="g" min={0} max={400} step={1} /></Field>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-5">
-            <div className="grid grid-cols-3 gap-2">
-              <button type="button" onClick={snap} className={ACTION}><Camera size={22} aria-hidden />Photo</button>
-              <button type="button" onClick={openSearch} className={ACTION}><Search size={22} aria-hidden />Search</button>
-              <button type="button" onClick={() => setQuick({ kcal: null, proteinG: null })} className={ACTION}><Flame size={22} aria-hidden />Quick add</button>
-            </div>
-
-            {recent.length > 0 && (
-              <div>
-                <SectionLabel>Recent</SectionLabel>
-                <RowList>
-                  {recent.slice(0, 6).map((it) => (
-                    <FoodRow
-                      key={it.foodName}
-                      name={it.foodName}
-                      detail={it.servingDescription || fmtG(it.quantityG)}
-                      kcal={it.kcal}
-                      proteinG={it.proteinG}
-                      actionLabel="Log"
-                      onClick={() => logItem(it)}
-                    />
-                  ))}
-                </RowList>
-              </div>
-            )}
-
-            {saved.length > 0 && (
-              <div>
-                <SectionLabel>Saved meals</SectionLabel>
-                <RowList>
-                  {saved.map((m) => {
-                    const t = draftTotals(m.items)
-                    return (
-                      <FoodRow
-                        key={m.id}
-                        name={m.savedName ?? 'Saved meal'}
-                        glyph={m.items[0]?.foodName}
-                        detail={`${m.items.length} item${m.items.length === 1 ? '' : 's'}`}
-                        kcal={t.kcal}
-                        proteinG={t.proteinG}
-                        actionLabel="Log"
-                        onClick={() => logSaved(m)}
-                      />
-                    )
-                  })}
-                </RowList>
-              </div>
-            )}
           </div>
         )}
       </Sheet>
