@@ -209,7 +209,7 @@ const PATTERN_ICON: Record<string, LucideIcon> = { mobility: StretchHorizontal, 
 
 function MoveRow({ exercise, line }: { exercise: Exercise; line: string }) {
   const m = exerciseMedia(exercise.id)
-  const hasPicture = !!(m.photoLoop || m.art || m.animation || m.images.length)
+  const hasPicture = !!(m.photo || m.art || m.animation || m.images.length)
   const Icon = PATTERN_ICON[exercise.pattern] ?? Dumbbell
   return (
     <li>

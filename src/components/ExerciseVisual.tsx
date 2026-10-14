@@ -1,9 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Activity, Bike, Cable, Cog, Dumbbell, Footprints, PersonStanding, StretchHorizontal, Waves, type LucideIcon } from 'lucide-react'
 import type { Exercise } from '../domain/types'
-import { exerciseMedia, photoModelFor } from '../data/exerciseMedia'
-import { getProfile } from '../db/repositories'
-import { useQuery } from '../hooks/useQuery'
+import { exerciseMedia } from '../data/exerciseMedia'
 import { cx } from '../lib/util'
 import { MuscleMap } from './MuscleMap'
 
@@ -47,13 +45,12 @@ function usePrefersReducedMotion(): boolean {
 }
 
 /**
- * Best available picture of the movement: the AI photo loop, then the looping animation, then the verified photos, then
- * the line illustration, then (or on load error) a tinted MuscleMap tile. Reduced motion skips the animation. A photo
- * loop or a drawing with several frames plays on cards and heroes; thumbs and reduced motion show the first frame.
+ * Best available picture of the movement: the AI photo, then the looping animation, then the verified photos, then
+ * the line illustration, then (or on load error) a tinted MuscleMap tile. Reduced motion skips the animation. A drawing
+ * with several frames plays on cards and heroes; thumbs and reduced motion show the first frame.
  */
 export function ExerciseVisual({ exercise, size = 'card', className }: ExerciseVisualProps) {
-  const model = useQuery(() => photoModelFor(getProfile()?.sex), [])
-  const { animation, images, art, artFrames, photoLoop, photoStill } = exerciseMedia(exercise.id, model)
+  const { animation, images, art, artFrames, photo, photoThumb } = exerciseMedia(exercise.id)
   const [photoFailed, setPhotoFailed] = useState(false)
   const [animFailed, setAnimFailed] = useState(false)
   const [failed, setFailed] = useState(false)
@@ -83,12 +80,12 @@ export function ExerciseVisual({ exercise, size = 'card', className }: ExerciseV
     return () => window.clearInterval(t)
   }, [flip, artFrames.length])
 
-  if (photoLoop && !photoFailed) {
-    // The SVG plays itself (SMIL); its first frame is a separate still. A thumb crops the 4:3 frame to the person.
+  if (photo && !photoFailed) {
+    // One still picture; a thumb has its own square crop on the person.
     return (
       <div role="img" aria-label={exercise.name} className={cx('relative overflow-hidden border border-line bg-media', FRAME[size], className)}>
         <img
-          src={size === 'thumb' || reduced ? photoStill! : photoLoop}
+          src={size === 'thumb' ? photoThumb! : photo}
           alt=""
           loading="lazy"
           decoding="async"
