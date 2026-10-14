@@ -36,6 +36,11 @@ export function dayKind(date: string): DayKind {
   return WEEK_KINDS[weekday(date)]
 }
 
+/** The kind of a session key: 'w1d1' → strength … 'w1d7' → recovery. */
+export function keyKind(key: string): DayKind {
+  return WEEK_KINDS[(Number(key.slice(key.indexOf('d') + 1)) - 1 + 7) % 7]
+}
+
 /** Monday to Sunday of the week holding `date`. */
 export function weekDates(date: string): string[] {
   const start = startOfWeek(date)
@@ -50,11 +55,11 @@ type RowLike = Pick<WorkoutSession, 'templateKey' | 'scheduledDate' | 'status' |
 
 /**
  * The row Today acts on for a session key on a date: in progress first, then completed, then an untouched planned
- * one. Without a key, any row of the week's programme that date.
+ * one. Without a key, any row of the programme (the week's, unless given) that date.
  */
-export function rowForDate<T extends RowLike>(rows: T[], date: string, key?: string): T | null {
+export function rowForDate<T extends RowLike>(rows: T[], date: string, key?: string, programId: string = WEEK_PROGRAM_ID): T | null {
   const rank = { in_progress: 0, completed: 1, planned: 2, skipped: 3 } as const
-  const own = rows.filter((r) => r.scheduledDate === date && isBlueprintRow(r) && r.status !== 'skipped' && (!key || r.templateKey.endsWith(`:${key}`)))
+  const own = rows.filter((r) => r.scheduledDate === date && parseProgramKey(r.templateKey)?.programId === programId && r.status !== 'skipped' && (!key || r.templateKey.endsWith(`:${key}`)))
   return own.sort((a, b) => rank[a.status] - rank[b.status] || b.id - a.id)[0] ?? null
 }
 

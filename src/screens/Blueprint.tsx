@@ -1,125 +1,98 @@
-// Today on the BFT week (FEATURES.blueprint; data in src/data/programs/bft.ts): the week as a strip, the day's class
-// with a picture of every move, and two ways to do it. Start runs it in Focus Mode the same way "Start
-// now" does (the series' safety questions once, then the symptom gate); "Do it with Coach" runs the same session as a
-// chat (screens/CoachWorkout.tsx). Tap another day to see it, or do it today.
+// Today (FEATURES.blueprint): the BFT week as a strip (data in src/data/programs/bft.ts), the day's class with two ways
+// to do it, and "More workouts" to pick from: the other BFT classes and the other series' start-now picks. Tapping a
+// class opens its intro with a picture of every move (screens/WorkoutIntro.tsx). Start goes straight into the player
+// with no questions (features/blueprint/start.ts); "Do it with Coach" runs the same session as a chat
+// (screens/CoachWorkout.tsx). Tap another day to see its class, or do it today.
 import { useState, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Activity, Check, ChevronRight, Dumbbell, HeartPulse, MessageSquare, PersonStanding, Play, Settings, StretchHorizontal, Wind, type LucideIcon } from 'lucide-react'
-import type { Block } from '../domain/programs'
-import type { Exercise } from '../domain/types'
-import { Button, ExerciseVisual, IconButton, Screen } from '../components'
-import { exerciseMedia } from '../data/exerciseMedia'
-import { getConditionFlags } from '../db/repositories'
+import { Check, ChevronRight, Settings } from 'lucide-react'
+import type { ProgramId } from '../domain/programs'
+import { IconButton, Screen } from '../components'
+import { expandSessions } from '../engine'
 import { useQuery } from '../hooks'
 import { cx, dayName, fmtDate, todayStr } from '../lib/util'
-import { SafetyCheckSheet, previewSafety } from '../features/programs'
-import { exerciseMap, libraryExercises } from '../features/workout/helpers'
-import { noImpactChosen, screenAnswersFor } from '../features/workout/program'
-import { blueprintProgram, blueprintRows, blueprintSession, ensureTodayRow } from '../features/blueprint/session'
-import {
-  KIND_META, blockLine, dayKey, dayKind, doneOn, rowForDate, sections, sessionExerciseIds, stationLine, weekDates, type DayKind,
-} from '../features/blueprint/week'
-
-type Mode = 'player' | 'coach'
+import { startNowPicks } from '../features/programs'
+import { blueprintProgram, blueprintRows, blueprintSession } from '../features/blueprint/session'
+import { startToday } from '../features/blueprint/start'
+import { KindArt, LATE_KINDS, OTHER_ART, StartButtons, WorkoutArt, type StartMode } from '../features/blueprint/ui'
+import { KIND_META, dayKey, dayKind, doneOn, keyKind, rowForDate, sessionExerciseIds, weekDates, type DayKind } from '../features/blueprint/week'
 
 export default function BlueprintScreen() {
   const navigate = useNavigate()
   const today = todayStr()
   const [picked, setPicked] = useState(today)
-  // The safety questions are asked once, before the first start of either kind.
-  const [checkFor, setCheckFor] = useState<Mode | null>(null)
-  const program = blueprintProgram()
   const week = weekDates(today)
   const key = dayKey(picked)
   const kind = dayKind(picked)
 
   const rows = useQuery(() => blueprintRows(today), [today])
-  const data = useQuery(() => {
-    const session = blueprintSession(key)
-    if (!session) return null
-    const flags = getConditionFlags().map((f) => f.region)
-    return {
-      session,
-      byId: exerciseMap(libraryExercises()),
-      safety: previewSafety(program, screenAnswersFor(program.id), flags, noImpactChosen(), today),
-    }
-  }, [key, today])
+  const session = useQuery(() => blueprintSession(key), [key, today])
+  const more = useQuery(() => moreWorkouts(dayKey(today)), [today])
 
   // This session on its own day, or done on today instead ("Do it today").
   const row = rowForDate(rows, picked, key) ?? (picked !== today ? rowForDate(rows, today, key) : null)
-  const open = (id: number, mode: Mode) => navigate(mode === 'coach' ? `/coach/workout/${id}` : `/train/session/${id}`)
-  const go = (mode: Mode) => {
-    if (row && row.status !== 'planned') return open(row.id, mode)
-    if (data?.safety.state === 'ready') return open(ensureTodayRow(key, today), mode)
-    setCheckFor(mode)
-  }
-
-  const button = row?.status === 'completed'
-    ? <Button variant="secondary" size="lg" full icon={<Check size={18} />} onClick={() => go('player')}>Done · See summary</Button>
-    : (
-      <div className="flex flex-col gap-2">
-        {row?.status === 'in_progress'
-          ? <Button variant="primary" size="lg" full icon={<Play size={18} />} onClick={() => go('player')}>Resume</Button>
-          : picked === today
-            ? <Button variant="primary" size="lg" full icon={<Play size={18} />} onClick={() => go('player')}>Start</Button>
-            : <Button variant="secondary" size="lg" full onClick={() => go('player')}>Do it today</Button>}
-        <Button variant="secondary" size="lg" full icon={<MessageSquare size={18} />} onClick={() => go('coach')}>
-          {row?.status === 'in_progress' ? 'Continue with Coach' : 'Do it with Coach'}
-        </Button>
-      </div>
-    )
+  const open = (id: number, mode: StartMode) => navigate(mode === 'coach' ? `/coach/workout/${id}` : `/train/session/${id}`)
+  const go = (mode: StartMode) => open(row && row.status !== 'planned' ? row.id : startToday(key, today), mode)
 
   return (
     <Screen
       pillar="today"
       large
       eyebrow={`${dayName(today, false)} · ${fmtDate(today)}`}
-      title={program.title}
-      subtitle={<span className="text-[15px] text-muted">Six classes, one a day</span>}
+      title="Today"
       right={<IconButton icon={<Settings size={22} />} label="Settings" onClick={() => navigate('/settings')} />}
     >
       <div className="flex flex-col gap-6 pb-4">
         <WeekStrip dates={week} today={today} picked={picked} rows={rows} onPick={setPicked} />
 
-        {data && (
+        {session && (
           <DayCard
             kind={kind}
+            to={`/workout/${blueprintProgram().id}/${key}`}
             when={picked === today ? 'Today' : dayName(picked, false)}
-            name={data.session.name}
-            minutes={data.session.minutes}
-            moves={sessionExerciseIds(data.session).length}
-            button={button}
-            note={kind === 'hiit' || kind === 'summit' ? 'Finish at least 4 hours before bed.' : null}
+            name={session.name}
+            minutes={session.minutes}
+            moves={sessionExerciseIds(session).length}
+            button={<StartButtons status={row?.status ?? null} later={picked !== today} onGo={go} />}
+            note={LATE_KINDS.includes(kind) ? 'Finish at least 4 hours before bed.' : null}
           />
         )}
 
-        {data && sections(data.session).map((sec, i) => (
-          <section key={`${sec.title}-${i}`} aria-label={sec.title || undefined}>
-            {sec.title && (
-              <div className="mb-2 flex items-baseline justify-between px-1">
-                <h3 className="eyebrow m-0 text-muted">{sec.title}</h3>
-                {sec.meta && <span className="text-[13px] font-medium text-faint">{sec.meta}</span>}
-              </div>
-            )}
-            <ul className="divide-y divide-line overflow-hidden rounded-[1.25rem] bg-surface">
-              {sec.blocks.flatMap(moveRows).map((m, j) => {
-                const ex = data.byId.get(m.id)
-                return ex ? <MoveRow key={`${m.id}-${j}`} exercise={ex} line={m.line} /> : null
-              })}
-            </ul>
-          </section>
-        ))}
+        <section aria-labelledby="more-workouts">
+          <h3 id="more-workouts" className="eyebrow m-0 mb-2 px-1 text-muted">More workouts</h3>
+          <ul className="grid grid-cols-2 gap-2.5">
+            {more.map((w) => (
+              <li key={`${w.programId}:${w.key}`} className="min-w-0">
+                <Link to={`/workout/${w.programId}/${w.key}`} className="press flex h-full flex-col overflow-hidden rounded-[1.25rem] bg-surface">
+                  {w.kind ? <KindArt kind={w.kind} small className="h-20 w-full" /> : <WorkoutArt label={w.series} color={OTHER_ART} small className="h-20 w-full" />}
+                  <span className="flex flex-1 flex-col gap-1 p-3">
+                    <span className="line-clamp-2 text-[15px] font-semibold leading-tight text-app">{w.name}</span>
+                    <span className="mt-auto text-[13px] font-medium text-muted"><span className="num text-xl text-app">{w.minutes}</span> min</span>
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
       </div>
-
-      <SafetyCheckSheet
-        open={checkFor !== null}
-        program={program}
-        mode="workout"
-        onClose={() => setCheckFor(null)}
-        onDone={() => { const mode = checkFor ?? 'player'; setCheckFor(null); open(ensureTodayRow(key, today), mode) }}
-      />
     </Screen>
   )
+}
+
+// --- more workouts ---------------------------------------------------------------------------------------------
+
+interface MoreWorkout { programId: ProgramId; key: string; name: string; minutes: number; kind: DayKind | null; series: string }
+
+/** The week's other classes, Monday first, then the other ready series' start-now picks. */
+function moreWorkouts(todayKey: string): MoreWorkout[] {
+  const week = blueprintProgram()
+  const classes = expandSessions(week)
+    .filter((s) => s.week === 1 && s.key !== todayKey)
+    .map((s) => ({ programId: week.id, key: s.key, name: s.name, minutes: s.minutes, kind: keyKind(s.key), series: week.title }))
+  const others = startNowPicks()
+    .filter((p) => p.program.id !== week.id)
+    .map((p) => ({ programId: p.program.id, key: p.pick.sessionKey, name: p.pick.name, minutes: p.session.minutes, kind: null, series: p.program.title }))
+  return [...classes, ...others]
 }
 
 // --- week strip ------------------------------------------------------------------------------------------------
@@ -160,71 +133,34 @@ function WeekStrip({ dates, today, picked, rows, onPick }: { dates: string[]; to
 
 // --- day card --------------------------------------------------------------------------------------------------
 
-/** The class name, big and white on its colour, as the studio screens show it. */
-function KindArt({ kind, className }: { kind: DayKind; className?: string }) {
-  const meta = KIND_META[kind]
-  return (
-    <span aria-hidden className={cx('flex items-center justify-center overflow-hidden', className)} style={{ background: meta.color }}>
-      <span className="font-display text-[56px] font-black uppercase italic leading-none tracking-tight text-white">{meta.label}</span>
-    </span>
-  )
-}
-
-function DayCard({ kind, when, name, minutes, moves, button, note }: {
-  kind: DayKind; when: string; name: string; minutes: number; moves: number; button: ReactNode; note: string | null
+/** The day's class: tap the top to see its moves; the buttons start it. */
+function DayCard({ kind, to, when, name, minutes, moves, button, note }: {
+  kind: DayKind; to: string; when: string; name: string; minutes: number; moves: number; button: ReactNode; note: string | null
 }) {
   const meta = KIND_META[kind]
   return (
     <article className="overflow-hidden rounded-[1.25rem] bg-surface">
-      <KindArt kind={kind} className="h-44 w-full" />
+      <Link to={to} className="press block" aria-label={`${name}: see the moves`}>
+        <KindArt kind={kind} className="h-44 w-full" />
+        <div className="px-4 pt-4">
+          <div className="eyebrow flex items-center gap-1.5 text-muted">
+            <span className="h-2 w-2 rounded-full" style={{ background: meta.color }} aria-hidden />
+            {when} · {meta.label}
+          </div>
+          <div className="mt-1 flex items-center justify-between gap-2">
+            <h2 className="m-0 text-[24px] font-semibold leading-tight text-app">{name}</h2>
+            <ChevronRight size={20} className="shrink-0 text-faint" aria-hidden />
+          </div>
+          <div className="mt-1.5 flex items-baseline gap-4 text-sm font-medium text-muted">
+            <span><span className="num text-3xl text-app">{minutes}</span> min</span>
+            <span><span className="num text-3xl text-app">{moves}</span> {moves === 1 ? 'move' : 'moves'}</span>
+          </div>
+        </div>
+      </Link>
       <div className="p-4">
-        <div className="eyebrow flex items-center gap-1.5 text-muted">
-          <span className="h-2 w-2 rounded-full" style={{ background: meta.color }} aria-hidden />
-          {when} · {meta.label}
-        </div>
-        <h2 className="m-0 mt-1 text-[24px] font-semibold leading-tight text-app">{name}</h2>
-        <div className="mt-1.5 flex items-baseline gap-4 text-sm font-medium text-muted">
-          <span><span className="num text-3xl text-app">{minutes}</span> min</span>
-          <span><span className="num text-3xl text-app">{moves}</span> {moves === 1 ? 'move' : 'moves'}</span>
-        </div>
-        <div className="mt-4">{button}</div>
+        {button}
         {note && <p className="m-0 mt-2.5 text-center text-[13px] text-muted">{note}</p>}
       </div>
     </article>
-  )
-}
-
-// --- moves -----------------------------------------------------------------------------------------------------
-
-function moveRows(b: Block): { id: string; line: string }[] {
-  if (b.shape === 'circuit') return b.stations.map((s) => ({ id: s.exerciseId, line: stationLine(s) }))
-  const line = blockLine(b)
-  if (b.shape === 'steady') return [{ id: b.exerciseId, line: `${line} · ${b.effort}` }]
-  if (b.shape === 'intervals') return [{ id: b.work.exerciseId, line }]
-  return [{ id: b.exerciseId, line }]
-}
-
-/** For moves with no drawing (tree pose, cobra, meditation …): an icon for the kind of move, never another move's picture. */
-const PATTERN_ICON: Record<string, LucideIcon> = { mobility: StretchHorizontal, balance: PersonStanding, breathing: Wind, cardio: HeartPulse, core: Activity }
-
-function MoveRow({ exercise, line }: { exercise: Exercise; line: string }) {
-  const m = exerciseMedia(exercise.id)
-  const hasPicture = !!(m.photoLoop || m.art || m.animation || m.images.length)
-  const Icon = PATTERN_ICON[exercise.pattern] ?? Dumbbell
-  return (
-    <li>
-      <Link to={`/train/exercise/${exercise.id}`} className="press flex min-h-[72px] items-center gap-3 px-3 py-2 active:bg-surface-2">
-        {hasPicture ? <ExerciseVisual exercise={exercise} size="thumb" /> : (
-          <span aria-hidden className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-line bg-surface-2 text-muted">
-            <Icon size={24} strokeWidth={1.75} />
-          </span>
-        )}
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-[15px] font-semibold text-app">{exercise.name}</span>
-          <span className="line-clamp-2 text-[13px] leading-snug text-muted">{line}</span>
-        </span>
-        <ChevronRight size={16} className="shrink-0 text-faint" aria-hidden />
-      </Link>
-    </li>
   )
 }

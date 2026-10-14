@@ -12,7 +12,7 @@ import type { Region, WorkoutSession } from '../domain/types'
 import { parseProgramKey } from '../domain/programs'
 import { ExerciseVisual, IconButton, Screen, useToast } from '../components'
 import { getProgram } from '../data/programs'
-import { addSet, deleteSet, getConditionFlags, getSession, getSetsForSession, lastSetsForExercise, previousSetsForExercise, updateSession, updateSet } from '../db/repositories'
+import { addSet, deleteSet, getSession, getSetsForSession, lastSetsForExercise, previousSetsForExercise, updateSession, updateSet } from '../db/repositories'
 import { aiConnected, coachConversation, isAIError } from '../ai'
 import { REDACTED_SAFETY_TURN, computeDailyPriority, isExerciseAllowed, screenMessage } from '../engine'
 import { acquireWakeLock } from '../native'
@@ -22,17 +22,17 @@ import { cx, nowIso, todayStr } from '../lib/util'
 import { buildCoachFacts, profileSummary, todayReadiness } from '../features/coach/facts'
 import { runCoachTool } from '../features/coach/tools'
 import { SupportSheet } from '../features/mind/SupportSheet'
-import { SafetyCheckSheet, previewSafety } from '../features/programs'
 import {
   GATE_REGIONS, GateResultSheet, PainSheet, REGION_LABELS, SubstituteSheet, SymptomGateSheet, computeDurationMin, defaultPostPain, evaluateProgressionWithPain,
-  exerciseMap, finishSession, fmtClock, fmtLoad, fmtSec, libraryExercises, noImpactChosen, readSessionFlag, reapplyGate, reducePlannedLoad,
-  screenAnswersFor, skipSession, startSessionWithGate, substituteExercise, summarizeSets, todaysGate, todaysRegionState, writeSessionFlag,
+  exerciseMap, finishSession, fmtClock, fmtLoad, fmtSec, libraryExercises, readSessionFlag, reapplyGate, reducePlannedLoad,
+  skipSession, startSessionWithGate, substituteExercise, summarizeSets, todaysGate, todaysRegionState, writeSessionFlag,
   type GateEntry, type GateOutcome, type PainOutcome, type SymptomChange, type SymptomChangeKind,
 } from '../features/workout'
 import { circuitRestAfter } from '../features/workout/focus'
 import { autoBlock, startWord } from '../features/workout/autoRun'
 import { NO_LOAD_EQUIPMENT, buildSetRow } from '../features/workout/useSetLogger'
-import { blueprintProgram, blueprintRows, ensureTodayRow } from '../features/blueprint/session'
+import { blueprintRows } from '../features/blueprint/session'
+import { startToday } from '../features/blueprint/start'
 import { dayKey, rowForDate } from '../features/blueprint/week'
 import { parseGateReply, parseWorkoutReply } from '../features/coachWorkout/parse'
 import { currentStep, progress, setsByExerciseId, stepLine, type Step } from '../features/coachWorkout/step'
@@ -42,29 +42,19 @@ export default function CoachWorkoutScreen() {
   return id === 'today' ? <TodayResolver /> : <CoachWorkout key={id} sessionId={Number(id)} />
 }
 
-/** Today's Blueprint session: an existing row, or the series' safety questions (once) and a new row. */
+/** Today's Blueprint session: the row already started or done, or today's row started now, with no questions. */
 function TodayResolver() {
   const navigate = useNavigate()
   const [params] = useSearchParams()
   const today = todayStr()
   const key = params.get('key') ?? dayKey(today)
-  const program = blueprintProgram()
-  const [asking, setAsking] = useState(false)
-  const go = useCallback((id: number) => navigate(`/coach/workout/${id}`, { replace: true }), [navigate])
 
   useEffect(() => {
     const row = rowForDate(blueprintRows(today), today, key)
-    if (row) return go(row.id)
-    const flags = getConditionFlags().map((f) => f.region)
-    if (previewSafety(program, screenAnswersFor(program.id), flags, noImpactChosen(), today).state === 'ready') go(ensureTodayRow(key, today))
-    else setAsking(true)
-  }, [today, key, program, go])
+    navigate(`/coach/workout/${row && row.status !== 'planned' ? row.id : startToday(key, today)}`, { replace: true })
+  }, [today, key, navigate])
 
-  return (
-    <Screen pillar="coach" title="Workout" back="/coach" backLabel="Coach">
-      <SafetyCheckSheet open={asking} program={program} mode="workout" onClose={() => navigate('/coach', { replace: true })} onDone={() => go(ensureTodayRow(key, today))} />
-    </Screen>
-  )
+  return <Screen pillar="coach" title="Workout" back="/coach" backLabel="Coach">{null}</Screen>
 }
 
 // --- the chat --------------------------------------------------------------------------------------------------

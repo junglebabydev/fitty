@@ -1,8 +1,8 @@
 // The week's session (BFT, see week.ts) for a day on this user's path, and the database rows for it. Shared by Today, the
 // coach-led workout and the coach's facts, so all three see the same session. Reads the database; only
 // ensureTodayRow writes.
-import type { ProgramSession } from '../../domain/programs'
-import { workoutTemplateKey } from '../../domain/programs'
+import type { ProgramId, ProgramSession } from '../../domain/programs'
+import { parseProgramKey, workoutTemplateKey } from '../../domain/programs'
 import type { WorkoutSession } from '../../domain/types'
 import { getProgram } from '../../data/programs'
 import { getConditionFlags, getSessions, getSetsForSession } from '../../db/repositories'
@@ -17,9 +17,14 @@ export function blueprintProgram() {
 
 /** The day's session on the user's path (standing flags, saved answers, the no-impact choice): what Start creates, before the gate. */
 export function blueprintSession(key: string): ProgramSession | null {
-  const program = blueprintProgram()
-  const base = expandSessions(program).find((s) => s.key === key)
-  if (!base) return null
+  return programSession(WEEK_PROGRAM_ID, key)
+}
+
+/** Any programme's session on the user's path, as blueprintSession: the "More workouts" on Today. */
+export function programSession(programId: ProgramId, key: string): ProgramSession | null {
+  const program = getProgram(programId)
+  const base = program && (expandSessions(program).find((s) => s.key === key) ?? program.sessions.find((s) => s.key === key))
+  if (!program || !base) return null
   const flags = getConditionFlags().map((f) => f.region)
   const noImpact = noImpactChosen()
   const path = screenResult(program, screenAnswersFor(program.id)?.answers ?? {}, flags, noImpact).path
@@ -32,13 +37,19 @@ export function blueprintRows(today: string): WorkoutSession[] {
   return getSessions(week[0], week[6]).filter(isBlueprintRow)
 }
 
-/** Today's row for a session: one in progress, or an untouched planned one, is reused; otherwise a new one is made. */
-export function ensureTodayRow(key: string, today: string): number {
-  const own = getSessions(today, today).filter((r) => isBlueprintRow(r) && r.templateKey.endsWith(`:${key}`))
+/**
+ * Today's row for a session (the week's, or another programme's): one in progress, or an untouched planned one, is
+ * reused; otherwise a new one is made.
+ */
+export function ensureTodayRow(key: string, today: string, programId: ProgramId = WEEK_PROGRAM_ID): number {
+  const own = getSessions(today, today).filter((r) => {
+    const k = parseProgramKey(r.templateKey)
+    return k?.programId === programId && k.sessionKey === key
+  })
   const live = own.find((r) => r.status === 'in_progress')
   if (live) return live.id
   const fresh = own.find((r) => r.status === 'planned' && getSetsForSession(r.id).length === 0)
-  return fresh ? fresh.id : startStandaloneWorkout(WEEK_PROGRAM_ID, key, today)
+  return fresh ? fresh.id : startStandaloneWorkout(programId, key, today)
 }
 
 /**
