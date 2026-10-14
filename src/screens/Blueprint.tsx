@@ -1,7 +1,7 @@
 // Today on the BFT week (FEATURES.blueprint; data in src/data/programs/bft.ts): the week as a strip, the day's class
-// with a picture of every move, and two ways to do it. Start runs it in Focus Mode the same way "Start
-// now" does (the series' safety questions once, then the symptom gate); "Do it with Coach" runs the same session as a
-// chat (screens/CoachWorkout.tsx). Tap another day to see it, or do it today.
+// with a picture of every move, and two ways to do it. Start goes straight into the player with no questions
+// (features/blueprint/start.ts); "Do it with Coach" runs the same session as a chat (screens/CoachWorkout.tsx). Tap
+// another day to see it, or do it today.
 import { useState, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Activity, Check, ChevronRight, Dumbbell, HeartPulse, MessageSquare, PersonStanding, Play, Settings, StretchHorizontal, Wind, type LucideIcon } from 'lucide-react'
@@ -9,13 +9,11 @@ import type { Block } from '../domain/programs'
 import type { Exercise } from '../domain/types'
 import { Button, ExerciseVisual, IconButton, Screen } from '../components'
 import { exerciseMedia } from '../data/exerciseMedia'
-import { getConditionFlags } from '../db/repositories'
 import { useQuery } from '../hooks'
 import { cx, dayName, fmtDate, todayStr } from '../lib/util'
-import { SafetyCheckSheet, previewSafety } from '../features/programs'
 import { exerciseMap, libraryExercises } from '../features/workout/helpers'
-import { noImpactChosen, screenAnswersFor } from '../features/workout/program'
-import { blueprintProgram, blueprintRows, blueprintSession, ensureTodayRow } from '../features/blueprint/session'
+import { blueprintProgram, blueprintRows, blueprintSession } from '../features/blueprint/session'
+import { startToday } from '../features/blueprint/start'
 import {
   KIND_META, blockLine, dayKey, dayKind, doneOn, rowForDate, sections, sessionExerciseIds, stationLine, weekDates, type DayKind,
 } from '../features/blueprint/week'
@@ -26,8 +24,6 @@ export default function BlueprintScreen() {
   const navigate = useNavigate()
   const today = todayStr()
   const [picked, setPicked] = useState(today)
-  // The safety questions are asked once, before the first start of either kind.
-  const [checkFor, setCheckFor] = useState<Mode | null>(null)
   const program = blueprintProgram()
   const week = weekDates(today)
   const key = dayKey(picked)
@@ -37,22 +33,13 @@ export default function BlueprintScreen() {
   const data = useQuery(() => {
     const session = blueprintSession(key)
     if (!session) return null
-    const flags = getConditionFlags().map((f) => f.region)
-    return {
-      session,
-      byId: exerciseMap(libraryExercises()),
-      safety: previewSafety(program, screenAnswersFor(program.id), flags, noImpactChosen(), today),
-    }
+    return { session, byId: exerciseMap(libraryExercises()) }
   }, [key, today])
 
   // This session on its own day, or done on today instead ("Do it today").
   const row = rowForDate(rows, picked, key) ?? (picked !== today ? rowForDate(rows, today, key) : null)
   const open = (id: number, mode: Mode) => navigate(mode === 'coach' ? `/coach/workout/${id}` : `/train/session/${id}`)
-  const go = (mode: Mode) => {
-    if (row && row.status !== 'planned') return open(row.id, mode)
-    if (data?.safety.state === 'ready') return open(ensureTodayRow(key, today), mode)
-    setCheckFor(mode)
-  }
+  const go = (mode: Mode) => open(row && row.status !== 'planned' ? row.id : startToday(key, today), mode)
 
   const button = row?.status === 'completed'
     ? <Button variant="secondary" size="lg" full icon={<Check size={18} />} onClick={() => go('player')}>Done · See summary</Button>
@@ -110,14 +97,6 @@ export default function BlueprintScreen() {
           </section>
         ))}
       </div>
-
-      <SafetyCheckSheet
-        open={checkFor !== null}
-        program={program}
-        mode="workout"
-        onClose={() => setCheckFor(null)}
-        onDone={() => { const mode = checkFor ?? 'player'; setCheckFor(null); open(ensureTodayRow(key, today), mode) }}
-      />
     </Screen>
   )
 }
