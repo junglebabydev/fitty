@@ -6,5 +6,5 @@
 // coachBrief: Coach's daily brief and proposals row, which read the old weekly plan.
 export const FEATURES = {
   reports: false, privacyLedger: false, mind: false, sleepTile: false,
-  blueprint: true, train: false, eat: false, coachBrief: false,
+  blueprint: true, train: false, eat: true, coachBrief: false,
 } as const
