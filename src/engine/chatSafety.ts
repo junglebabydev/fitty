@@ -24,6 +24,9 @@ const PATTERNS: Record<SafetyKind, RegExp[]> = {
   medical_emergency: [
     /\bchest\s+(pain|pains|tight(ness)?|pressure|hurts?|is hurting)\b/,
     /\b(tight|pain in (my|the)|pressure (in|on) (my|the)) chest\b/,
+    /\b(elephant|someone|somebody|something)( is)?( sitting| standing)? on (my|the) chest\b/,
+    /(?<!gave me a )\bheart attack\b/,
+    /\bangina\b/,
     /\b(passed out|fainted|blacked out|lost consciousness)\b/,
     /\bi (just )?collapsed\b/,
     /\b(can'?t|cannot|can not|couldn'?t|struggling to|trouble|hard to) breath(e|ing)\b/,
@@ -45,6 +48,28 @@ const PATTERNS: Record<SafetyKind, RegExp[]> = {
   ],
 }
 
+/**
+ * Chest symptoms with words between, or in/on the chest: "chest feels tight", "chest's really tight", "chest getting
+ * tighter", "chest really hurts", "pressure in chest" (and the "chets" typo). Found by the coach eval and a review on
+ * 2026-10-15. Sore is left out (DOMS); so are exercise nouns ("chest press hurt"), "crushing it", "chest heavy day", a
+ * shirt's "the chest" and "tight in this shirt".
+ */
+const CHEST_PHRASES: RegExp[] = [
+    /(?<!\bthe )\bch(?:est|ets)(?:'s)?\s*(?:(?:is|was|feels?|feeling|felt|gets?|getting|got|went|has|had|been|keeps?|kept|started|starting|to|still|really|so+|very|v|quite|a bit|a little|kind of|kinda|super|extremely|pretty|like)\s+){0,4}(tight|tighter|tightening|heavy|heavier|crushing(?!\s+(it|them|this|that|my|the|every|all|prs?|pbs?)\b)|painful|pains?|hurts?|hurting|squeezed|discomfort)\b(?! (day|session|workout))(?!\s+(in|by|from|with|under) (this|that|these|my|the|a|an) (\w+ )?(shirt|t-shirt|top|tee|tank|vest|jacket|hoodie|bra|strap|monitor)s?\b)/,
+    /\b(pains?|pressure|tightness|heaviness|(?<!\b(?:on|the) )squeezing|crushing|discomfort|a crushing feeling|a tight feeling|a heavy feeling|heavy feeling|tight feeling) (in|on|across|around|round) ((my|the) )?ch(?:est|ets)\b/,
+]
+
+/** A muscle reason the user gives themselves: the day after, a stretch, the pump, the weights. Not "during" or "while". */
+const MUSCLE_REASON = /\b(doms|pump(ed)?|in a good way|stretch\w*|foam roll\w*|massage\w*|mobility|posture|desk|to the touch|press on it|deload|\d+ ?(kg|lbs?)|\d+x\d+|p[br]s?|(from|after|since) (yesterday|last night|chest day|benching|all the|the (pec |doorway )?stretch|i started|my first)|from (the )?(bench|push[- ]?ups?|dips|fl(y|ies|yes)))\b/
+
+/** Anything beyond the chest that points at the heart or the brain keeps the reply, whatever reason is given. */
+const WARNING_SIGN = /\b(left arm|arms? (is |are |feels? |went |going )?(numb|tingl\w*|weak)|jaw|dizz\w*|light-?headed|sweat\w*|clammy|nause\w*|vomit\w*|sick|short of breath|breathless|can'?t breathe|faint\w*|pass(ing)? out|racing|pounding|irregular|never (had|happened|felt) (that|this|like this)( before)?)\b/
+
+/** A chest phrase counts unless the user names a muscle reason and nothing else points at the heart. */
+function chestWarning(t: string): boolean {
+  return CHEST_PHRASES.some((re) => re.test(t)) && (!MUSCLE_REASON.test(t) || WARNING_SIGN.test(t))
+}
+
 export const SAFETY_REPLIES: Record<SafetyKind, string> = {
   self_harm:
     "I'm really glad you told me. You don't have to handle this alone. The people at 1771 and SOS 1767 are there any time, day or night. If you're in danger right now, call 995.",
@@ -60,7 +85,7 @@ const ORDER: SafetyKind[] = ['self_harm', 'medical_emergency', 'disordered_eatin
 export function screenMessage(text: string): SafetyHit | null {
   const t = text.toLowerCase().replace(/[’‘]/g, "'").replace(/\s+/g, ' ')
   for (const kind of ORDER) {
-    if (PATTERNS[kind].some((re) => re.test(t))) return { kind, reply: SAFETY_REPLIES[kind] }
+    if (PATTERNS[kind].some((re) => re.test(t)) || (kind === 'medical_emergency' && chestWarning(t))) return { kind, reply: SAFETY_REPLIES[kind] }
   }
   return null
 }

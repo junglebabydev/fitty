@@ -201,6 +201,14 @@ export interface SafetyHit { kind: SafetyKind; reply: string }
 Patterns are phrase-level, not single words, and err toward triggering. A false positive costs one
 message and a sheet the user can close. A miss is worse.
 
+**Chest symptoms (2026-10-15).** The coach eval (`scripts/evals/coach`) and a review found the chest rows missed most
+real phrasings ("chest feels tight", "chest's really tight", "pressure in chest", "heart attack", "elephant on my
+chest"). These now trigger, with one exception so day-after soreness still reaches the coach: when the user gives a
+muscle reason ("from yesterday's bench", a stretch, the pump, kg or a PB) and nothing else points at the heart (left
+arm, jaw, sweating, dizziness, breathlessness, fainting, "never had that before"), the message goes to the model.
+Chest symptoms during exertion always trigger. On a 105-message warning-sign set the screen now catches 57 (was 4);
+on 118 ordinary gym messages it flags 18 (was 7). Every case is in `src/engine/__tests__/chatSafety.test.ts`.
+
 ### 5.4 Fixed replies and what happens after
 
 Replies are hard-coded, warm and short. They never mention training, food or targets.
