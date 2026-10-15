@@ -218,19 +218,21 @@ export const EXERCISE_PHOTOS: string[] = [
 
 /** Photo moves that loop: the photo, then photo/<id>-b.webp. Built by scripts/moves/build.mjs, checked by eye 2026-10-15. */
 export const EXERCISE_PHOTO_LOOPS: string[] = [
-  'arabesque', 'arnold_press', 'ball_back_extension', 'ball_slam', 'band_monster_walk', 'bb_back_squat', 'bb_bench_press',
-  'bb_hang_pull', 'bb_row', 'bb_sumo_deadlift', 'bike_climb', 'cat_cow', 'db_overhead_triceps', 'db_pullover_bridge',
-  'double_under', 'glute_bridge', 'hip_thrust', 'incline_walk', 'jump_rope', 'kb_bottoms_up_press', 'kb_halo', 'kb_rdl',
-  'kb_suitcase_squat', 'kb_swing', 'kneeling_hip_thrust', 'landmine_lunge_press', 'lateral_lunge', 'leg_press', 'leg_swings',
-  'march_in_place', 'mountain_climber', 'one_arm_db_row', 'pallof_press_overhead', 'plank_shoulder_tap', 'rowing_machine',
-  'scapular_roll', 'shadow_boxing', 'ski_erg', 'sl_bridge_bench', 'sled_push', 'step_jack', 'straight_arm_pulldown',
-  'thread_the_needle', 'track_run', 'treadmill_push',
+  'arabesque', 'arm_circles', 'arnold_press', 'assault_bike', 'ball_back_extension', 'ball_slam', 'band_monster_walk',
+  'battle_rope', 'bb_back_squat', 'bb_bench_press', 'bb_hang_pull', 'bb_row', 'bb_sumo_deadlift', 'bike_climb', 'burpee',
+  'cat_cow', 'cobra_pose', 'db_overhead_triceps', 'db_pullover_bridge', 'db_standing_press', 'double_under', 'glute_bridge',
+  'hip_circles', 'hip_thrust', 'incline_walk', 'jump_rope', 'kb_bottoms_up_press', 'kb_halo', 'kb_rdl', 'kb_suitcase_squat',
+  'kb_swing', 'kneeling_hip_thrust', 'landmine_lunge_press', 'lateral_lunge', 'leg_press', 'leg_swings', 'march_in_place',
+  'mountain_climber', 'one_arm_db_row', 'pallof_press_overhead', 'plank_shoulder_tap', 'rowing_machine', 'scapular_roll',
+  'shadow_boxing', 'ski_erg', 'sl_bridge_bench', 'slam_hop_over', 'sled_push', 'stationary_bike', 'step_jack',
+  'straight_arm_pulldown', 'swiss_ball_leg_curl', 'thread_the_needle', 'thruster', 'track_run', 'treadmill_push',
+  'wall_ball',
 ]
 
 /** Quick, repeating loops (steps, strides, rope turns, punches) swap faster than a lift's steady rep. */
 export const EXERCISE_PHOTO_FAST: string[] = [
-  'bike_climb', 'double_under', 'incline_walk', 'jump_rope', 'march_in_place', 'mountain_climber', 'shadow_boxing',
-  'sled_push', 'step_jack', 'track_run', 'treadmill_push',
+  'arm_circles', 'assault_bike', 'battle_rope', 'bike_climb', 'double_under', 'incline_walk', 'jump_rope', 'march_in_place',
+  'mountain_climber', 'shadow_boxing', 'sled_push', 'stationary_bike', 'step_jack', 'track_run', 'treadmill_push',
 ]
 
 /** How long each photo of a loop shows, in ms. */
