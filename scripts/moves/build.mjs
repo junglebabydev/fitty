@@ -4,7 +4,9 @@
 // movement; a hold has one), generated with Gemini image models (and Canva's generator for the first drafts) from
 // text prompts and reference frames; see EXERCISE_PHOTOS in src/data/exerciseMedia.ts. Frame 1 is used unless the
 // move is in SECOND, where the end of the movement shows it better (the squat at the bottom, the press overhead).
-// One picture, not a loop: two frames faded into each other read as a ghost, not a movement (owner, 2026-10-14).
+// A move with two frames that is not in STILL also gets public/moves/photo/<id>-b.webp, the other end of the movement,
+// cropped with the same box so the app can swap the two with a hard cut (EXERCISE_PHOTO_LOOPS). Never faded: two frames
+// faded into each other read as a ghost, not a movement (owner, 2026-10-14).
 // One-off tool, not part of the build: needs sharp (`npm i --no-save sharp`).
 // Run: node scripts/moves/build.mjs <framesDir> [id …]   (the frames are kept out of git, in .moves-src/white/f)
 import sharp from 'sharp'
@@ -19,6 +21,30 @@ const SECOND = new Set([
   'one_arm_db_row', 'pallof_press_overhead', 'plank_shoulder_tap', 'rowing_machine', 'ski_erg', 'sl_bridge_bench',
   'step_jack', 'swiss_ball_leg_curl',
 ])
+
+/**
+ * Two-frame moves that stay one picture, because swapping their frames would not show the exercise. Every pair was
+ * checked by eye on 2026-10-15, side by side and overlaid, against the exercise's own instructions.
+ */
+const STILL = new Map([
+  ['arm_circles', 'frame 2 tilts the arms like a see-saw, not a circle'],
+  ['assault_bike', 'the frames are nearly the same, so a swap only twitches'],
+  ['battle_rope', 'the frames are nearly the same, so a swap only twitches'],
+  ['hip_circles', 'the frames are nearly the same, so a swap only twitches'],
+  ['incline_walk', 'a grey shadow under the deck is in one frame only, so it would blink'],
+  ['leg_swings', 'a pale grey patch beside the pole is in one frame only, so it would blink'],
+  ['burpee', 'plank to mid-jump skips the middle, and the jump lands below the floor'],
+  ['slam_hop_over', 'skips the slam: she hovers over a ball that appears under her'],
+  ['db_fly', 'frame 2 is a pullover (dumbbells behind the head), not a fly'],
+  ['db_standing_press', 'frame 1 bends the knees, a push press; the press is strict'],
+  ['stationary_bike', 'frame 2 stands out of the saddle, so she would bob up and down'],
+  ['swiss_ball_leg_curl', 'the knees bend but the ball does not roll in, so the legs grow'],
+  ['thruster', 'frame 2 is drawn at another scale: the plates shrink by a third'],
+  ['wall_ball', 'frame 2 is drawn at another scale: she shrinks as she stands'],
+])
+
+/** Loops whose frame 2 sits lower than frame 1: lined up on the floor so the feet stay planted. */
+const FLOOR = new Set(['bb_sumo_deadlift'])
 
 const PHOTO_W = 960, THUMB = 192
 /** White space around the person, as a share of their larger side. */
@@ -62,14 +88,31 @@ const names = readdirSync(dir)
 const frame = (id, n) => ['jpg', 'png'].map((x) => `${id}-${n}.${x}`).find((f) => names.includes(f))
 const ids = [...new Set(names.map((f) => /^(.+)-1\.(?:jpg|png)$/.exec(f)?.[1]).filter(Boolean))].filter((id) => !only.length || only.includes(id)).sort()
 let photos = 0, thumbs = 0
+const loops = []
 for (const id of ids) {
   const n = SECOND.has(id) && frame(id, 2) ? 2 : 1
   const file = join(dir, frame(id, n))
   const b = await box(file)
-  const [p, t] = await Promise.all([crop(file, b, 4 / 3, PHOTO_W), crop(file, b, 1, THUMB)])
+  const loop = frame(id, 2) && !STILL.has(id)
+  let p, other
+  if (loop) {
+    // Both frames in one box, in frame 1's coordinates (the camera did not move between them), so nothing jumps.
+    const f = [join(dir, frame(id, 1)), join(dir, frame(id, 2))]
+    const [b1, b2] = await Promise.all(f.map(box))
+    const dy = FLOOR.has(id) ? b1[3] - b2[3] : 0
+    const u = [Math.min(b1[0], b2[0]), Math.min(b1[1], b2[1] + dy), Math.max(b1[2], b2[2]), Math.max(b1[3], b2[3] + dy)]
+    const [c1, c2] = await Promise.all([crop(f[0], u, 4 / 3, PHOTO_W), crop(f[1], [u[0], u[1] - dy, u[2], u[3] - dy], 4 / 3, PHOTO_W)])
+    ;[p, other] = n === 2 ? [c2, c1] : [c1, c2]
+    writeFileSync(join(out.photo, `${id}-b.webp`), other)
+    loops.push(id)
+  } else {
+    p = await crop(file, b, 4 / 3, PHOTO_W)
+  }
+  const t = await crop(file, b, 1, THUMB)
   writeFileSync(join(out.photo, `${id}.webp`), p)
   writeFileSync(join(out.thumb, `${id}.webp`), t)
-  photos += p.length; thumbs += t.length
-  console.log(`${id.padEnd(24)} frame ${n}  ${(p.length / 1024).toFixed(0)} KB + ${(t.length / 1024).toFixed(1)} KB thumb`)
+  photos += p.length + (other?.length ?? 0); thumbs += t.length
+  console.log(`${id.padEnd(24)} frame ${n}${loop ? ' + loop' : '       '}  ${(p.length / 1024).toFixed(0)} KB + ${(t.length / 1024).toFixed(1)} KB thumb`)
 }
-console.log(`${ids.length} moves: photos ${(photos / 1024).toFixed(0)} KB, thumbs ${(thumbs / 1024).toFixed(0)} KB`)
+console.log(`${ids.length} moves, ${loops.length} loops: photos ${(photos / 1024).toFixed(0)} KB, thumbs ${(thumbs / 1024).toFixed(0)} KB`)
+console.log(`EXERCISE_PHOTO_LOOPS: ${JSON.stringify(loops)}`)

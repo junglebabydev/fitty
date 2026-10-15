@@ -47,11 +47,13 @@ function usePrefersReducedMotion(): boolean {
 /**
  * Best available picture of the movement: the AI photo, then the looping animation, then the verified photos, then
  * the line illustration, then (or on load error) a tinted MuscleMap tile. Reduced motion skips the animation. A drawing
- * with several frames plays on cards and heroes; thumbs and reduced motion show the first frame.
+ * with several frames, or a photo loop, plays on cards and heroes; thumbs and reduced motion show the first frame.
  */
 export function ExerciseVisual({ exercise, size = 'card', className }: ExerciseVisualProps) {
-  const { animation, images, art, artFrames, photo, photoThumb } = exerciseMedia(exercise.id)
+  const { animation, images, art, artFrames, photo, photoThumb, photoFrames, photoBeat } = exerciseMedia(exercise.id)
   const [photoFailed, setPhotoFailed] = useState(false)
+  const [loopFailed, setLoopFailed] = useState(false)
+  const [shot, setShot] = useState(0)
   const [animFailed, setAnimFailed] = useState(false)
   const [failed, setFailed] = useState(false)
   const [artFailed, setArtFailed] = useState(false)
@@ -60,13 +62,14 @@ export function ExerciseVisual({ exercise, size = 'card', className }: ExerciseV
   const reduced = usePrefersReducedMotion()
 
   // A new exercise gets a fresh chance to load its media.
-  useEffect(() => { setPhotoFailed(false); setAnimFailed(false); setFailed(false); setArtFailed(false); setFrame(0); setStep(0) }, [exercise.id])
+  useEffect(() => { setPhotoFailed(false); setLoopFailed(false); setAnimFailed(false); setFailed(false); setArtFailed(false); setFrame(0); setStep(0); setShot(0) }, [exercise.id])
 
   const showAnim = !!animation && !animFailed && !reduced
   const showPhoto = !showAnim && images.length > 0 && !failed
   const showArt = !showAnim && !showPhoto && !!art && !artFailed
   const crossfade = showPhoto && size === 'hero' && images.length > 1 && !reduced
   const flip = showArt && size !== 'thumb' && artFrames.length > 1 && !reduced
+  const photoLoop = !!photo && !photoFailed && !loopFailed && size !== 'thumb' && photoFrames.length > 1 && !reduced
 
   useEffect(() => {
     if (!crossfade) { setFrame(0); return }
@@ -80,8 +83,16 @@ export function ExerciseVisual({ exercise, size = 'card', className }: ExerciseV
     return () => window.clearInterval(t)
   }, [flip, artFrames.length])
 
+  useEffect(() => {
+    if (!photoLoop) { setShot(0); return }
+    const t = window.setInterval(() => setShot((i) => (i + 1) % photoFrames.length), photoBeat)
+    return () => window.clearInterval(t)
+  }, [photoLoop, photoFrames.length, photoBeat])
+
   if (photo && !photoFailed) {
-    // One still picture; a thumb has its own square crop on the person.
+    // One picture; a thumb has its own square crop on the person. A loop lays its other photos over the first and shows
+    // one at a time with a hard cut, never a fade (a fade reads as a ghost). The first stays underneath, so a photo that
+    // has not loaded yet shows the still, and one that fails stops the loop.
     return (
       <div role="img" aria-label={exercise.name} className={cx('relative overflow-hidden border border-line bg-media', FRAME[size], className)}>
         <img
@@ -93,6 +104,18 @@ export function ExerciseVisual({ exercise, size = 'card', className }: ExerciseV
           onError={() => setPhotoFailed(true)}
           className={cx('absolute inset-0 h-full w-full', size === 'thumb' ? 'object-cover' : 'object-contain')}
         />
+        {photoLoop && photoFrames.slice(1).map((src, i) => (
+          <img
+            key={src}
+            src={src}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            draggable={false}
+            onError={() => setLoopFailed(true)}
+            className={cx('absolute inset-0 h-full w-full object-contain', shot === i + 1 ? 'opacity-100' : 'opacity-0')}
+          />
+        ))}
       </div>
     )
   }

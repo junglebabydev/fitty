@@ -1,10 +1,10 @@
-import { existsSync } from 'node:fs'
+import { existsSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { EXERCISES, EXERCISE_BY_ID } from '../exercises'
 import {
   EXERCISE_ANIMATION_BASE, EXERCISE_ANIMATION_IDS, EXERCISE_ART_BASE, EXERCISE_ART_FRAMES, EXERCISE_ART_LOOPS, EXERCISE_MEDIA_BASE,
-  EXERCISE_PHOTO_IDS, EXERCISE_PHOTOS, exerciseMedia,
+  EXERCISE_PHOTO_FAST, EXERCISE_PHOTO_IDS, EXERCISE_PHOTO_LOOPS, EXERCISE_PHOTOS, PHOTO_BEAT_MS, PHOTO_FAST_BEAT_MS, exerciseMedia,
 } from '../exerciseMedia'
 import { getProgram } from '../programs'
 import { SESSION_TEMPLATES } from '../../engine/planner'
@@ -128,6 +128,26 @@ describe('exerciseMedia', () => {
       expect([m.animation, m.art, ...m.images], id).toEqual([null, null])
     }
     expect(exerciseMedia('bird_dog').photo).toBeNull()
+  })
+
+  it('ships the other end of the movement for exactly the photo loops, played after the photo', () => {
+    const dir = join(__dirname, '../../../public/moves/photo')
+    expect(new Set(EXERCISE_PHOTO_LOOPS).size).toBe(EXERCISE_PHOTO_LOOPS.length)
+    const shipped = readdirSync(dir).filter((f) => f.endsWith('-b.webp')).map((f) => f.slice(0, -'-b.webp'.length))
+    expect(shipped.sort()).toEqual([...EXERCISE_PHOTO_LOOPS].sort())
+    for (const id of EXERCISE_PHOTO_LOOPS) {
+      expect(EXERCISE_PHOTOS, id).toContain(id)
+      expect(exerciseMedia(id).photoFrames, id).toEqual([`/moves/photo/${id}.webp`, `/moves/photo/${id}-b.webp`])
+    }
+    for (const id of EXERCISE_PHOTO_FAST) expect(EXERCISE_PHOTO_LOOPS, id).toContain(id)
+    expect(exerciseMedia('march_in_place').photoBeat).toBe(PHOTO_FAST_BEAT_MS)
+    expect(exerciseMedia('kb_swing').photoBeat).toBe(PHOTO_BEAT_MS)
+    // A move whose frames do not swap cleanly, and a hold, stay one picture.
+    for (const id of ['thruster', 'childs_pose']) {
+      expect(exerciseMedia(id).photoFrames, id).toEqual([`/moves/photo/${id}.webp`])
+      expect(exerciseMedia(id).photoBeat, id).toBe(0)
+    }
+    expect(exerciseMedia('bird_dog').photoFrames).toEqual([])
   })
 
   it('gives every move of the BFT week a photo: standard, knee and back paths, alone and together', () => {
