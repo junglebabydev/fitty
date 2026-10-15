@@ -11,3 +11,5 @@ dev-dist
 *.tsbuildinfo
 # Owner profile: real personal data, never committed (see src/config/owner.example.ts)
 src/config/owner.local.ts
+# Eval data, downloaded images and results (scripts/evals): never committed
+.evals/
