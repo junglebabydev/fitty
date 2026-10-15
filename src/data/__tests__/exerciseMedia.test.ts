@@ -143,7 +143,7 @@ describe('exerciseMedia', () => {
     expect(exerciseMedia('march_in_place').photoBeat).toBe(PHOTO_FAST_BEAT_MS)
     expect(exerciseMedia('kb_swing').photoBeat).toBe(PHOTO_BEAT_MS)
     // A move whose frames do not swap cleanly, and a hold, stay one picture.
-    for (const id of ['thruster', 'childs_pose']) {
+    for (const id of ['db_fly', 'childs_pose']) {
       expect(exerciseMedia(id).photoFrames, id).toEqual([`/moves/photo/${id}.webp`])
       expect(exerciseMedia(id).photoBeat, id).toBe(0)
     }

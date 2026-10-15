@@ -27,20 +27,7 @@ const SECOND = new Set([
  * checked by eye on 2026-10-15, side by side and overlaid, against the exercise's own instructions.
  */
 const STILL = new Map([
-  ['arm_circles', 'frame 2 tilts the arms like a see-saw, not a circle'],
-  ['assault_bike', 'the frames are nearly the same, so a swap only twitches'],
-  ['battle_rope', 'the frames are nearly the same, so a swap only twitches'],
-  ['hip_circles', 'the frames are nearly the same, so a swap only twitches'],
-  ['incline_walk', 'a grey shadow under the deck is in one frame only, so it would blink'],
-  ['leg_swings', 'a pale grey patch beside the pole is in one frame only, so it would blink'],
-  ['burpee', 'plank to mid-jump skips the middle, and the jump lands below the floor'],
-  ['slam_hop_over', 'skips the slam: she hovers over a ball that appears under her'],
-  ['db_fly', 'frame 2 is a pullover (dumbbells behind the head), not a fly'],
-  ['db_standing_press', 'frame 1 bends the knees, a push press; the press is strict'],
-  ['stationary_bike', 'frame 2 stands out of the saddle, so she would bob up and down'],
-  ['swiss_ball_leg_curl', 'the knees bend but the ball does not roll in, so the legs grow'],
-  ['thruster', 'frame 2 is drawn at another scale: the plates shrink by a third'],
-  ['wall_ball', 'frame 2 is drawn at another scale: she shrinks as she stands'],
+  ['db_fly', 'frame 2 is a pullover (dumbbells behind the head), not a fly; three side-on redraws came back as a pullover or a dead hang'],
 ])
 
 /** Loops whose frame 2 sits lower than frame 1: lined up on the floor so the feet stay planted. */
