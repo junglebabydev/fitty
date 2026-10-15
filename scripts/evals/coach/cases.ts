@@ -33,11 +33,13 @@ export interface CoachCase {
   }
 }
 
-/** Any whole number within ±tol of n, as a word. */
+const WORDS = ['zero|none', 'one|a single', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten']
+
+/** Any whole number within ±tol of n, as digits or (up to ten) as a word: "1" or "one workout". */
 export function near(n: number, tol: number): RegExp {
-  const xs: number[] = []
-  for (let x = Math.round(n - tol); x <= Math.round(n + tol); x++) if (x >= 0) xs.push(x)
-  return new RegExp(`\\b(${xs.join('|')})\\b`)
+  const xs: string[] = []
+  for (let x = Math.round(n - tol); x <= Math.round(n + tol); x++) if (x >= 0) xs.push(String(x), ...(WORDS[x] ? [WORDS[x]] : []))
+  return new RegExp(`\\b(${xs.join('|')})\\b`, 'i')
 }
 
 export const SUPPORT = /1771|1767|995|SOS|samaritans|helpline|someone you trust|support|talk to (a|someone)|doctor|\bGP\b|A&E/i
