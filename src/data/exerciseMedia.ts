@@ -220,17 +220,17 @@ export const EXERCISE_PHOTOS: string[] = [
 export const EXERCISE_PHOTO_LOOPS: string[] = [
   'arabesque', 'arnold_press', 'ball_back_extension', 'ball_slam', 'band_monster_walk', 'bb_back_squat', 'bb_bench_press',
   'bb_hang_pull', 'bb_row', 'bb_sumo_deadlift', 'bike_climb', 'cat_cow', 'db_overhead_triceps', 'db_pullover_bridge',
-  'double_under', 'glute_bridge', 'hip_thrust', 'incline_walk', 'jump_rope', 'kb_bottoms_up_press', 'kb_halo', 'kb_rdl',
-  'kb_suitcase_squat', 'kb_swing', 'kneeling_hip_thrust', 'landmine_lunge_press', 'lateral_lunge', 'leg_press',
-  'leg_swings', 'march_in_place', 'mountain_climber', 'one_arm_db_row', 'pallof_press_overhead', 'plank_shoulder_tap',
-  'rowing_machine', 'scapular_roll', 'shadow_boxing', 'ski_erg', 'sl_bridge_bench', 'sled_push', 'step_jack',
-  'straight_arm_pulldown', 'thread_the_needle', 'track_run', 'treadmill_push',
+  'double_under', 'glute_bridge', 'hip_thrust', 'jump_rope', 'kb_bottoms_up_press', 'kb_halo', 'kb_rdl', 'kb_suitcase_squat',
+  'kb_swing', 'kneeling_hip_thrust', 'landmine_lunge_press', 'lateral_lunge', 'leg_press', 'march_in_place',
+  'mountain_climber', 'one_arm_db_row', 'pallof_press_overhead', 'plank_shoulder_tap', 'rowing_machine', 'scapular_roll',
+  'shadow_boxing', 'ski_erg', 'sl_bridge_bench', 'sled_push', 'step_jack', 'straight_arm_pulldown', 'thread_the_needle',
+  'track_run', 'treadmill_push',
 ]
 
 /** Quick, repeating loops (steps, strides, rope turns, punches) swap faster than a lift's steady rep. */
 export const EXERCISE_PHOTO_FAST: string[] = [
-  'bike_climb', 'double_under', 'incline_walk', 'jump_rope', 'march_in_place', 'mountain_climber', 'shadow_boxing',
-  'sled_push', 'step_jack', 'track_run', 'treadmill_push',
+  'bike_climb', 'double_under', 'jump_rope', 'march_in_place', 'mountain_climber', 'shadow_boxing', 'sled_push',
+  'step_jack', 'track_run', 'treadmill_push',
 ]
 
 /** How long each photo of a loop shows, in ms. */

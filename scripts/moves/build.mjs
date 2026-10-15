@@ -31,6 +31,8 @@ const STILL = new Map([
   ['assault_bike', 'the frames are nearly the same, so a swap only twitches'],
   ['battle_rope', 'the frames are nearly the same, so a swap only twitches'],
   ['hip_circles', 'the frames are nearly the same, so a swap only twitches'],
+  ['incline_walk', 'a grey shadow under the deck is in one frame only, so it would blink'],
+  ['leg_swings', 'a pale grey patch beside the pole is in one frame only, so it would blink'],
   ['burpee', 'plank to mid-jump skips the middle, and the jump lands below the floor'],
   ['slam_hop_over', 'skips the slam: she hovers over a ball that appears under her'],
   ['db_fly', 'frame 2 is a pullover (dumbbells behind the head), not a fly'],
