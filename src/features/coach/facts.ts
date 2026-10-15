@@ -1,6 +1,7 @@
 // Assembles CoachFacts for the rules engine from the local database. Read-only:
 // nothing in here writes, so it is safe to call from render (via useQuery).
 import type { Exercise, NutritionTarget, SymptomCheck, WorkoutSession } from '../../domain/types'
+import { parseProgramKey } from '../../domain/programs'
 import { addDays, dateOf, hourNow as clockHour, startOfWeek, todayStr } from '../../lib/util'
 import {
   activeSession, completedSessionCount, dailyTotals, dailyTotalsRange, getBodyMetrics, getCheckIn, getConditionFlags, getExercise, getGoals,
@@ -93,6 +94,15 @@ export function plannedSessionFor(today: string = todayStr()): WorkoutSession | 
 export function weekSessionsFor(today: string = todayStr()): WorkoutSession[] {
   const start = startOfWeek(today)
   return getSessions(start, addDays(start, 6))
+}
+
+/**
+ * A row in the coach's week on the Blueprint build: any workout started or finished (a BFT class, a More workouts pick,
+ * an older session), or one Today made and has not started yet (a standalone workout key). Old weekly-plan rows that
+ * were never started are left out.
+ */
+export function countsOnBlueprint(s: Pick<WorkoutSession, 'status' | 'templateKey'>): boolean {
+  return s.status === 'completed' || s.status === 'in_progress' || parseProgramKey(s.templateKey)?.standalone === true
 }
 
 /** Explicit setting first; otherwise the highest tier present in the week's plan. */
@@ -219,9 +229,10 @@ export function buildCoachFacts(today: string = todayStr()): CoachFacts {
   const sleep = sleepFacts(today)
   const readiness = computeReadiness(readinessInputFor(today))
   const gate = gateFor(today)
-  // On the Blueprint week the coach sees only Blueprint sessions, so old plan rows never come up in its answers.
+  // On the Blueprint week the coach's today is the day's class, and its week is what was trained plus the rows Today
+  // made (countsOnBlueprint), so old plan rows nobody started never come up in its answers.
   const plannedToday = FEATURES.blueprint ? blueprintToday(today) : plannedSessionFor(today)
-  const sessionsThisWeek = FEATURES.blueprint ? blueprintRows(today) : weekSessionsFor(today)
+  const sessionsThisWeek = FEATURES.blueprint ? weekSessionsFor(today).filter(countsOnBlueprint) : weekSessionsFor(today)
   const target = currentTarget(today)
 
   const weightRows = getBodyMetrics('weight', TREND_WINDOW_DAYS)
@@ -263,7 +274,8 @@ export function buildCoachFacts(today: string = todayStr()): CoachFacts {
     sleepAvg7Min: sleep.avg7Min,
     missedThisWeek: missedThisWeek(sessionsThisWeek, today),
     nutritionTrend,
-    stalls: stalledExercises(sessionsThisWeek, plannedToday),
+    // Stalls still come from the day's class: a More workouts row left in progress must not stand in for it.
+    stalls: stalledExercises(FEATURES.blueprint ? blueprintRows(today) : sessionsThisWeek, plannedToday),
     loggedMealDaysLast7,
     mind: mindFacts(today),
   }
