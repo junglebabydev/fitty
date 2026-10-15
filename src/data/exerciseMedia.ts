@@ -199,6 +199,9 @@ export const EXERCISE_ART_LOOPS: Record<string, [slug: string, frames: number[]]
 // picture of these moves, so a class and its swaps read in one style. Every frame was checked by eye; the leg press
 // stops at 90° and the back squat above parallel, the ranges the instructions set. Until 2026-10-14 they were two-frame
 // loops with a man's set for male profiles; the owner found the fade ghostly and chose one picture, of the woman.
+// Since 2026-10-15 the moves in EXERCISE_PHOTO_LOOPS move again, without a fade: photo/<id>-b.webp is the other end of
+// the movement in the same crop, and the two swap with a hard cut. Every pair was checked by eye against the exercise;
+// STILL in scripts/moves/build.mjs lists the two-frame moves that stay one picture, and why.
 export const EXERCISE_PHOTO_SOURCE = 'AI-generated (Canva, Gemini)'
 export const EXERCISE_PHOTOS: string[] = [
   'arabesque', 'arm_circles', 'arnold_press', 'assault_bike', 'ball_back_extension', 'ball_slam', 'band_monster_walk',
@@ -212,6 +215,27 @@ export const EXERCISE_PHOTOS: string[] = [
   'stationary_bike', 'step_jack', 'straight_arm_pulldown', 'swiss_ball_leg_curl', 'thread_the_needle', 'thruster',
   'track_run', 'treadmill_push', 'wall_ball',
 ]
+
+/** Photo moves that loop: the photo, then photo/<id>-b.webp. Built by scripts/moves/build.mjs, checked by eye 2026-10-15. */
+export const EXERCISE_PHOTO_LOOPS: string[] = [
+  'arabesque', 'arnold_press', 'ball_back_extension', 'ball_slam', 'band_monster_walk', 'bb_back_squat', 'bb_bench_press',
+  'bb_hang_pull', 'bb_row', 'bb_sumo_deadlift', 'bike_climb', 'cat_cow', 'db_overhead_triceps', 'db_pullover_bridge',
+  'double_under', 'glute_bridge', 'hip_thrust', 'incline_walk', 'jump_rope', 'kb_bottoms_up_press', 'kb_halo', 'kb_rdl',
+  'kb_suitcase_squat', 'kb_swing', 'kneeling_hip_thrust', 'landmine_lunge_press', 'lateral_lunge', 'leg_press',
+  'leg_swings', 'march_in_place', 'mountain_climber', 'one_arm_db_row', 'pallof_press_overhead', 'plank_shoulder_tap',
+  'rowing_machine', 'scapular_roll', 'shadow_boxing', 'ski_erg', 'sl_bridge_bench', 'sled_push', 'step_jack',
+  'straight_arm_pulldown', 'thread_the_needle', 'track_run', 'treadmill_push',
+]
+
+/** Quick, repeating loops (steps, strides, rope turns, punches) swap faster than a lift's steady rep. */
+export const EXERCISE_PHOTO_FAST: string[] = [
+  'bike_climb', 'double_under', 'incline_walk', 'jump_rope', 'march_in_place', 'mountain_climber', 'shadow_boxing',
+  'sled_push', 'step_jack', 'track_run', 'treadmill_push',
+]
+
+/** How long each photo of a loop shows, in ms. */
+export const PHOTO_BEAT_MS = 900
+export const PHOTO_FAST_BEAT_MS = 450
 
 const movesUrl = (file: string) => `${import.meta.env.BASE_URL}moves/${file}`
 
@@ -233,10 +257,14 @@ export interface ExerciseMedia {
   photo: string | null
   /** The same photo cropped square on the person, for thumbnails. */
   photoThumb: string | null
+  /** The photo, then the other end of the movement when the move loops ([] without a photo). */
+  photoFrames: string[]
+  /** How long each photo of a loop shows, in ms (0 without a loop). */
+  photoBeat: number
   source: string | null
 }
 
-const NO_PHOTO = { photo: null, photoThumb: null }
+const NO_PHOTO = { photo: null, photoThumb: null, photoFrames: [], photoBeat: 0 }
 
 /**
  * Animation + photos for one of OUR exercise ids (unknown ids get neither). An AI photo replaces all, then a drawing
@@ -244,7 +272,14 @@ const NO_PHOTO = { photo: null, photoThumb: null }
  */
 export function exerciseMedia(id: string): ExerciseMedia {
   if (EXERCISE_PHOTOS.includes(id)) {
-    return { animation: null, images: [], art: null, artFrames: [], photo: movesUrl(`photo/${id}.webp`), photoThumb: movesUrl(`thumb/${id}.webp`), source: EXERCISE_PHOTO_SOURCE }
+    const photo = movesUrl(`photo/${id}.webp`)
+    const loop = EXERCISE_PHOTO_LOOPS.includes(id)
+    return {
+      animation: null, images: [], art: null, artFrames: [], photo, photoThumb: movesUrl(`thumb/${id}.webp`),
+      photoFrames: loop ? [photo, movesUrl(`photo/${id}-b.webp`)] : [photo],
+      photoBeat: !loop ? 0 : EXERCISE_PHOTO_FAST.includes(id) ? PHOTO_FAST_BEAT_MS : PHOTO_BEAT_MS,
+      source: EXERCISE_PHOTO_SOURCE,
+    }
   }
   const loop = EXERCISE_ART_LOOPS[id]
   if (loop) {
