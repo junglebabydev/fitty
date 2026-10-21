@@ -6,8 +6,9 @@ import { initTheme } from './lib/theme'
 import App from './App'
 
 // Offline-first shell: the service worker precaches the app bundle and sql-wasm.wasm (about 4 MB in all).
-// Updates are applied automatically (registerType: 'autoUpdate'). It registers once the page has loaded and the
-// first screen had a moment, so on a first visit those downloads never compete with the app's own.
+// Updates are applied automatically (registerType: 'autoUpdate'). A returning visit (a worker already controls the
+// page) registers at once, so an update the browser finds on this navigation still reloads the app. Only a first
+// visit waits until the page has loaded and the first screen had a moment, so the precache never competes with it.
 initTheme()
 
 const registerServiceWorker = () => registerSW({
@@ -24,7 +25,8 @@ const registerServiceWorker = () => registerSW({
   },
 })
 const afterFirstScreen = () => window.setTimeout(registerServiceWorker, 3000)
-if (document.readyState === 'complete') afterFirstScreen()
+if (navigator.serviceWorker?.controller) registerServiceWorker()
+else if (document.readyState === 'complete') afterFirstScreen()
 else window.addEventListener('load', afterFirstScreen, { once: true })
 
 createRoot(document.getElementById('root')!).render(

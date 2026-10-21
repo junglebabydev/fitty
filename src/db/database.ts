@@ -1,6 +1,22 @@
 import initSqlJs, { type Database as SqlDatabase, type SqlJsStatic, type SqlValue } from 'sql.js'
 import { MIGRATIONS } from './schema'
 
+/**
+ * The database engine public/theme-boot.js began downloading with the page, taken once. Undefined (no early fetch,
+ * a failed one, or a retry after a boot error) lets sql.js fetch it itself.
+ */
+async function earlyWasm(): Promise<ArrayBuffer | undefined> {
+  const w = window as Window & { __sqlWasm?: Promise<Response | null> }
+  const pending = w.__sqlWasm
+  delete w.__sqlWasm
+  try {
+    const res = await pending
+    return res?.ok ? await res.arrayBuffer() : undefined
+  } catch {
+    return undefined
+  }
+}
+
 // Local-first SQLite via sql.js (WASM). The database bytes are persisted to
 // IndexedDB after every write. When wrapped in Capacitor this module is the
 // single place to swap in @capacitor-community/sqlite.
@@ -33,7 +49,8 @@ class Database {
     // sql.js resolves to dist/sql-wasm-browser.js under Vite's `browser` export condition, which asks
     // for 'sql-wasm-browser.wasm'; only sql-wasm.wasm (byte-identical) is served from public/.
     // Under node (vitest) the default loader finds dist/sql-wasm.wasm next to the script.
-    const SQL = await initSqlJs(typeof window === 'undefined' ? {} : { locateFile: () => '/sql-wasm.wasm' })
+    const wasmBinary = typeof window === 'undefined' ? undefined : await earlyWasm()
+    const SQL = await initSqlJs(typeof window === 'undefined' ? {} : { locateFile: () => '/sql-wasm.wasm', ...(wasmBinary ? { wasmBinary } : {}) })
     this.sql = SQL
     const bytes = await idbGet()
     this.db = bytes ? new SQL.Database(bytes) : new SQL.Database()
