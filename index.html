@@ -12,7 +12,9 @@
     <title>Coach</title>
   </head>
   <body>
-    <div id="root"></div>
+    <!-- Painted as soon as the stylesheet arrives: the same skeleton as LoadingState's boot screen (src/App.tsx), so
+         the hand-over to React is invisible. React replaces it on its first render. -->
+    <div id="root"><div class="mx-auto flex min-h-dvh w-full max-w-[430px] flex-col gap-3 bg-app px-4 pt-safe" role="status" aria-busy="true"><div class="flex flex-col gap-2 pb-2 pt-6"><div class="skeleton h-3 w-24"></div><div class="skeleton h-9 w-48"></div></div><div class="skeleton h-56 w-full rounded-[1.25rem]"></div><div class="grid grid-cols-2 gap-3"><div class="skeleton h-24 rounded-[1.25rem]"></div><div class="skeleton h-24 rounded-[1.25rem]"></div></div><div class="skeleton h-32 w-full rounded-[1.25rem]"></div><p class="eyebrow anim-pulse-soft m-0 pt-1 text-center text-muted">Opening your local database…</p></div></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

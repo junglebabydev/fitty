@@ -1,4 +1,4 @@
-import Anthropic from '@anthropic-ai/sdk'
+import type Anthropic from '@anthropic-ai/sdk'
 import { AIError, type AIProvider, type ChatTurn, type JsonRequest, type MealContext, type MealImage, type MealRecognition, type RecognizedFood } from './types'
 
 // Anthropic provider, called directly from the browser (single-user, local-first
@@ -8,6 +8,16 @@ import { AIError, type AIProvider, type ChatTurn, type JsonRequest, type MealCon
 
 export const DEFAULT_ANTHROPIC_MODEL = 'claude-opus-5'
 export const ANTHROPIC_TIMEOUT_MS = 60_000
+
+// The SDK is about 580 KB before minifying and only this provider (an owner's own key in Settings) uses it, so it
+// loads on first use instead of with the app; the meal prompt and parser below never need it.
+type Sdk = typeof import('@anthropic-ai/sdk')
+let sdk: Sdk | null = null
+
+export async function loadAnthropicSdk(): Promise<Sdk> {
+  sdk ??= await import('@anthropic-ai/sdk')
+  return sdk
+}
 
 type ImageMediaType = Anthropic.Base64ImageSource['media_type']
 const IMAGE_MEDIA_TYPES: ImageMediaType[] = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
@@ -139,9 +149,14 @@ export function parseMealRecognition(text: string): MealRecognition {
   return { items, overall_confidence: Math.round(overall * 100) / 100, notes: str(obj.notes) }
 }
 
-/** Maps SDK exceptions to AIError kinds. AIErrors pass through untouched. */
+/** Maps SDK exceptions to AIError kinds. AIErrors pass through untouched. An SDK error implies the SDK has loaded. */
 export function mapAnthropicError(e: unknown): AIError {
   if (e instanceof AIError) return e
+  const Anthropic = sdk?.default
+  if (!Anthropic) {
+    if (e instanceof Error && e.name === 'AbortError') return new AIError('network', 'The request was cancelled.', e)
+    return new AIError('unknown', undefined, e)
+  }
   if (e instanceof Anthropic.AuthenticationError || e instanceof Anthropic.PermissionDeniedError) {
     return new AIError('auth', undefined, e)
   }
@@ -192,9 +207,10 @@ export class AnthropicProvider implements AIProvider {
     return this.apiKey.length > 0
   }
 
-  private getClient(): Anthropic {
+  private async getClient(): Promise<Anthropic> {
     if (!this.isConfigured()) throw new AIError('not_configured')
     if (!this.client) {
+      const { default: Anthropic } = await loadAnthropicSdk()
       this.client = new Anthropic({
         apiKey: this.apiKey,
         dangerouslyAllowBrowser: true,
@@ -206,7 +222,7 @@ export class AnthropicProvider implements AIProvider {
   }
 
   async recognizeMeal(img: MealImage, context: MealContext): Promise<MealRecognition> {
-    const client = this.getClient()
+    const client = await this.getClient()
     const parts: string[] = ['Identify the foods in this photo and estimate portions and nutrition.']
     if (context.mealType) parts.push(`Meal type: ${context.mealType}.`)
     if (context.hint?.trim()) parts.push(`User note: ${context.hint.trim()}`)
@@ -250,7 +266,7 @@ export class AnthropicProvider implements AIProvider {
 
   /** Generic structured call (reports, plans, routing). Images and PDFs ride along as content blocks. */
   async completeJson(req: JsonRequest): Promise<unknown> {
-    const client = this.getClient()
+    const client = await this.getClient()
     const blocks: Anthropic.ContentBlockParam[] = []
     for (const a of req.attachments ?? []) {
       if (a.mediaType === 'application/pdf') {
@@ -288,7 +304,7 @@ export class AnthropicProvider implements AIProvider {
   }
 
   async coachChat(system: string, turns: ChatTurn[]): Promise<string> {
-    const client = this.getClient()
+    const client = await this.getClient()
     // The API requires the first message to be from the user; drop any leading assistant turns.
     const firstUser = turns.findIndex((t) => t.role === 'user')
     const usable = firstUser >= 0 ? turns.slice(firstUser) : []
@@ -331,7 +347,7 @@ export class AnthropicProvider implements AIProvider {
     try {
       return await client.messages.create(preferred)
     } catch (e) {
-      if (e instanceof Anthropic.BadRequestError && preferred !== fallback) {
+      if (sdk && e instanceof sdk.default.BadRequestError && preferred !== fallback) {
         return await client.messages.create(fallback)
       }
       throw e
