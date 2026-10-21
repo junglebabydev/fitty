@@ -10,13 +10,15 @@ export interface RingProps {
   stroke?: number
   pillar?: Pillar
   trackOpacity?: number
+  /** Stroke colour class for the arc and its track (e.g. 'stroke-protein'); defaults to the pillar hue. */
+  tone?: string
   /** Rendered in the centre (a numeral, an icon). */
   children?: ReactNode
   ariaLabel: string
 }
 
 /** Single progress ring. Draws once on mount; later value changes ease. */
-export function Ring({ value, max = 1, size = 96, stroke = 9, pillar, trackOpacity = 0.14, children, ariaLabel }: RingProps) {
+export function Ring({ value, max = 1, size = 96, stroke = 9, pillar, tone = 'stroke-pillar', trackOpacity = 0.14, children, ariaLabel }: RingProps) {
   const frac = max > 0 && Number.isFinite(value) ? Math.max(0, Math.min(1, value / max)) : 0
   const r = (size - stroke) / 2
   const c = size / 2
@@ -30,7 +32,7 @@ export function Ring({ value, max = 1, size = 96, stroke = 9, pillar, trackOpaci
       style={{ width: size, height: size }}
     >
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label={ariaLabel} className="block">
-        <circle cx={c} cy={c} r={r} fill="none" strokeWidth={stroke} className="stroke-pillar" opacity={trackOpacity} />
+        <circle cx={c} cy={c} r={r} fill="none" strokeWidth={stroke} className={tone} opacity={trackOpacity} />
         {frac > 0 && (
           <circle
             cx={c}
@@ -41,7 +43,7 @@ export function Ring({ value, max = 1, size = 96, stroke = 9, pillar, trackOpaci
             strokeLinecap="round"
             strokeDasharray={`${dash} ${circ}`}
             transform={`rotate(-90 ${c} ${c})`}
-            className={cx('stroke-pillar anim-draw')}
+            className={cx(tone, 'anim-draw')}
             style={{ '--dash-from': dash, transition: 'stroke-dasharray 600ms var(--ease-out-soft)' } as CSSProperties}
           />
         )}
