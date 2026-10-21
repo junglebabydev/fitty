@@ -31,8 +31,9 @@ const CONCURRENCY = Number(arg('concurrency') ?? 3)
 
 const GEMINI_KEY = evalKey('GEMINI_API_KEY')
 const OPENROUTER_KEY = evalKey('OPENROUTER_API_KEY')
-// Production calls Gemini directly from the app Worker (no OPENROUTER_API_KEY there, so pickProvider picks 'gemini').
-// Through OpenRouter it is the same model with a different request shape: a proxy, and the report says so.
+// Production goes through OpenRouter: the app Worker's GEMINI_API_KEY secret holds an OpenRouter key, which
+// openRouterKeyOf (worker/guard.ts) routes to OpenRouter. With a Google key in .evals/.env, --via gemini shows the
+// direct path instead.
 const VIA = (arg('via') ?? (GEMINI_KEY ? 'gemini' : 'openrouter')) as 'gemini' | 'openrouter'
 const MODEL = arg('model') ?? (VIA === 'gemini' ? DEFAULT_GEMINI_MODEL : DEFAULT_OPENROUTER_MODEL)
 if (VIA === 'gemini' && !GEMINI_KEY) throw new Error('Set GEMINI_API_KEY in .evals/.env (or use --via openrouter).')
@@ -175,7 +176,7 @@ function summary(rows: Row[]) {
 // --- run --------------------------------------------------------------------------------------------------------
 
 const cases = [...(SETS.includes('n5k') ? n5kCases() : []), ...(SETS.includes('own') ? ownCases() : []), ...(SETS.includes('neg') ? negCases() : [])]
-console.log(`Meal-photo eval: ${cases.length} photos via ${VIA} (${MODEL})${VIA === 'openrouter' ? ', a proxy: production calls Gemini directly' : ''}`)
+console.log(`Meal-photo eval: ${cases.length} photos via ${VIA} (${MODEL})`)
 let done = 0
 const rows = await pool(cases, CONCURRENCY, async (c) => {
   const r = await runCase(c)
