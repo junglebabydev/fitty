@@ -11,7 +11,7 @@
 //     deprecated in favour of generationConfig.responseFormat.text { mimeType: 'APPLICATION_JSON', schema }; they
 //     are still accepted, and a rejected request (HTTP 400) is retried once as a plain prompt-only JSON request.
 //   - gemini-3.8-flash is the current stable Flash model (text, image, video, audio and PDF in; structured outputs).
-import { MEAL_RECOGNITION_SCHEMA, MEAL_SYSTEM_PROMPT, extractJson, parseMealRecognition, stripDataUrl } from './anthropic'
+import { MEAL_RECOGNITION_SCHEMA, MEAL_SYSTEM_PROMPT, extractJson, mealUserPrompt, parseMealRecognition, stripDataUrl } from './anthropic'
 import { AIError, type AIProvider, type ChatTurn, type JsonRequest, type MealContext, type MealImage, type MealRecognition } from './types'
 
 export const DEFAULT_GEMINI_MODEL = 'gemini-3.8-flash'
@@ -231,12 +231,9 @@ export class GeminiProvider implements AIProvider {
   }
 
   async recognizeMeal(img: MealImage, context: MealContext): Promise<MealRecognition> {
-    const parts: string[] = ['Identify the foods in this photo and estimate portions and nutrition.']
-    if (context.mealType) parts.push(`Meal type: ${context.mealType}.`)
-    if (context.hint?.trim()) parts.push(`User note: ${context.hint.trim()}`)
     const req: JsonRequest = {
       system: MEAL_SYSTEM_PROMPT,
-      prompt: parts.join(' '),
+      prompt: mealUserPrompt(context),
       schema: MEAL_RECOGNITION_SCHEMA,
       attachments: [{ base64: img.base64, mediaType: img.mediaType, name: 'meal' }],
     }

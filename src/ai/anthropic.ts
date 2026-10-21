@@ -65,6 +65,14 @@ notes is at most two short sentences. uncertainty_reason is at most 12 words. Pl
 Respond with a single JSON object matching this shape and nothing else — no prose, no code fences:
 {"items":[{"food_name":string,"estimated_quantity_g":number,"serving_description":string,"kcal":number,"protein_g":number,"carbs_g":number,"fat_g":number,"confidence_0_1":number,"uncertainty_reason":string,"source_hint":string}],"overall_confidence":number,"notes":string}`
 
+/** The user message sent with a meal photo. Shared by the providers and scripts/evals/meal, so the eval sends the same words. */
+export function mealUserPrompt(context: MealContext): string {
+  const parts = ['Identify the foods in this photo and estimate portions and nutrition.']
+  if (context.mealType) parts.push(`Meal type: ${context.mealType}.`)
+  if (context.hint?.trim()) parts.push(`User note: ${context.hint.trim()}`)
+  return parts.join(' ')
+}
+
 function num(v: unknown, fallback = 0): number {
   const n = typeof v === 'number' ? v : typeof v === 'string' ? Number(v) : NaN
   return Number.isFinite(n) ? n : fallback
