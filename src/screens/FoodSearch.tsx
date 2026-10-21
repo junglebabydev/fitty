@@ -6,7 +6,7 @@ import type { Macros, Meal } from '../domain/types'
 import { aiConnected, isAIError } from '../ai'
 import { AIBadge, Button, Field, NumberInput, Screen, Sheet, Stepper, TextInput, useToast } from '../components'
 import { useQuery } from '../hooks'
-import { FOODS, searchFoods, servingMacros, toFoodItem, type FoodRecord } from '../data'
+import { FOODS, searchFoods, servingMacros, toFoodItem, type FoodRecord } from '../data/foods'
 import { addMeal, cloneMeal, getSavedMeals, recentFoods } from '../db/repositories'
 import { fmtDate, todayStr } from '../lib/util'
 import {

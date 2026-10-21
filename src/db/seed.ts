@@ -22,7 +22,8 @@ import {
   addMindSession, addMoodLog, addSet, addSleepRecord, addSymptomCheck, createSession, exerciseCount, getProfile, getSetting, saveProfile, setNutritionTarget,
   setSetting, upsertExercises, upsertGoal, upsertCheckIn,
 } from './repositories'
-import { EXERCISES, FOOD_BY_ID, toFoodItem, type FoodRecord } from '../data'
+import { EXERCISES } from '../data'
+import type { FoodRecord } from '../data/foods'
 import { JOURNAL_PROMPTS, buildWeek, estimateTargets, sessionFromTemplate } from '../engine'
 import { emptyPermissions } from '../native'
 
@@ -283,22 +284,27 @@ export function planWeek(today: string): SeedWeekPlan {
 type NewItem = Omit<FoodItem, 'id' | 'mealId'>
 type NewMeal = Omit<Meal, 'id' | 'items'>
 
-function food(id: string): FoodRecord {
-  const f = FOOD_BY_ID[id]
+/** The two food-library helpers the demo meals need; loaded with import() so boot does not ship the library. */
+export type SeedFoods = Pick<typeof import('../data/foods'), 'FOOD_BY_ID' | 'toFoodItem'>
+
+function food(lib: SeedFoods, id: string): FoodRecord {
+  const f = lib.FOOD_BY_ID[id]
   if (!f) throw new Error(`Seed food missing from library: ${id}`)
   return f
 }
 
-function items(list: [foodId: string, grams: number][]): NewItem[] {
-  return list.map(([id, grams]) => ({ ...toFoodItem(food(id), grams), source: 'seed' }))
+function items(lib: SeedFoods, list: [foodId: string, grams: number][]): NewItem[] {
+  return list.map(([id, grams]) => ({ ...lib.toFoodItem(food(lib, id), grams), source: 'seed' }))
 }
 
 export interface SeedMeal { meal: NewMeal; items: NewItem[] }
 
-function meal(date: string, hh: number, mm: number, mealType: Meal['mealType'], list: [string, number][], savedName: string | null = null, notes = ''): SeedMeal {
+type MealArgs = [date: string, hh: number, mm: number, mealType: Meal['mealType'], list: [string, number][], savedName?: string | null, notes?: string]
+
+function mealOf(lib: SeedFoods, date: string, hh: number, mm: number, mealType: Meal['mealType'], list: [string, number][], savedName: string | null = null, notes = ''): SeedMeal {
   return {
     meal: { ts: isoAt(date, hh, mm), mealType, photoUri: null, notes, source: 'seed', savedName, isSaved: savedName != null },
-    items: items(list),
+    items: items(lib, list),
   }
 }
 
@@ -308,8 +314,9 @@ function meal(date: string, hh: number, mm: number, mealType: Meal['mealType'], 
  * the trend engine must not read the seed as under-eating). The three saved meals and one plainly
  * logged Snickers are in here; today is only the kopi.
  */
-export function mealSeries(today: string): SeedMeal[] {
+export function mealSeries(today: string, lib: SeedFoods): SeedMeal[] {
   const d = (n: number) => addDays(today, -n)
+  const meal = (...a: MealArgs) => mealOf(lib, ...a)
   const kopi = (date: string): SeedMeal => meal(date, 8, 30, 'drink', [['kopi_o_kosong', 200]])
   const chickenRice: [string, number][] = [['chicken_rice_no_skin', 380], ['cucumber', 100]]
   const chickenRiceExtra: [string, number][] = [...chickenRice, ['steamed_chicken_hawker', 100]]
@@ -543,7 +550,7 @@ function sessionSearch(): string {
 
 const when = (d: string) => `${dayName(d)} ${fmtDate(d)}`
 
-function seedAll(today: string): void {
+function seedAll(today: string, foods: SeedFoods): void {
   // Profile, goals, conditions
   saveProfile(SEED_PROFILE)
   for (const g of SEED_GOALS) upsertGoal({ ...g, startDate: addDays(today, -13), targetDate: addDays(today, 150) })
@@ -596,7 +603,7 @@ function seedAll(today: string): void {
   })
 
   // Meals
-  const meals = mealSeries(today)
+  const meals = mealSeries(today, foods)
   for (const m of meals) addMeal(m.meal, m.items)
 
   // Coach decision: reflow accepted two days ago
@@ -704,7 +711,8 @@ export async function seedIfEmpty(env: Pick<SeedDecisionInput, 'dev' | 'search'>
   const hasProfile = getProfile() != null
   const skipDemo = getSetting('seed.skipDemo', false)
   if (shouldSeedDemo({ ...env, skipDemo, hasProfile })) {
-    db.transaction(() => seedAll(todayStr()))
+    const foods = await import('../data/foods')
+    db.transaction(() => seedAll(todayStr(), foods))
     await db.persist()
     return
   }
@@ -715,10 +723,11 @@ export async function seedIfEmpty(env: Pick<SeedDecisionInput, 'dev' | 'search'>
 
 /** Clears every user table and seeds the scenario again relative to today. */
 export async function reseed(): Promise<void> {
+  const foods = await import('../data/foods')
   db.transaction(() => {
     for (const t of userTables()) db.run(`DELETE FROM "${t}"`)
     try { db.run('DELETE FROM sqlite_sequence') } catch { /* no AUTOINCREMENT rows yet */ }
-    seedAll(todayStr())
+    seedAll(todayStr(), foods)
   })
   await db.persist()
 }

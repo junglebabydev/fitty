@@ -4,7 +4,10 @@ import type { Block, Enrollment, Program, ProgramSession } from '../../../domain
 import { PROGRAM_KEY_PREFIX } from '../../../domain/programs'
 import type { PlannedExercise } from '../../../domain/types'
 import { EXERCISES, EXERCISE_BY_ID } from '../../exercises'
-import { PROGRAM_LIST, getProgram } from '../index'
+import { PROGRAM_LIST } from '../all'
+import { getProgram } from '../index'
+import { START_NOW } from '../catalog'
+import { startNowPicks } from '../../../features/programs/StartNowRow'
 import { expandSessions, programWeekSessions, sessionsForWeek, toPlannedExercises } from '../../../engine/programs'
 
 const READY = ['bft', 'blueprint', 'gym-strength', 'home-dumbbells', 'bodyweight']
@@ -282,5 +285,13 @@ describe('series rules', () => {
     const a = planned(home, 'w3d1', ['standard'], { squat: 1, hinge: 1 })
     expect(pick(a, 'squat')).toMatchObject({ exerciseId: 'bulgarian_split_squat', sets: 3, repMin: 8, repMax: 15, perSide: true })
     expect(pick(a, 'hinge')).toMatchObject({ exerciseId: 'db_single_leg_rdl', perSide: true })
+  })
+})
+
+describe('start-now catalog (Today tiles without the series)', () => {
+  it('matches startNowPicks over the full data, in order', () => {
+    expect(START_NOW).toEqual(startNowPicks(PROGRAM_LIST).map((p) => ({
+      programId: p.program.id, title: p.program.title, key: p.pick.sessionKey, name: p.pick.name, minutes: p.session.minutes,
+    })))
   })
 })

@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import type { SafetyTag } from '../../domain/types'
-import { EXERCISES, EXERCISE_BY_ID, EXERCISE_ALIASES, CANONICAL_EXERCISE_IDS, findExerciseByAlias } from '../exercises'
+import { EXERCISES, EXERCISE_BY_ID, CANONICAL_EXERCISE_IDS } from '../exercises'
+import { EXERCISE_ALIASES, findExerciseByAlias } from '../exerciseAliases'
 import { FOODS, FOOD_BY_ID, HIGH_PROTEIN_IDS, SG_SOURCE_TAG, searchFoods, toFoodItem } from '../foods'
+import { HIGH_PROTEIN_NAMES } from '../highProteinNames'
 import { MOBILITY_ROUTINES, routinesFor } from '../mobility'
 
 const VALID_TAGS: SafetyTag[] = [
@@ -292,6 +294,10 @@ describe('foods', () => {
     const sg = toFoodItem(FOOD_BY_ID.laksa, 250)
     expect(sg.uncertaintyReason).toMatch(/HPB/)
     expect(a.uncertaintyReason).toBeNull()
+  })
+
+  it('HIGH_PROTEIN_NAMES is exactly the lower-cased names of HIGH_PROTEIN_IDS', () => {
+    expect(HIGH_PROTEIN_NAMES).toEqual(HIGH_PROTEIN_IDS.map((id) => FOOD_BY_ID[id].name.toLowerCase()))
   })
 
   it('HIGH_PROTEIN_IDS resolve and really are high protein', () => {

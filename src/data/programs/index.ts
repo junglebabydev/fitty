@@ -1,29 +1,27 @@
-// Programme registry. Each series is transcribed from docs/programs/<id>.md into its own file.
+// Programme registry. BFT (the week Today runs) is always here; the other series arrive with loadAllPrograms()
+// (./load.ts), which imports ./all.ts, and that registers them. Routes that can need any series await it first (App.tsx).
 import type { Program, ProgramId } from '../../domain/programs'
 import { PROGRAM_IDS } from '../../domain/programs'
 import { program as bft } from './bft'
 import { program as blueprint } from './blueprint'
-import { program as gymStrength } from './gym-strength'
-import { program as homeDumbbells } from './home-dumbbells'
-import { program as hiit } from './hiit'
-import { program as postpartum } from './postpartum'
-import { program as startRunning } from './start-running'
-import { program as bodyweight } from './bodyweight'
 
-export const PROGRAMS: Record<ProgramId, Program> = {
-  bft,
-  blueprint,
-  'gym-strength': gymStrength,
-  'home-dumbbells': homeDumbbells,
-  hiit,
-  postpartum,
-  'start-running': startRunning,
-  bodyweight,
+// Blueprint is in BFT's chunk anyway: bft.ts takes its Sunday from it.
+const loaded: Partial<Record<ProgramId, Program>> = { bft, blueprint }
+
+/** Called by ./all.ts when it loads. */
+export function registerPrograms(programs: Record<ProgramId, Program>): void {
+  Object.assign(loaded, programs)
 }
 
-/** In gallery order. */
-export const PROGRAM_LIST: Program[] = PROGRAM_IDS.map((id) => PROGRAMS[id])
-
+/** A loaded programme, or null for an id that is no programme. A real series not loaded yet throws (never a silent null). */
 export function getProgram(id: string): Program | null {
-  return (PROGRAMS as Record<string, Program | undefined>)[id] ?? null
+  const p = (loaded as Record<string, Program | undefined>)[id]
+  if (p) return p
+  if ((PROGRAM_IDS as string[]).includes(id)) throw new Error(`Programme ${id} is not loaded yet: await loadAllPrograms() first`)
+  return null
+}
+
+/** In gallery order. Every series: only after loadAllPrograms(). */
+export function programList(): Program[] {
+  return PROGRAM_IDS.map((id) => getProgram(id)!)
 }

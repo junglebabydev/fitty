@@ -3,7 +3,7 @@
 // class opens its intro with a picture of every move (screens/WorkoutIntro.tsx). Start goes straight into the player
 // with no questions (features/blueprint/start.ts); "Do it with Coach" runs the same session as a chat
 // (screens/CoachWorkout.tsx). Tap another day to see its class, or do it today.
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Check, ChevronRight, Settings } from 'lucide-react'
 import type { ProgramId } from '../domain/programs'
@@ -11,7 +11,8 @@ import { IconButton, Screen } from '../components'
 import { expandSessions } from '../engine'
 import { useQuery } from '../hooks'
 import { cx, dayName, fmtDate, todayStr } from '../lib/util'
-import { startNowPicks } from '../features/programs'
+import { START_NOW } from '../data/programs/catalog'
+import { loadAllPrograms } from '../data/programs/load'
 import { blueprintProgram, blueprintRows, blueprintSession } from '../features/blueprint/session'
 import { startToday } from '../features/blueprint/start'
 import { KindArt, LATE_KINDS, OTHER_ART, StartButtons, WorkoutArt, type StartMode } from '../features/blueprint/ui'
@@ -28,6 +29,8 @@ export default function BlueprintScreen() {
   const rows = useQuery(() => blueprintRows(today), [today])
   const session = useQuery(() => blueprintSession(key), [key, today])
   const more = useQuery(() => moreWorkouts(dayKey(today)), [today])
+  // The other series, once Today is up, so a "More workouts" tap opens at once.
+  useEffect(() => { void loadAllPrograms().catch(() => {}) }, [])
 
   // This session on its own day, or done on today instead ("Do it today").
   const row = rowForDate(rows, picked, key) ?? (picked !== today ? rowForDate(rows, today, key) : null)
@@ -89,9 +92,9 @@ function moreWorkouts(todayKey: string): MoreWorkout[] {
   const classes = expandSessions(week)
     .filter((s) => s.week === 1 && s.key !== todayKey)
     .map((s) => ({ programId: week.id, key: s.key, name: s.name, minutes: s.minutes, kind: keyKind(s.key), series: week.title }))
-  const others = startNowPicks()
-    .filter((p) => p.program.id !== week.id)
-    .map((p) => ({ programId: p.program.id, key: p.pick.sessionKey, name: p.pick.name, minutes: p.session.minutes, kind: null, series: p.program.title }))
+  const others = START_NOW
+    .filter((p) => p.programId !== week.id)
+    .map((p) => ({ programId: p.programId, key: p.key, name: p.name, minutes: p.minutes, kind: null, series: p.title }))
   return [...classes, ...others]
 }
 

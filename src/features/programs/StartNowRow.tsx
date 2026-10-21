@@ -1,7 +1,7 @@
 // "Start now" (docs/PRD_TRAINING_PROGRAMS.md §4.9): workouts you can do today without joining anything. First the
 // standalone picks of ready programmes, then the built-in and saved routines.
 import type { Program, ProgramSession, StandalonePick } from '../../domain/programs'
-import { PROGRAM_LIST } from '../../data/programs'
+import { programList } from '../../data/programs'
 import { expandSessions, sessionTypeForFocus } from '../../engine'
 import { SESSION_TYPE_META } from '../workout/helpers'
 import type { Routine } from '../workout/routines'
@@ -15,7 +15,7 @@ export function standaloneSession(p: Program, sessionKey: string): ProgramSessio
 export interface StartNowPick { program: Program; pick: StandalonePick; session: ProgramSession }
 
 /** Standalone picks of ready programmes, in gallery order. Preview series and picks that resolve to no session are left out. */
-export function startNowPicks(programs: Program[] = PROGRAM_LIST): StartNowPick[] {
+export function startNowPicks(programs: Program[] = programList()): StartNowPick[] {
   return programs
     .filter((p) => p.status === 'ready')
     .flatMap((program) => program.standalone.flatMap((pick) => {
