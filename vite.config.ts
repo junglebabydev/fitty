@@ -59,9 +59,21 @@ export default defineConfig({
           urlPattern: /^https:\/\/raw\.githubusercontent\.com\/bryllim\/workout-guide\/.*\.svg$/,
           handler: 'CacheFirst',
           options: { cacheName: 'exercise-art', expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 90 }, cacheableResponse: { statuses: [0, 200] } },
-        }],maximumFileSizeToCacheInBytes: 6 * 1024 * 1024, globPatterns: ['**/*.{js,css,html,svg,png,webp,wasm,woff2}'] },
+        }],maximumFileSizeToCacheInBytes: 6 * 1024 * 1024, globPatterns: ['**/*.{js,css,html,svg,png,webp,wasm,woff2}'],
+        // The Anthropic SDK only serves an owner's own key, online: it is fetched when used, never precached.
+        globIgnores: ['**/anthropic-sdk-*.js'] },
     }),
   ],
+  build: {
+    rollupOptions: {
+      output: {
+        // src/ai/anthropic.ts loads the SDK on first use. Name its file so the precache can skip it. Only renamed, not
+        // regrouped: a manual chunk pulled shared helpers in and made the app import it at start.
+        chunkFileNames: (chunk: { moduleIds: string[] }) =>
+          chunk.moduleIds.some((id) => id.includes('/node_modules/@anthropic-ai/sdk/')) ? 'assets/anthropic-sdk-[hash].js' : 'assets/[name]-[hash].js',
+      },
+    },
+  },
   // sql.js ships CJS/UMD only; pre-bundling makes its default import work in dev.
   optimizeDeps: { include: ['sql.js'] },
   test: { environment: 'node' },

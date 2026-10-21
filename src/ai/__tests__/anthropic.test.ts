@@ -1,6 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk'
-import { describe, expect, it } from 'vitest'
-import { AnthropicProvider, mapAnthropicError, parseMealRecognition, stripDataUrl, toImageMediaType } from '../anthropic'
+import { beforeAll, describe, expect, it } from 'vitest'
+import { AnthropicProvider, loadAnthropicSdk, mapAnthropicError, parseMealRecognition, stripDataUrl, toImageMediaType } from '../anthropic'
 import { AIError } from '../types'
 
 describe('parseMealRecognition', () => {
@@ -38,6 +38,9 @@ describe('parseMealRecognition', () => {
 })
 
 describe('mapAnthropicError', () => {
+  // The provider loads the SDK on first use; an SDK error only exists after that.
+  beforeAll(async () => { await loadAnthropicSdk() })
+
   it('maps SDK typed errors to AIError kinds', () => {
     expect(mapAnthropicError(new Anthropic.AuthenticationError(401, undefined, 'bad key', undefined as unknown as Headers)).kind).toBe('auth')
     expect(mapAnthropicError(new Anthropic.RateLimitError(429, undefined, 'slow down', undefined as unknown as Headers)).kind).toBe('rate_limit')
