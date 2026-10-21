@@ -23,9 +23,10 @@ Results, with every reply, land in `.evals/results/`.
 
 Every photo goes through what the app does to a camera shot or an uploaded photo (both run `downscaleImage`: longest
 side 1280 px, JPEG quality 85), then the app's `MEAL_SYSTEM_PROMPT`, `mealUserPrompt` and `MEAL_RECOGNITION_SCHEMA` to
-`gemini-3.8-flash`, then `parseMealRecognition`. Production calls Gemini directly from the app Worker (it has no
-OpenRouter key), so `--via gemini` is the faithful run; `--via openrouter` sends the same model a slightly different
-request and is reported as a proxy.
+`gemini-3.8-flash`, then `parseMealRecognition`. Which upstream production uses depends on the app Worker's key: its
+`GEMINI_API_KEY` secret holds an OpenRouter key (`sk-or-…`), and `openRouterKeyOf` in `worker/guard.ts` sends an
+OpenRouter key through OpenRouter, so `--via openrouter` is the faithful run today. `--via gemini` (a Google key in
+`.evals/.env`) is the path a real Google key would take.
 
 | Set | Photos | Truth |
 |---|---|---|

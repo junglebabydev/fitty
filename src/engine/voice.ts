@@ -508,11 +508,18 @@ export const LBS_TO_KG = 0.45359237
 
 function fmtQty(q: number): string { return Number.isInteger(q) ? String(q) : String(Math.round(q * 100) / 100) }
 
+/**
+ * A message that is only a greeting or small talk ("hi", "hey coach", "good morning"). The meal step treats any
+ * short phrase as food so "chicken rice" works without a verb, and with AI off "hi" became a snack (matched to egg
+ * whites through their high-protein tag).
+ */
+const SMALL_TALK = /^(?:(?:hi+|hello|hey+|heya|hiya|yo|sup|hola|howdy|morning|evening|good (?:morning|afternoon|evening|night)|ok|okay|k|cool|nice|great|thanks|thank you|thx|ty|cheers|bye|coach|there|again|test|testing|lol|haha)[\s.]*)+$/
+
 export function parseVoiceCommand(transcript: string, ctx: VoiceContext): ParsedCommand {
   const raw = transcript.trim()
   const t = normalizeTranscript(raw)
   const today = dateOf(ctx.now)
-  if (!t) return unknown(raw)
+  if (!t || SMALL_TALK.test(t)) return unknown(raw)
 
   // 1. start / finish workout. A programme word means a new series, not today's session
   // ("begin postpartum training", "start a running program": PRD_TRAINING_PROGRAMS §7).

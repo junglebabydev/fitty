@@ -175,6 +175,17 @@ describe('parseVoiceCommand — PRD §7.4 examples', () => {
   })
 })
 
+describe('small talk is not a meal', () => {
+  // Typed "hi" into Coach with AI off and got "Log snack: 1 × hi" (matched to egg whites via the high-protein tag).
+  it.each(['hi', 'Hi!', 'hello', 'hey coach', 'hey there', 'thanks', 'thank you', 'ok', 'good morning', 'yo'])('"%s" is not logged as anything', (t) => {
+    expect(parse(t).intent).toBe('unknown')
+  })
+
+  it.each(['chicken rice', 'kaya toast', 'nasi lemak', '2 eggs', 'hi I had chicken rice'])('"%s" is still a meal', (t) => {
+    expect(parse(t).intent).toBe('log_meal')
+  })
+})
+
 describe('parseMealCorrection', () => {
   const items = [
     { foodName: 'Steamed rice', quantityG: 200 },
