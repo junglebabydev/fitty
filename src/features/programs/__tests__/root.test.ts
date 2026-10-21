@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { PROGRAM_LIST, getProgram } from '../../../data/programs'
+import { PROGRAM_LIST } from '../../../data/programs/all'
+import { getProgram } from '../../../data/programs'
 import type { ScreenAnswers } from '../../../domain/programs'
 import type { WorkoutSession } from '../../../domain/types'
 import { expandSessions } from '../../../engine'

@@ -2,7 +2,8 @@
 // (no db access) so they can be unit-tested; `applyCommand` at the bottom does the writes.
 import type { BodyMetric, ExerciseSet, FoodItem, Meal, Readiness, RedFlags, Region, SymptomCheck, WorkoutSession } from '../../domain/types'
 import { clamp, dateOf, nowIso } from '../../lib/util'
-import { EXERCISES, FOOD_BY_ID, searchFoods, toFoodItem, type FoodRecord } from '../../data'
+import { EXERCISES } from '../../data'
+import { FOOD_BY_ID, searchFoods, toFoodItem, type FoodRecord } from '../../data/foods'
 import { evaluateSymptomGate, type MealType, type ParsedCommand, type ParsedMealItem, type VoiceContext } from '../../engine'
 import {
   activeSession, addBodyMetric, addMeal, addSet, addSymptomCheck, addVoiceCommand, cloneMeal, deleteBodyMetric, deleteMeal,

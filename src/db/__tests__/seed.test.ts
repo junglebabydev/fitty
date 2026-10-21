@@ -9,6 +9,7 @@ import {
   hasDemoParam, mealSeries, pickSpreadDay, planWeek, restingHrSeries, setsFor, shiftMinutes, shouldSeedDemo, sleepSeries,
   weightSeries, withLoads,
 } from '../seed'
+import * as foods from '../../data/foods'
 
 const TODAY = '2026-09-10' // Thursday — the reference demo day
 const WEEK = ['2026-09-07', '2026-09-08', '2026-09-09', '2026-09-10', '2026-09-11', '2026-09-12', '2026-09-13'] // Mon..Sun
@@ -232,7 +233,7 @@ describe('planWeek', () => {
 
 describe('mealSeries', () => {
   it('logs only a 5 kcal kopi today and the three saved meals on earlier days', () => {
-    const meals = mealSeries(TODAY)
+    const meals = mealSeries(TODAY, foods)
     const todays = meals.filter((m) => dateOf(m.meal.ts) === TODAY)
     expect(todays).toHaveLength(1)
     expect(todays[0].meal.mealType).toBe('drink')
@@ -252,7 +253,7 @@ describe('mealSeries', () => {
   })
 
   it('covers every one of the last seven days and uses seed as the item source', () => {
-    const meals = mealSeries(TODAY)
+    const meals = mealSeries(TODAY, foods)
     const days = new Set(meals.map((m) => dateOf(m.meal.ts)))
     for (let k = 0; k < 7; k++) expect(days.has(addDays(TODAY, -k))).toBe(true)
     expect(meals.every((m) => m.meal.source === 'seed' && m.items.every((i) => i.source === 'seed'))).toBe(true)

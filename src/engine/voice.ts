@@ -235,7 +235,8 @@ export const VOICE_EXERCISE_ALIASES: Record<string, string[]> = {
   laps: ['swim_freestyle'],
 }
 
-const ALIAS_ENTRIES = Object.entries(VOICE_EXERCISE_ALIASES)
+let aliasEntries: { alias: string; tokens: string[]; ids: string[] }[] | null = null
+const aliasList = () => aliasEntries ??= Object.entries(VOICE_EXERCISE_ALIASES)
   .map(([alias, ids]) => ({ alias, tokens: alias.split(' '), ids }))
   .sort((a, b) => b.tokens.length - a.tokens.length || b.alias.length - a.alias.length)
 
@@ -286,7 +287,7 @@ export function matchExercise(text: string, exercises: Exercise[], fuzzy = false
   const tokens = normalizeTranscript(text).split(' ').filter(Boolean)
   const byId = new Map(exercises.map((e) => [e.id, e]))
   // 1. alias table (longest phrase first)
-  for (const entry of ALIAS_ENTRIES) {
+  for (const entry of aliasList()) {
     const idx = phraseAt(tokens, entry.tokens, false)
     if (idx < 0) continue
     for (const id of entry.ids) {
@@ -313,7 +314,7 @@ export function matchExercise(text: string, exercises: Exercise[], fuzzy = false
   }
   // 3. fuzzy alias pass (only when explicitly requested, e.g. with a load/reps signal)
   if (!best && fuzzy) {
-    for (const entry of ALIAS_ENTRIES) {
+    for (const entry of aliasList()) {
       const idx = phraseAt(tokens, entry.tokens, true)
       if (idx < 0) continue
       for (const id of entry.ids) {

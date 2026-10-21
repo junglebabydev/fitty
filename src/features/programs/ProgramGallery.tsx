@@ -2,7 +2,7 @@
 // week. Preview series say "Coming soon". A tile opens the intro.
 import { Link } from 'react-router-dom'
 import type { Program, ProgramId } from '../../domain/programs'
-import { PROGRAM_LIST } from '../../data/programs'
+import { programList } from '../../data/programs'
 import { ProgramCover } from './ProgramCover'
 
 export function programMeta(p: Program): string {
@@ -15,7 +15,7 @@ export interface ProgramGalleryProps {
   active?: { programId: ProgramId; week: number } | null
 }
 
-export function ProgramGallery({ programs = PROGRAM_LIST, active }: ProgramGalleryProps) {
+export function ProgramGallery({ programs = programList(), active }: ProgramGalleryProps) {
   return (
     <ul className="grid grid-cols-2 gap-2.5" aria-label="Programmes">
       {programs.map((p) => {

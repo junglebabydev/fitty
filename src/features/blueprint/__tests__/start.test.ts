@@ -1,5 +1,6 @@
 // Start with no questions, through the real sql.js engine like workout/__tests__/program.test.ts.
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { loadAllPrograms } from '../../../data/programs/load'
 import { db } from '../../../db/database'
 import { getSession, getSessions, getSymptomChecks, tableCounts, updateSession } from '../../../db/repositories'
 import { todayStr } from '../../../lib/util'
@@ -45,7 +46,8 @@ describe('startToday', () => {
     expect(getSession(id)!.status).toBe('completed')
   })
 
-  it("starts another series' workout from More workouts the same way", () => {
+  it("starts another series' workout from More workouts the same way", async () => {
+    await loadAllPrograms() // WorkoutIntro's route loads them (App.tsx withPrograms); the BFT cases above run without
     const today = todayStr()
     const id = startToday('w2d2', today, 'gym-strength')
     const row = getSession(id)!

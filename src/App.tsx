@@ -15,18 +15,22 @@ import { applyOwnerProfile } from './features/settings/ownerBootstrap'
 // Not lazy: OnboardingGate renders it outside the Suspense boundary.
 import OwnerUnlockScreen from './screens/OwnerUnlock'
 import { FEATURES } from './config/features'
+import { loadAllPrograms } from './data/programs/load'
 
 // --- screens (route table in docs/CONTRACTS.md) -------------------------------------
 
+/** Screens that can open any programme (getProgram is synchronous) load the series with their own code. */
+const withPrograms = <T,>(load: () => Promise<T>) => () => Promise.all([load(), loadAllPrograms()]).then(([m]) => m)
+
 const OnboardingScreen = lazy(() => import('./screens/Onboarding'))
-const TodayScreen = lazy(() => import('./screens/Today'))
+const TodayScreen = lazy(withPrograms(() => import('./screens/Today')))
 const BlueprintScreen = lazy(() => import('./screens/Blueprint'))
-const WorkoutIntroScreen = lazy(() => import('./screens/WorkoutIntro'))
+const WorkoutIntroScreen = lazy(withPrograms(() => import('./screens/WorkoutIntro')))
 const SleepScreen = lazy(() => import('./screens/Sleep'))
 const CheckInScreen = lazy(() => import('./screens/CheckIn'))
-const TrainScreen = lazy(() => import('./screens/Train'))
-const ProgramIntroScreen = lazy(() => import('./screens/ProgramIntro'))
-const WorkoutScreen = lazy(() => import('./screens/Workout'))
+const TrainScreen = lazy(withPrograms(() => import('./screens/Train')))
+const ProgramIntroScreen = lazy(withPrograms(() => import('./screens/ProgramIntro')))
+const WorkoutScreen = lazy(withPrograms(() => import('./screens/Workout')))
 const ExerciseDetailScreen = lazy(() => import('./screens/ExerciseDetail'))
 const MobilityScreen = lazy(() => import('./screens/Mobility'))
 const EatScreen = lazy(() => import('./screens/Eat'))
@@ -37,7 +41,7 @@ const MindBreatheScreen = lazy(() => import('./screens/MindBreathe'))
 const MindJournalScreen = lazy(() => import('./screens/MindJournal'))
 const ProgressScreen = lazy(() => import('./screens/Progress'))
 const CoachScreen = lazy(() => import('./screens/Coach'))
-const CoachWorkoutScreen = lazy(() => import('./screens/CoachWorkout'))
+const CoachWorkoutScreen = lazy(withPrograms(() => import('./screens/CoachWorkout')))
 const SettingsScreen = lazy(() => import('./screens/Settings'))
 const PrivacyLedgerScreen = lazy(() => import('./screens/PrivacyLedger'))
 const HealthSettingsScreen = lazy(() => import('./screens/HealthSettings'))

@@ -1,8 +1,8 @@
 // Read-only tools the coach model may call (docs/PRD_COACH_CHAT.md §12). Every number a tool returns is computed
 // here, so the model quotes figures and never does its own arithmetic. No tool writes anything: changes still go
 // through the PROPOSAL line and Accept/Reject. The summarisers are pure; `runCoachTool` reads the local database.
-import { EXERCISES, FOODS } from '../../data'
-import type { FoodRecord } from '../../data/foods'
+import { EXERCISES } from '../../data'
+import { FOODS, type FoodRecord } from '../../data/foods'
 import type { Exercise, NutritionTarget, SleepRecord, WorkoutSession } from '../../domain/types'
 import {
   dailyTotalsRange, exerciseHistory, getNutritionTarget, getSessions, getSetsForSession, getSleepRecords,

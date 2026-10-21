@@ -14,7 +14,8 @@ import {
   regionLabel, rollingAverage, supportSignal,
   type CoachFacts, type GateResult, type ReadinessInput, type ReadinessResult, type Tier,
 } from '../../engine'
-import { EXERCISE_BY_ID, FOOD_BY_ID, HIGH_PROTEIN_IDS } from '../../data'
+import { EXERCISE_BY_ID } from '../../data'
+import { HIGH_PROTEIN_NAMES as HIGH_PROTEIN_NAME_LIST } from '../../data/highProteinNames'
 import { TRAIN_TIER_SETTING } from '../workout/helpers'
 import { FEATURES } from '../../config/features'
 import { blueprintRows, blueprintToday } from '../blueprint/session'
@@ -138,7 +139,7 @@ export function proteinPaceExpected(proteinTarget: number, hour: number): number
   return proteinTarget * Math.min(1, Math.max(0, hour - 9) / 12)
 }
 
-const HIGH_PROTEIN_NAMES = new Set(HIGH_PROTEIN_IDS.map((id) => FOOD_BY_ID[id]?.name.toLowerCase()).filter((n): n is string => !!n))
+const HIGH_PROTEIN_NAMES = new Set(HIGH_PROTEIN_NAME_LIST)
 
 /** Names of recently logged foods that are protein-dense (or known high-protein records), most recent first. */
 export function recentHighProteinFoods(limit = 5): string[] {
