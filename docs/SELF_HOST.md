@@ -24,6 +24,7 @@ The same app and AI endpoint as the Cloudflare deploy (docs/DEPLOY.md), in one N
 1. **Behind Cloudflare Access before the key is set.** The same reasons as docs/DEPLOY.md §4 apply, and `/api/ai/reauth` works the same way.
 2. **Only reachable through the reverse proxy.** The server rebuilds the request URL from `X-Forwarded-Proto` and `Host`, so the Worker's HTTPS and same-origin checks only mean something when the proxy sets those headers. Don't publish port 8080 on the host.
 3. **A new address is a new, empty app** (docs/DEPLOY.md §6). Export from the old address first if you want to keep anything.
+4. **Cloudflare Tunnel gives up on a response after about 100 s** (error 524). The Worker never had that limit, and the upstream timeout in `worker/openrouter.ts` is 120 s. So a very slow AI call now shows up in the app as a network error, not as the Worker's own timeout message. Normal calls take seconds.
 
 ## Run it locally
 
