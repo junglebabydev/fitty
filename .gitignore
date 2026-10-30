@@ -13,3 +13,4 @@ dev-dist
 src/config/owner.local.ts
 # Eval data, downloaded images and results (scripts/evals): never committed
 .evals/
+build

@@ -1,0 +1,12 @@
+node_modules
+dist
+dev-dist
+build
+.git
+.wrangler
+.evals
+.dev.vars*
+.env
+.env.*
+*.local
+src/config/owner.local.ts
