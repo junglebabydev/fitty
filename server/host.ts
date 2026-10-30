@@ -146,7 +146,11 @@ export function createHost(options: HostOptions): Server {
   return createServer((req, res) => {
     void (async () => {
       try {
-        await send(res, await worker.fetch(toRequest(req), env, ctx))
+        const started = Date.now()
+        const response = await worker.fetch(toRequest(req), env, ctx)
+        // Status and timing of AI calls only, never headers or bodies: enough to tell a wrong PIN (403) from a lockout (429).
+        if (req.url?.startsWith('/api/')) console.log(`api ${req.method} ${req.url.split('?')[0]} ${response.status} ms=${Date.now() - started}`)
+        await send(res, response)
       } catch (e) {
         console.error('host error:', e instanceof Error ? e.name : typeof e)
         if (!res.headersSent) res.statusCode = 500
