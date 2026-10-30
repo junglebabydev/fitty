@@ -51,8 +51,9 @@ export const MAX_DECIDE_OPTIONS = 20
 export const MAX_TOOLS = 8
 export const MAX_TOOL_SCHEMA_CHARS = 2_000
 const TOOL_NAME = /^[a-z_]{1,40}$/
-/** The PIN is a bearer token, not a 4-digit PIN: its length is what stops guessing, the lockout below is only a brake. */
-export const MIN_PIN_LENGTH = 8
+/** 6 is enough only behind Cloudflare Access, which keeps strangers from reaching the endpoint at all; on a public URL
+ *  use a long random token (docs/DEPLOY.md §2), because then its length is what stops guessing and the lockout is only a brake. */
+export const MIN_PIN_LENGTH = 6
 export const CHAT_MAX_TOKENS = 2048
 export const JSON_MAX_TOKENS = 8192
 /** AI calls per isolate. Isolates are per-location and recycled, so this is a brake, not a quota. */

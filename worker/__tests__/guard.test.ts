@@ -25,7 +25,8 @@ describe('PIN', () => {
     expect(await checkPin(undefined, 'anything-at-all')).toBe('unset')
     expect(await checkPin('   ', 'anything-at-all')).toBe('unset')
     expect(await checkPin('1234', '1234')).toBe('too_short')
-    expect(await checkPin('seven-c', 'seven-c')).toBe('too_short') // under MIN_PIN_LENGTH
+    expect(await checkPin('five5', 'five5')).toBe('too_short') // under MIN_PIN_LENGTH
+    expect(await checkPin('482913', '482913')).toBe('ok') // six digits, the minimum
     expect(await checkPin('a-long-enough-pin', null)).toBe('missing')
     expect(await checkPin('a-long-enough-pin', '')).toBe('missing')
     expect(await checkPin('a-long-enough-pin', 'a-long-enough-pim')).toBe('wrong')

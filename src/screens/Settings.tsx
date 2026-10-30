@@ -400,7 +400,7 @@ const MAC_STEPS: { title: string; body: JSX.Element }[] = [
   { title: 'Keep the server running', body: <>Leave <Code>npm run dev</Code> or <Code>npm run dev:https</Code> running, and open the app from the same Wi-Fi.</> },
 ]
 const CLOUD_STEPS: { title: string; body: JSX.Element }[] = [
-  { title: 'Add two Worker secrets', body: <>Set one AI key (<Code>OPENROUTER_API_KEY</Code>, <Code>GEMINI_API_KEY</Code> or <Code>ANTHROPIC_API_KEY</Code>) and a <Code>COACH_BRIDGE_PIN</Code> of at least 8 characters, with <Code>npx wrangler secret put NAME</Code> or in the Cloudflare dashboard.</> },
+  { title: 'Add two Worker secrets', body: <>Set one AI key (<Code>OPENROUTER_API_KEY</Code>, <Code>GEMINI_API_KEY</Code> or <Code>ANTHROPIC_API_KEY</Code>) and a <Code>COACH_BRIDGE_PIN</Code> of at least 6 characters, with <Code>npx wrangler secret put NAME</Code> or in the Cloudflare dashboard.</> },
   { title: 'Redeploy', body: <>Deploy the Worker again so it picks the secrets up.</> },
   { title: 'Enter the PIN here', body: <>Type the same PIN in the Bridge PIN field, then check again. The API key stays on the Worker.</> },
 ]
