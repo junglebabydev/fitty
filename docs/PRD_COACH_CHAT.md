@@ -438,6 +438,10 @@ Worst case is about 8 s extra before a standard reply. Phase 7 measures flex p95
 fallback rate. If p95 is over 5 s, or more than 1 in 10 calls fall back, interactive tiers go
 back to standard, and Flex stays for background work (the eval, the weekly review, check-ins).
 
+*(Decided 2026-11-02: the coach chat is back on standard (`COACH_SERVICE_TIER: "standard"` in
+`wrangler.coach.jsonc`). The 2026-10-15 evals ran at Flex with a median of 15–17 s and a p95 of about 23 s. Google
+now gives Flex a latency target of minutes, not seconds. See docs/research/COACH_AGENT_HARNESS.md.)*
+
 ### 11.6 Classifier: Jev (owner's request, 2026-09-25)
 
 Jev (TypeSafe, on OpenRouter) is a "System One" decision model. It doesn't write text. It takes
