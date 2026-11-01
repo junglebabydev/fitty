@@ -13,5 +13,6 @@
   "observability": { "enabled": false },
   // COACH_OPENROUTER_MODEL (chat, default google/gemini-3.8-flash), COACH_OPENROUTER_DATA_COLLECTION (default deny),
   // COACH_MODEL_ROUTER (decision model, default typesafe/jev-1.13), COACH_SERVICE_TIER ('flex' default | 'standard').
-  "vars": {}
+  // Standard since 2026-11-02: the evals' p95 was ~23 s at Flex, past the PRD's 5 s limit (§11.5).
+  "vars": { "COACH_SERVICE_TIER": "standard" }
 }
